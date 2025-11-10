@@ -29,10 +29,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore src/Xtraq.csproj -p:TargetFramework=net8.0
+        run: dotnet restore src/Xtraq.csproj -p:TargetFramework=net8.0 -p:PublishReadyToRun=false
 
       - name: Pack global tool (Release)
-        run: dotnet pack src/Xtraq.csproj --configuration Release --no-restore -p:TargetFramework=net8.0 -p:TargetFrameworks=net8.0 -p:PublishSingleFile=false --output artifacts/nuget
+        run: dotnet pack src/Xtraq.csproj --configuration Release --no-restore -p:TargetFramework=net8.0 -p:TargetFrameworks=net8.0 -p:PublishSingleFile=false -p:PublishReadyToRun=false --output artifacts/nuget
 
       - name: Publish to GitHub Packages feed
         env:
