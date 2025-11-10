@@ -1,0 +1,64 @@
+{
+  "Schema": "sample",
+  "Name": "Orders",
+  "Columns": [
+    {
+      "Name": "OrderId",
+      "TypeRef": "sys.int",
+      "IsIdentity": true
+    },
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int"
+    },
+    {
+      "Name": "OrderNumber",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 40
+    },
+    {
+      "Name": "Status",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 50
+    },
+    {
+      "Name": "TotalAmount",
+      "TypeRef": "sys.decimal",
+      "MaxLength": 9,
+      "Precision": 18,
+      "Scale": 2
+    },
+    {
+      "Name": "Currency",
+      "TypeRef": "sys.char",
+      "MaxLength": 3
+    },
+    {
+      "Name": "PlacedAtUtc",
+      "TypeRef": "sys.datetime2",
+      "Precision": 23,
+      "Scale": 3,
+      "HasDefaultValue": true,
+      "DefaultConstraintName": "DF_sample_Orders_PlacedAtUtc",
+      "DefaultDefinition": "sysutcdatetime()"
+    },
+    {
+      "Name": "RequiredAtUtc",
+      "TypeRef": "sys.datetime2",
+      "IsNullable": true,
+      "Precision": 23,
+      "Scale": 3
+    },
+    {
+      "Name": "Metadata",
+      "TypeRef": "sample.JsonDocument"
+    },
+    {
+      "Name": "HasOutstandingBalance",
+      "TypeRef": "sys.int",
+      "IsComputed": true,
+      "ComputedDefinition": "case when [TotalAmount]\u003E(0) AND ([Status]=N\u0027Processing\u0027 OR [Status]=N\u0027Pending\u0027) then (1) else (0) end",
+      "IsComputedPersisted": true
+    }
+  ]
+}

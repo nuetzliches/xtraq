@@ -1,0 +1,50 @@
+name: SQL Sample Container
+
+on:
+  pull_request:
+    branches: [master, develop]
+  push:
+    branches: [master, develop]
+
+jobs:
+  sql-sample:
+    name: Validate SQL sample container
+    runs-on: ubuntu-latest
+    env:
+      MSSQL_SA_PASSWORD: Xtraq@12345
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Provision container environment file
+        run: |
+          cat <<EOF > samples/mssql/.env
+          MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+          EOF
+
+      - name: Start SQL Server sample container
+        run: docker compose -f samples/mssql/docker-compose.yml up --build -d
+
+      - name: Wait for SQL Server readiness
+        run: |
+          echo "Waiting for SQL Server container health..."
+          for attempt in {1..30}; do
+            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' xtraq-sample-sql || echo "unknown")
+            if [ "$STATUS" = "\"healthy\"" ]; then
+              echo "Container reported healthy state."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: current status ${STATUS}."
+            sleep 5
+          done
+          echo "SQL Server container did not become healthy in time." >&2
+          docker logs xtraq-sample-sql || true
+          exit 1
+
+      - name: Verify sample schema bootstrap
+        run: |
+          docker exec xtraq-sample-sql /opt/mssql-tools/bin/sqlcmd -C -S localhost -U sa -P "${MSSQL_SA_PASSWORD}" -Q "SELECT name FROM sys.databases"
+
+      - name: Tear down SQL Server container
+        if: always()
+        run: docker compose -f samples/mssql/docker-compose.yml down -v

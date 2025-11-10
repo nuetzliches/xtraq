@@ -1,0 +1,40 @@
+{
+  "Schema": "sample",
+  "Name": "UpdateUserBio",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "IsNullable": true
+    },
+    {
+      "Name": "Bio",
+      "TypeRef": "sample.UserBioType"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "DisplayName",
+          "TypeRef": "sys.nvarchar(200)",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Bio",
+          "TypeRef": "sample.UserBioType"
+        },
+        {
+          "Name": "UpdatedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "IsNullable": true,
+          "MaxLength": 7
+        }
+      ]
+    }
+  ]
+}

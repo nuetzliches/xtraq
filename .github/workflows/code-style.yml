@@ -1,0 +1,46 @@
+name: Code Style Check
+
+on:
+  pull_request:
+    branches: [master, develop]
+  push:
+    branches: [master, develop]
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    name: Check Code Formatting
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore src/Xtraq.csproj
+
+      - name: Check code formatting
+        run: |
+          dotnet format src/Xtraq.csproj --verify-no-changes --verbosity diagnostic
+
+      - name: Check for redundant usings
+        run: |
+          # Check for any files that still have global using imports
+          echo "Checking for redundant using statements..."
+          PATTERN='^[[:space:]]*using (System|System\.Collections\.Generic|System\.Collections\.Concurrent|System\.Diagnostics|System\.Globalization|System\.IO|System\.Linq|System\.Reflection|System\.Security\.Cryptography|System\.Text|System\.Text\.Json|System\.Text\.RegularExpressions|System\.Threading|System\.Threading\.Tasks|Microsoft\.Extensions\.DependencyInjection);'
+          REDUNDANT_USINGS=$(grep -R -E "$PATTERN" src/ --include="*.cs" --exclude-dir=obj --exclude-dir=bin | grep -v GlobalUsings.cs || true)
+          if [ ! -z "$REDUNDANT_USINGS" ]; then
+            echo "❌ Found redundant using statements that should be in GlobalUsings.cs:"
+            echo "$REDUNDANT_USINGS"
+            exit 1
+          else
+            echo "✅ No redundant using statements found"
+          fi
+
+      - name: Analyze code style
+        run: dotnet build src/Xtraq.csproj --configuration Release --verbosity normal

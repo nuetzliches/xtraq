@@ -1,0 +1,5 @@
+IF DB_ID(N'XtraqSample') IS NULL
+BEGIN
+    CREATE DATABASE XtraqSample;
+END;
+GO

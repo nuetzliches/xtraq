@@ -1,0 +1,60 @@
+name: Publish Global Tool
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      nuget-api-key:
+        description: "Optional NuGet.org API key (paste only when manually dispatching)"
+        required: false
+        default: ""
+
+jobs:
+  build-and-publish:
+    name: Build and publish tool package
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_NOLOGO: 1
+      HAS_NUGET_API_KEY: ${{ secrets.NUGET_API_KEY != '' && 'true' || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore src/Xtraq.csproj -p:TargetFramework=net8.0
+
+      - name: Pack global tool (Release)
+        run: dotnet pack src/Xtraq.csproj --configuration Release --no-restore -p:TargetFramework=net8.0 -p:TargetFrameworks=net8.0 -p:PublishSingleFile=false --output artifacts/nuget
+
+      - name: Publish to GitHub Packages feed
+        env:
+          GITHUB_FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+        run: |
+          dotnet nuget push artifacts/nuget/*.nupkg --api-key "${{ github.token }}" --source "$GITHUB_FEED" --skip-duplicate
+
+      - name: Publish to NuGet.org
+        if: ${{ env.HAS_NUGET_API_KEY == 'true' }}
+        run: |
+          dotnet nuget push artifacts/nuget/*.nupkg --api-key '${{ secrets.NUGET_API_KEY }}' --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Publish to NuGet.org (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.nuget-api-key != '' }}
+        run: |
+          dotnet nuget push artifacts/nuget/*.nupkg --api-key '${{ inputs.nuget-api-key }}' --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xtraq-global-tool
+          path: artifacts/nuget
+          overwrite: true
+          if-no-files-found: error
+

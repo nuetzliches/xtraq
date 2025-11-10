@@ -1,0 +1,24 @@
+
+namespace Xtraq.Engine;
+
+/// <summary>
+/// ServiceCollection extensions for Xtraq templating components.
+/// </summary>
+public static class TemplatingServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers the simple template engine and a file system loader.
+    /// </summary>
+    /// <param name="services">DI collection.</param>
+    /// <param name="templateRoot">Directory containing *.spt template files.</param>
+    public static IServiceCollection AddXtraqTemplating(this IServiceCollection services, string templateRoot)
+    {
+        if (!Directory.Exists(templateRoot))
+        {
+            throw new DirectoryNotFoundException($"Template root not found: {templateRoot}");
+        }
+        services.AddSingleton<ITemplateRenderer, SimpleTemplateEngine>();
+        services.AddSingleton<ITemplateLoader>(_ => new FileSystemTemplateLoader(templateRoot));
+        return services;
+    }
+}

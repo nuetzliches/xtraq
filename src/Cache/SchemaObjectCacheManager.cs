@@ -1,0 +1,554 @@
+using Xtraq.Services;
+using Xtraq.Utils;
+
+namespace Xtraq.Cache;
+
+/// <summary>
+/// Comprehensive cache manager for all SQL Server schema objects.
+/// Provides delta-detection and dependency-based invalidation for:
+/// - Stored Procedures
+/// - Functions (Scalar and Table-Valued)
+/// - Views
+/// - Tables
+/// - User-Defined Table Types (UDTT)
+/// - User-Defined Data Types (UDT)
+/// </summary>
+internal interface ISchemaObjectCacheManager
+{
+    /// <summary>
+    /// Initialize the cache manager for the current project.
+    /// </summary>
+    Task InitializeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get the last known modification timestamp for a schema object.
+    /// Returns null if the object is not in the cache.
+    /// </summary>
+    DateTime? GetLastModified(SchemaObjectType objectType, string schema, string name);
+
+    /// <summary>
+    /// Get the timestamp of the most recent cache persistence.
+    /// Returns null if the cache has not been persisted yet.
+    /// </summary>
+    DateTime? GetLastUpdatedUtc();
+
+    /// <summary>
+    /// Update the modification timestamp for a schema object.
+    /// </summary>
+    Task UpdateLastModifiedAsync(SchemaObjectType objectType, string schema, string name, DateTime lastModifiedUtc);
+
+    /// <summary>
+    /// Get objects that have been modified since the specified timestamp.
+    /// Used for delta-detection to only snapshot changed objects.
+    /// </summary>
+    Task<IReadOnlyList<SchemaObjectRef>> GetModifiedSinceAsync(SchemaObjectType objectType, DateTime sinceUtc);
+
+    /// <summary>
+    /// Invalidate cache entries for objects that depend on the specified object.
+    /// For example, invalidate all procedures that use a UDT when the UDT changes.
+    /// </summary>
+    Task InvalidateDependentsAsync(SchemaObjectRef changedObject);
+
+    /// <summary>
+    /// Get direct dependents for a given schema object.
+    /// </summary>
+    IReadOnlyList<SchemaObjectRef> GetDependents(SchemaObjectRef dependency);
+
+    /// <summary>
+    /// Record a dependency relationship between two schema objects.
+    /// </summary>
+    Task RecordDependencyAsync(SchemaObjectRef dependent, SchemaObjectRef dependency);
+
+    /// <summary>
+    /// Flush all pending changes to disk.
+    /// </summary>
+    Task FlushAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clear all cache entries (force full reload).
+    /// </summary>
+    Task ClearAllAsync();
+}
+
+/// <summary>
+/// Types of SQL Server schema objects that can be cached.
+/// </summary>
+public enum SchemaObjectType
+{
+    /// <summary>
+    /// Represents a stored procedure object.
+    /// </summary>
+    StoredProcedure,
+    /// <summary>
+    /// Represents a scalar user-defined function.
+    /// </summary>
+    ScalarFunction,
+    /// <summary>
+    /// Represents a table-valued user-defined function.
+    /// </summary>
+    TableValuedFunction,
+    /// <summary>
+    /// Represents a view definition.
+    /// </summary>
+    View,
+    /// <summary>
+    /// Represents a table definition.
+    /// </summary>
+    Table,
+    /// <summary>
+    /// Represents a user-defined table type.
+    /// </summary>
+    UserDefinedTableType,
+    /// <summary>
+    /// Represents a user-defined data type.
+    /// </summary>
+    UserDefinedDataType
+}
+
+/// <summary>
+/// Reference to a schema object (schema.name).
+/// </summary>
+public record SchemaObjectRef(SchemaObjectType Type, string Schema, string Name)
+{
+    /// <summary>
+    /// Gets the fully qualified name in the format <c>schema.object</c>.
+    /// </summary>
+    public string FullName => $"{Schema}.{Name}";
+
+    /// <inheritdoc />
+    public override string ToString() => $"{Type}:{FullName}";
+}
+
+/// <summary>
+/// Cache entry for a schema object with modification tracking.
+/// </summary>
+public class SchemaObjectCacheEntry
+{
+    /// <summary>
+    /// Gets or sets the schema object type represented by the cache entry.
+    /// </summary>
+    public SchemaObjectType Type { get; set; }
+    /// <summary>
+    /// Gets or sets the owning schema for the object.
+    /// </summary>
+    public string Schema { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the object name within the schema.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the last modification timestamp observed for the object.
+    /// </summary>
+    public DateTime LastModifiedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the timestamp when the entry was cached.
+    /// </summary>
+    public DateTime CachedUtc { get; set; } = DateTime.UtcNow;
+    /// <summary>
+    /// Gets or sets the schema object dependencies tracked for invalidation.
+    /// </summary>
+    public List<SchemaObjectRef> Dependencies { get; set; } = new();
+    /// <summary>
+    /// Gets or sets an optional hash of the object content for change detection.
+    /// </summary>
+    public string? ContentHash { get; set; }
+}
+
+internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
+{
+    private readonly IConsoleService _console;
+    private readonly object _sync = new();
+    private readonly Dictionary<string, SchemaObjectCacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, HashSet<string>> _dependencyGraph = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool _initialized;
+    private bool _dirty;
+    private string _cacheDirectory = string.Empty;
+    private string _cacheFilePath = string.Empty;
+    private string _dependencyGraphFilePath = string.Empty;
+    private DateTime? _lastUpdatedUtc;
+
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    public SchemaObjectCacheManager(IConsoleService console)
+    {
+        _console = console ?? throw new ArgumentNullException(nameof(console));
+    }
+
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_initialized) return;
+
+        var projectRoot = ProjectRootResolver.ResolveCurrent();
+        _cacheDirectory = Path.Combine(projectRoot, ".xtraq", "cache");
+        _cacheFilePath = Path.Combine(_cacheDirectory, "schema-objects.json");
+        _dependencyGraphFilePath = Path.Combine(_cacheDirectory, "dependency-graph.json");
+
+        Directory.CreateDirectory(_cacheDirectory);
+
+        if (File.Exists(_cacheFilePath))
+        {
+            await LoadCacheAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        _initialized = true;
+    }
+
+    public DateTime? GetLastModified(SchemaObjectType objectType, string schema, string name)
+    {
+        var key = BuildKey(objectType, schema, name);
+        lock (_sync)
+        {
+            return _cache.TryGetValue(key, out var entry) ? entry.LastModifiedUtc : null;
+        }
+    }
+
+    public DateTime? GetLastUpdatedUtc()
+    {
+        lock (_sync)
+        {
+            return _lastUpdatedUtc;
+        }
+    }
+
+    public Task UpdateLastModifiedAsync(SchemaObjectType objectType, string schema, string name, DateTime lastModifiedUtc)
+    {
+        var key = BuildKey(objectType, schema, name);
+        lock (_sync)
+        {
+            if (_cache.TryGetValue(key, out var existing))
+            {
+                existing.LastModifiedUtc = lastModifiedUtc;
+                existing.CachedUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                _cache[key] = new SchemaObjectCacheEntry
+                {
+                    Type = objectType,
+                    Schema = schema,
+                    Name = name,
+                    LastModifiedUtc = lastModifiedUtc,
+                    CachedUtc = DateTime.UtcNow
+                };
+            }
+            _dirty = true;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<SchemaObjectRef>> GetModifiedSinceAsync(SchemaObjectType objectType, DateTime sinceUtc)
+    {
+        List<SchemaObjectRef> modified;
+        lock (_sync)
+        {
+            modified = _cache.Values
+                .Where(entry => entry.Type == objectType && entry.LastModifiedUtc > sinceUtc)
+                .Select(entry => new SchemaObjectRef(entry.Type, entry.Schema, entry.Name))
+                .ToList();
+        }
+        return Task.FromResult<IReadOnlyList<SchemaObjectRef>>(modified);
+    }
+
+    public Task InvalidateDependentsAsync(SchemaObjectRef changedObject)
+    {
+        var changedKey = BuildKey(changedObject);
+        List<string> dependentKeys;
+
+        lock (_sync)
+        {
+            if (!_dependencyGraph.TryGetValue(changedKey, out var dependents))
+            {
+                return Task.CompletedTask;
+            }
+            dependentKeys = dependents.ToList();
+        }
+
+        _console.Verbose($"[schema-cache] Invalidating {dependentKeys.Count} objects dependent on {changedObject}");
+
+        lock (_sync)
+        {
+            foreach (var dependentKey in dependentKeys)
+            {
+                if (_cache.TryGetValue(dependentKey, out var entry))
+                {
+                    // Mark as needing refresh by setting last modified to minimum
+                    entry.LastModifiedUtc = DateTime.MinValue;
+                    _dirty = true;
+                }
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public IReadOnlyList<SchemaObjectRef> GetDependents(SchemaObjectRef dependency)
+    {
+        var dependencyKey = BuildKey(dependency);
+        lock (_sync)
+        {
+            if (!_dependencyGraph.TryGetValue(dependencyKey, out var dependents) || dependents.Count == 0)
+            {
+                return Array.Empty<SchemaObjectRef>();
+            }
+
+            return dependents.Select(ParseKey).Where(static dep => dep is not null).Cast<SchemaObjectRef>().ToArray();
+        }
+    }
+
+    public Task RecordDependencyAsync(SchemaObjectRef dependent, SchemaObjectRef dependency)
+    {
+        var dependentKey = BuildKey(dependent);
+        var dependencyKey = BuildKey(dependency);
+
+        lock (_sync)
+        {
+            // Record in cache entry
+            if (_cache.TryGetValue(dependentKey, out var entry))
+            {
+                if (!entry.Dependencies.Contains(dependency))
+                {
+                    entry.Dependencies.Add(dependency);
+                    _dirty = true;
+                }
+            }
+
+            // Record in reverse dependency graph for fast invalidation
+            if (!_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
+            {
+                dependents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _dependencyGraph[dependencyKey] = dependents;
+            }
+            dependents.Add(dependentKey);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_dirty) return;
+
+        List<SchemaObjectCacheEntry> entries;
+        List<DependencyGraphNode> graphSnapshot;
+        lock (_sync)
+        {
+            entries = _cache.Values.ToList();
+            graphSnapshot = _cache.Values
+                .Select(entry => new DependencyGraphNode
+                {
+                    Type = entry.Type,
+                    Schema = entry.Schema,
+                    Name = entry.Name,
+                    Dependencies = entry.Dependencies.Select(static dependency => new SchemaObjectRef(dependency.Type, dependency.Schema, dependency.Name)).ToList(),
+                    Dependents = _dependencyGraph.TryGetValue(BuildKey(entry.Type, entry.Schema, entry.Name), out var dependents)
+                        ? dependents.Select(ParseKey).Where(static dep => dep is not null).Cast<SchemaObjectRef>().ToList()
+                        : new List<SchemaObjectRef>()
+                })
+                .ToList();
+            _dirty = false;
+        }
+
+        try
+        {
+            var now = DateTime.UtcNow;
+            var document = new SchemaCacheDocument
+            {
+                Version = 1,
+                LastUpdatedUtc = now,
+                Entries = entries.OrderBy(e => e.Type).ThenBy(e => e.Schema).ThenBy(e => e.Name).ToList()
+            };
+            var dependencyDocument = new DependencyGraphDocument
+            {
+                Version = 1,
+                LastUpdatedUtc = now,
+                Nodes = graphSnapshot
+                    .OrderBy(node => node.Type)
+                    .ThenBy(node => node.Schema, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(node => node.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            };
+
+            var tempFile = _cacheFilePath + ".tmp";
+            await using (var stream = File.Create(tempFile))
+            {
+                await JsonSerializer.SerializeAsync(stream, document, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            var tempGraphFile = _dependencyGraphFilePath + ".tmp";
+            await using (var stream = File.Create(tempGraphFile))
+            {
+                await JsonSerializer.SerializeAsync(stream, dependencyDocument, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (File.Exists(_cacheFilePath))
+            {
+                File.Replace(tempFile, _cacheFilePath, null);
+            }
+            else
+            {
+                File.Move(tempFile, _cacheFilePath);
+            }
+
+            if (File.Exists(_dependencyGraphFilePath))
+            {
+                File.Replace(tempGraphFile, _dependencyGraphFilePath, null);
+            }
+            else
+            {
+                File.Move(tempGraphFile, _dependencyGraphFilePath);
+            }
+
+            lock (_sync)
+            {
+                _lastUpdatedUtc = now;
+            }
+            _console.Verbose($"[schema-cache] Persisted {entries.Count} schema object entries to cache");
+        }
+        catch (Exception ex)
+        {
+            _dirty = true;
+            _console.Verbose($"[schema-cache] Failed to persist cache: {ex.Message}");
+        }
+    }
+
+    public Task ClearAllAsync()
+    {
+        lock (_sync)
+        {
+            _cache.Clear();
+            _dependencyGraph.Clear();
+            _dirty = true;
+            _lastUpdatedUtc = null;
+        }
+
+        try
+        {
+            if (File.Exists(_cacheFilePath))
+            {
+                File.Delete(_cacheFilePath);
+            }
+            if (File.Exists(_dependencyGraphFilePath))
+            {
+                File.Delete(_dependencyGraphFilePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[schema-cache] Failed to delete cache file: {ex.Message}");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadCacheAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = File.OpenRead(_cacheFilePath);
+            var document = await JsonSerializer.DeserializeAsync<SchemaCacheDocument>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+
+            if (document?.Entries == null) return;
+
+            lock (_sync)
+            {
+                _cache.Clear();
+                _dependencyGraph.Clear();
+                _lastUpdatedUtc = document.LastUpdatedUtc;
+
+                foreach (var entry in document.Entries)
+                {
+                    var key = BuildKey(entry.Type, entry.Schema, entry.Name);
+                    _cache[key] = entry;
+
+                    // Rebuild dependency graph
+                    foreach (var dependency in entry.Dependencies)
+                    {
+                        var dependencyKey = BuildKey(dependency);
+                        if (!_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
+                        {
+                            dependents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            _dependencyGraph[dependencyKey] = dependents;
+                        }
+                        dependents.Add(key);
+                    }
+                }
+            }
+
+            _console.Verbose($"[schema-cache] Loaded {document.Entries.Count} schema object entries from cache");
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[schema-cache] Failed to load cache: {ex.Message}");
+        }
+    }
+
+    private static string BuildKey(SchemaObjectType objectType, string schema, string name)
+    {
+        return $"{objectType}:{schema}.{name}";
+    }
+
+    private static string BuildKey(SchemaObjectRef objectRef)
+    {
+        return BuildKey(objectRef.Type, objectRef.Schema, objectRef.Name);
+    }
+
+    private static SchemaObjectRef? ParseKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        var typeSeparator = key.IndexOf(':');
+        if (typeSeparator < 0 || typeSeparator == key.Length - 1)
+        {
+            return null;
+        }
+
+        var typeSegment = key[..typeSeparator];
+        var identifier = key[(typeSeparator + 1)..];
+        var nameSeparator = identifier.IndexOf('.');
+        if (nameSeparator <= 0 || nameSeparator == identifier.Length - 1)
+        {
+            return null;
+        }
+
+        if (!Enum.TryParse(typeSegment, out SchemaObjectType type))
+        {
+            return null;
+        }
+
+        var schema = identifier[..nameSeparator];
+        var name = identifier[(nameSeparator + 1)..];
+        return new SchemaObjectRef(type, schema, name);
+    }
+
+    private sealed class SchemaCacheDocument
+    {
+        public int Version { get; set; }
+        public DateTime LastUpdatedUtc { get; set; }
+        public List<SchemaObjectCacheEntry> Entries { get; set; } = new();
+    }
+
+    private sealed class DependencyGraphDocument
+    {
+        public int Version { get; set; }
+        public DateTime LastUpdatedUtc { get; set; }
+        public List<DependencyGraphNode> Nodes { get; set; } = new();
+    }
+
+    private sealed class DependencyGraphNode
+    {
+        public SchemaObjectType Type { get; set; }
+        public string Schema { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public List<SchemaObjectRef> Dependencies { get; set; } = new();
+        public List<SchemaObjectRef> Dependents { get; set; } = new();
+    }
+}

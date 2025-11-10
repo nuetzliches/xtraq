@@ -1,0 +1,6 @@
+{
+  "Schema": "sample",
+  "Name": "JsonDocument",
+  "BaseSqlTypeName": "nvarchar",
+  "IsNullable": true
+}

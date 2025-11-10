@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Xtraq Mark</title>
+  <desc id="desc">Stylized Xtraq favicon with layered X and signal arc</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" opacity="0" />
+  <g transform="translate(32 32) scale(1.7) translate(-32 -32)">
+    <path d="M20 18h8l4 6 4-6h8L36 32l8 14h-8l-4-6-4 6h-8l8-14z" fill="#38bdf8" />
+    <path d="M44.5 23.5a11.5 11.5 0 0 1 0 17.0" fill="none" stroke="#f8fafc" stroke-width="3.5" stroke-linecap="round" opacity="0.75" />
+    <path d="M18.5 23.5a11.5 11.5 0 0 0 0 17.0" fill="none" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" opacity="0.65" />
+  </g>
+</svg>

@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xtraq", "src\Xtraq.csproj", "{2198A832-20FA-FFA6-8A01-1CA23AA35658}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xtraq.Tests", "tests\Xtraq.Tests\Xtraq.Tests.csproj", "{2C6F9C92-5EFC-4E05-B8F6-2B7183762CE4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2198A832-20FA-FFA6-8A01-1CA23AA35658}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2198A832-20FA-FFA6-8A01-1CA23AA35658}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2198A832-20FA-FFA6-8A01-1CA23AA35658}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2198A832-20FA-FFA6-8A01-1CA23AA35658}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C6F9C92-5EFC-4E05-B8F6-2B7183762CE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C6F9C92-5EFC-4E05-B8F6-2B7183762CE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C6F9C92-5EFC-4E05-B8F6-2B7183762CE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C6F9C92-5EFC-4E05-B8F6-2B7183762CE4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5ABB7006-F1F5-453C-AAA1-129A1340CC96}
+	EndGlobalSection
+EndGlobal

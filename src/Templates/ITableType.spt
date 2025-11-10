@@ -1,0 +1,4 @@
+{{ HEADER }}
+namespace {{ Namespace }};
+
+public interface ITableType {}

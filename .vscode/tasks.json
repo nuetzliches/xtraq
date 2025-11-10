@@ -1,0 +1,124 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["build", "src/Xtraq.csproj"],
+      "problemMatcher": ["$msCompile"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "run (net8.0)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["run", "--project", "src/Xtraq.csproj", "--framework", "net8.0"],
+      "group": "build",
+      "dependsOn": "build"
+    },
+    {
+      "label": "run (net10.0)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/Xtraq.csproj",
+        "--framework",
+        "net10.0"
+      ],
+      "group": "build",
+      "dependsOn": "build"
+    },
+    {
+      "label": "clean redundant usings",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "tools/Clean-RedundantUsings.ps1",
+        "-Verbose"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "format code",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["format", "src/Xtraq.csproj", "--verbosity", "normal"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "sql container up",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "docker compose -f \"samples/mssql/docker-compose.yml\" up --build -d"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "sql container down",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "docker compose -f \"samples/mssql/docker-compose.yml\" down"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "sql container reset",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "docker compose -f \"samples/mssql/docker-compose.yml\" down -v; docker compose -f \"samples/mssql/docker-compose.yml\" up --build -d"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
+

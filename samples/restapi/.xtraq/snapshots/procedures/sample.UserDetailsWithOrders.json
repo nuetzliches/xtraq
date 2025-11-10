@@ -1,0 +1,105 @@
+{
+  "Schema": "sample",
+  "Name": "UserDetailsWithOrders",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "IsNullable": true
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "Alias",
+          "TypeRef": "sys.nvarchar(120)",
+          "IsNullable": true,
+          "MaxLength": 120
+        },
+        {
+          "Name": "DisplayName",
+          "TypeRef": "sys.nvarchar(200)",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Email",
+          "TypeRef": "sys.nvarchar(320)",
+          "IsNullable": true,
+          "MaxLength": 320
+        },
+        {
+          "Name": "IsActive",
+          "TypeRef": "sys.bit"
+        },
+        {
+          "Name": "PreferredLocale",
+          "TypeRef": "sys.nvarchar(10)",
+          "MaxLength": 10
+        },
+        {
+          "Name": "CreatedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "MaxLength": 7
+        },
+        {
+          "Name": "UpdatedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "IsNullable": true,
+          "MaxLength": 7
+        },
+        {
+          "Name": "Metadata",
+          "TypeRef": "sample.JsonDocument"
+        }
+      ]
+    },
+    {
+      "Columns": [
+        {
+          "Name": "OrderId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "OrderNumber",
+          "TypeRef": "sys.nvarchar(40)",
+          "MaxLength": 40
+        },
+        {
+          "Name": "Status",
+          "TypeRef": "sys.nvarchar(50)",
+          "MaxLength": 50
+        },
+        {
+          "Name": "TotalAmount",
+          "TypeRef": "sys.decimal(18,2)",
+          "MaxLength": 9
+        },
+        {
+          "Name": "Currency",
+          "TypeRef": "sys.char(3)",
+          "MaxLength": 3
+        },
+        {
+          "Name": "PlacedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "MaxLength": 7
+        },
+        {
+          "Name": "RequiredAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "IsNullable": true,
+          "MaxLength": 7
+        },
+        {
+          "Name": "HasOutstandingBalance",
+          "TypeRef": "sys.int"
+        }
+      ]
+    }
+  ]
+}

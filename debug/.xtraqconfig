@@ -1,0 +1,6 @@
+{
+    "Namespace": "WebApi",
+    "OutputDir": "Xtraq",
+    "TargetFramework": "net10",
+    "BuildSchemas": []
+}

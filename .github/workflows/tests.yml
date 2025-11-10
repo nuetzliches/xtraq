@@ -1,0 +1,126 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+
+jobs:
+  test:
+    name: Run ${{ matrix.framework }} test suite
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - framework: net8.0
+            sdk: 8.0.x
+            quality: ga
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_NOLOGO: 1
+      COVERAGE_THRESHOLD: "5"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.sdk }}
+          dotnet-quality: ${{ matrix.quality }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore Tests.sln -p:TargetFramework=${{ matrix.framework }}
+
+      - name: Build solution (Release)
+        run: dotnet build Tests.sln --configuration Release --no-restore -p:TargetFramework=${{ matrix.framework }}
+
+      - name: Prepare artifact directories
+        run: |
+          mkdir -p artifacts/test-results/${{ matrix.framework }}
+          mkdir -p artifacts/coverage
+          mkdir -p artifacts/test-results/${{ matrix.framework }}/integration-e2e
+
+      - name: Install ReportGenerator
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.4.18
+
+      - name: Add dotnet tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify Docker availability
+        run: docker info
+
+      - name: Pre-pull SQL Server image
+        run: docker pull mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Run unit tests with coverage
+        run: |
+          dotnet test tests/Xtraq.Tests/Xtraq.Tests.csproj --configuration Release --framework ${{ matrix.framework }} --no-build --logger trx --results-directory artifacts/test-results/${{ matrix.framework }}/unit --collect:"XPlat Code Coverage" --verbosity normal --diag "artifacts/test-results/${{ matrix.framework }}/unit/vstest-diag.log"
+
+      - name: Run integration tests with coverage
+        run: |
+          dotnet test tests/Xtraq.IntegrationTests/Xtraq.IntegrationTests.csproj --configuration Release --framework ${{ matrix.framework }} --no-build --logger trx --results-directory artifacts/test-results/${{ matrix.framework }}/integration --collect:"XPlat Code Coverage" --filter "Category!=CliE2E" --verbosity normal --diag "artifacts/test-results/${{ matrix.framework }}/integration/vstest-diag.log"
+
+      - name: Run CLI end-to-end test
+        timeout-minutes: 15
+        run: |
+          dotnet test tests/Xtraq.IntegrationTests/Xtraq.IntegrationTests.csproj --configuration Release --framework ${{ matrix.framework }} --no-build --logger trx --results-directory artifacts/test-results/${{ matrix.framework }}/integration-e2e --filter "Category=CliE2E" --verbosity normal --diag "artifacts/test-results/${{ matrix.framework }}/integration-e2e/vstest-diag.log"
+
+      - name: Generate coverage report
+        run: |
+          reportgenerator -reports:"artifacts/test-results/${{ matrix.framework }}/**/coverage.cobertura.xml" -targetdir:"artifacts/coverage/${{ matrix.framework }}" -reporttypes:"JsonSummary;Cobertura;HtmlInline_AzurePipelines"
+
+      - name: Enforce coverage threshold
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          import json
+
+          summary_path = Path("artifacts/coverage") / os.environ['FRAMEWORK'] / "Summary.json"
+          if not summary_path.is_file():
+              print(f"Coverage summary not found at {summary_path}.", file=sys.stderr)
+              sys.exit(1)
+
+          threshold = float(os.environ.get("COVERAGE_THRESHOLD", "0"))
+          data = json.loads(summary_path.read_text())
+          coverage = float(data["summary"]["linecoverage"])
+
+          print(f"Line coverage: {coverage:.2f}% (threshold {threshold:.2f}%)")
+          if coverage < threshold:
+              print("Coverage threshold not met.", file=sys.stderr)
+              sys.exit(1)
+          PY
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.framework }}
+          path: artifacts/test-results
+          overwrite: true
+          if-no-files-found: ignore
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.framework }}
+          path: artifacts/coverage
+          overwrite: true
+          if-no-files-found: warn
+

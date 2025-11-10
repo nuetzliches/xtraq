@@ -1,0 +1,63 @@
+{
+  "Schema": "sample",
+  "Name": "UserList",
+  "Parameters": [
+    {
+      "Name": "IncludeInactive",
+      "TypeRef": "sys.bit",
+      "IsNullable": true
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "Alias",
+          "TypeRef": "sys.nvarchar(120)",
+          "IsNullable": true,
+          "MaxLength": 120
+        },
+        {
+          "Name": "DisplayName",
+          "TypeRef": "sys.nvarchar(200)",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Email",
+          "TypeRef": "sys.nvarchar(320)",
+          "IsNullable": true,
+          "MaxLength": 320
+        },
+        {
+          "Name": "IsActive",
+          "TypeRef": "sys.bit"
+        },
+        {
+          "Name": "PreferredLocale",
+          "TypeRef": "sys.nvarchar(10)",
+          "MaxLength": 10
+        },
+        {
+          "Name": "CreatedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "MaxLength": 7
+        },
+        {
+          "Name": "UpdatedAtUtc",
+          "TypeRef": "sys.datetime2(3)",
+          "IsNullable": true,
+          "MaxLength": 7
+        },
+        {
+          "Name": "SearchName",
+          "TypeRef": "sys.nvarchar(321)",
+          "MaxLength": 321
+        }
+      ]
+    }
+  ]
+}

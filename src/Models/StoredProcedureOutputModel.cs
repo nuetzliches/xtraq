@@ -1,0 +1,42 @@
+using Xtraq.Data.Models;
+
+namespace Xtraq.Models;
+
+internal sealed class StoredProcedureOutputModel
+{
+    private readonly StoredProcedureOutput _item;
+
+    public StoredProcedureOutputModel()
+    {
+        _item = new StoredProcedureOutput();
+    }
+
+    public StoredProcedureOutputModel(StoredProcedureOutput item)
+    {
+        _item = item;
+    }
+
+    public string Name
+    {
+        get => _item.Name;
+        set => _item.Name = value;
+    }
+
+    public bool? IsNullable
+    {
+        get => _item.IsNullable;
+        set => _item.IsNullable = value ?? false;
+    }
+
+    public string SqlTypeName
+    {
+        get => _item.SqlTypeName;
+        set => _item.SqlTypeName = value;
+    }
+
+    public int MaxLength
+    {
+        get => _item.MaxLength;
+        set => _item.MaxLength = value;
+    }
+}

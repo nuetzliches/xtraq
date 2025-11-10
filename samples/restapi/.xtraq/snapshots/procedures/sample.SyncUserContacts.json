@@ -1,0 +1,42 @@
+{
+  "Schema": "sample",
+  "Name": "SyncUserContacts",
+  "Parameters": [
+    {
+      "Name": "Contacts",
+      "TypeRef": "sample.UserContactTableType"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "MergeAction",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 10
+        },
+        {
+          "Name": "ContactId"
+        },
+        {
+          "Name": "UserId"
+        },
+        {
+          "Name": "Email"
+        },
+        {
+          "Name": "DisplayName"
+        },
+        {
+          "Name": "Preferred"
+        },
+        {
+          "Name": "LastInteractionUtc"
+        },
+        {
+          "Name": "UpdatedAtUtc"
+        }
+      ]
+    }
+  ]
+}
