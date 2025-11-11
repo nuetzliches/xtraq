@@ -21,7 +21,7 @@ public sealed class EmbeddedResourceTemplateLoader : ITemplateLoader
             throw new ArgumentException("Resource prefix required", nameof(resourcePrefix));
         }
 
-    if (!resourcePrefix.EndsWith(".", StringComparison.Ordinal))
+        if (!resourcePrefix.EndsWith(".", StringComparison.Ordinal))
         {
             resourcePrefix += '.';
         }
