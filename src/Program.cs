@@ -441,30 +441,6 @@ public static class Program
 
         initCommand.SetHandler(async context =>
         {
-            static void EnsureProjectGitignore(string projectRoot)
-            {
-                Directory.CreateDirectory(projectRoot);
-                var gitignorePath = Path.Combine(projectRoot, ".gitignore");
-                var existing = File.Exists(gitignorePath) ? File.ReadAllLines(gitignorePath).ToList() : new List<string>();
-                var entries = new HashSet<string>(existing, StringComparer.Ordinal);
-                var required = new[] { ".xtraq/cache/", ".xtraq/telemetry/" };
-                var updated = false;
-
-                foreach (var entry in required)
-                {
-                    if (entries.Add(entry))
-                    {
-                        existing.Add(entry);
-                        updated = true;
-                    }
-                }
-
-                if (updated || !File.Exists(gitignorePath))
-                {
-                    File.WriteAllLines(gitignorePath, existing);
-                }
-            }
-
             var targetPath = context.ParseResult.GetValueForArgument(initProjectArgument)?.Trim();
             if (string.IsNullOrWhiteSpace(targetPath))
             {
@@ -536,7 +512,7 @@ public static class Program
                     }
 
                     Xtraq.Configuration.TrackableConfigManager.Write(resolved, envValues);
-                    EnsureProjectGitignore(resolved);
+                    Xtraq.Cli.ProjectEnvironmentBootstrapper.EnsureProjectGitignore(resolved);
                     Console.WriteLine($"[xtraq init] Trackable config updated at {Path.Combine(resolved, ".xtraqconfig")}");
                 }
                 catch (Exception configEx)

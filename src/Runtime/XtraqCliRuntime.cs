@@ -44,21 +44,48 @@ internal sealed class XtraqCliRuntime(
         var workingDirectory = DirectoryUtils.GetWorkingDirectory();
         var cliOverrides = BuildCliOverrides(options);
         XtraqConfiguration cfg;
-        try
+        var attemptedInit = false;
+        while (true)
         {
-            cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides);
-            if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
-                !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                workingDirectory = cfg.ProjectRoot;
-                DirectoryUtils.SetBasePath(workingDirectory);
+                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides);
+                if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
+                    !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
+                {
+                    workingDirectory = cfg.ProjectRoot;
+                    DirectoryUtils.SetBasePath(workingDirectory);
+                }
+
+                break;
             }
-        }
-        catch (Exception envEx)
-        {
-            consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
-            consoleService.Output("run xtraq init?");
-            return ExecuteResultEnum.Error;
+            catch (Exception envEx)
+            {
+                consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
+
+                if (attemptedInit)
+                {
+                    return ExecuteResultEnum.Error;
+                }
+
+                var consent = consoleService.GetYesNo("Run xtraq init now?", isDefaultConfirmed: true);
+                if (!consent)
+                {
+                    return ExecuteResultEnum.Error;
+                }
+
+                try
+                {
+                    await RunInitPipelineAsync(workingDirectory, consoleService).ConfigureAwait(false);
+                    consoleService.Success("Init pipeline completed. Configure XTRAQ_GENERATOR_DB in your .env before re-running commands.");
+                    attemptedInit = true;
+                }
+                catch (Exception initEx)
+                {
+                    consoleService.Error($"Init pipeline failed: {initEx.Message}");
+                    return ExecuteResultEnum.Error;
+                }
+            }
         }
 
         var connectionString = cfg.GeneratorConnectionString;
@@ -1190,6 +1217,18 @@ internal sealed class XtraqCliRuntime(
         public double? WarmRunSuccessRate { get; init; }
 
         public IReadOnlyList<TelemetryRunSummary> Runs { get; init; } = Array.Empty<TelemetryRunSummary>();
+    }
+    private static async Task RunInitPipelineAsync(string projectRoot, IConsoleService consoleService)
+    {
+        var resolvedRoot = string.IsNullOrWhiteSpace(projectRoot) ? Directory.GetCurrentDirectory() : projectRoot;
+        Directory.CreateDirectory(resolvedRoot);
+
+        var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolvedRoot, autoApprove: true).ConfigureAwait(false);
+        var examplePath = ProjectEnvironmentBootstrapper.EnsureEnvExample(resolvedRoot);
+        ProjectEnvironmentBootstrapper.EnsureProjectGitignore(resolvedRoot);
+
+        consoleService.Output($"[xtraq init] .env ready at {envPath}");
+        consoleService.Output($"[xtraq init] Template available at {examplePath}");
     }
 }
 

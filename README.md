@@ -1,7 +1,7 @@
 # Xtraq
 
 [![NuGet](https://img.shields.io/nuget/v/xtraq?logo=nuget)](https://www.nuget.org/packages/xtraq/)
-[![Tests](https://img.shields.io/github/actions/workflow/status/nuetzliches/xtraq/tests.yml?logo=githubactions&label=Tests)](https://github.com/nuetzliches/xtraq/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/nuetzliches/xtraq/tests.yml?logo=githubactions&label=Tests&branch=master)](https://github.com/nuetzliches/xtraq/actions/workflows/tests.yml?query=branch%3Amaster)
 
 👉 Explore the full documentation on GitHub Pages: https://nuetzliches.github.io/xtraq/
 

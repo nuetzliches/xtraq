@@ -87,6 +87,34 @@ internal static class ProjectEnvironmentBootstrapper
         return examplePath;
     }
 
+    /// <summary>
+    /// Ensures the project .gitignore ignores Xtraq cache and telemetry folders.
+    /// </summary>
+    /// <param name="projectRoot">Project root directory.</param>
+    internal static void EnsureProjectGitignore(string projectRoot)
+    {
+        Directory.CreateDirectory(projectRoot);
+        var gitignorePath = Path.Combine(projectRoot, ".gitignore");
+        var lines = File.Exists(gitignorePath) ? File.ReadAllLines(gitignorePath).ToList() : new List<string>();
+        var seen = new HashSet<string>(lines, StringComparer.Ordinal);
+        var required = new[] { ".xtraq/cache/", ".xtraq/telemetry/" };
+        var updated = false;
+
+        foreach (var entry in required)
+        {
+            if (seen.Add(entry))
+            {
+                lines.Add(entry);
+                updated = true;
+            }
+        }
+
+        if (updated || !File.Exists(gitignorePath))
+        {
+            File.WriteAllLines(gitignorePath, lines);
+        }
+    }
+
     private static void TryWriteTrackableConfig(string projectRoot, string envPath)
     {
         try

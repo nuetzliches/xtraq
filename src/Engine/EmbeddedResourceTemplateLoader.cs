@@ -46,7 +46,46 @@ public sealed class EmbeddedResourceTemplateLoader : ITemplateLoader
             var content = reader.ReadToEnd();
 
             var logicalName = resourceName[resourcePrefix.Length..^4]; // strip prefix and .spt extension
-            TemplateLoaderSupport.AddTemplate(_catalog, logicalName, content);
+
+            static bool IsVariantSegment(string segment)
+            {
+                if (segment.Length <= 3 || !segment.StartsWith("net", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                for (var i = 3; i < segment.Length; i++)
+                {
+                    if (!char.IsDigit(segment[i]))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            var segments = logicalName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            string simpleName;
+            if (segments.Length == 0)
+            {
+                simpleName = logicalName;
+            }
+            else if (segments.Length >= 2 && IsVariantSegment(segments[^1]))
+            {
+                // Preserve variant suffix (e.g. UnifiedProcedure.net10)
+                simpleName = string.Join('.', segments[^2], segments[^1]);
+            }
+            else
+            {
+                simpleName = segments[^1];
+            }
+
+            TemplateLoaderSupport.AddTemplate(_catalog, simpleName, content);
+            if (!string.Equals(simpleName, logicalName, StringComparison.OrdinalIgnoreCase))
+            {
+                TemplateLoaderSupport.AddTemplate(_catalog, logicalName, content);
+            }
         }
     }
 
