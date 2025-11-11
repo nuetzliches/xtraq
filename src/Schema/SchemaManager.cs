@@ -389,50 +389,18 @@ internal sealed class SchemaManager(
             }
         }
 
-        // Apply --procedure flag filtering for schema snapshots (snapshot command only)
         var buildProcedures = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
-        bool hasProcedureFilter = false;
-        var procedureFilterExact = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var procedureFilterWildcard = new List<Regex>();
-        if (!string.IsNullOrWhiteSpace(buildProcedures))
+        var procedureFilter = ProcedureFilter.Create(buildProcedures, consoleService);
+        if (procedureFilter.HasFilter)
         {
-            var tokens = buildProcedures.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                                        .Select(p => p.Trim())
-                                        .Where(p => !string.IsNullOrEmpty(p))
-                                        .ToList();
-
-            foreach (var t in tokens)
+            var beforeCount = storedProcedures.Count;
+            storedProcedures = procedureFilter
+                .Apply(storedProcedures, static sp => $"{sp.SchemaName}.{sp.Name}")
+                .ToList();
+            var kept = storedProcedures.Count;
+            if (kept != beforeCount)
             {
-                if (t.Contains('*') || t.Contains('?'))
-                {
-                    // Convert wildcard to Regex: escape, then replace \* -> .*, \? -> .
-                    var escaped = Regex.Escape(t);
-                    var pattern = "^" + escaped.Replace("\\*", ".*").Replace("\\?", ".") + "$";
-                    try { procedureFilterWildcard.Add(new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)); } catch { }
-                }
-                else
-                {
-                    procedureFilterExact.Add(t);
-                }
-            }
-
-            hasProcedureFilter = (procedureFilterExact.Count + procedureFilterWildcard.Count) > 0;
-            if (hasProcedureFilter)
-            {
-                var beforeCount = storedProcedures.Count;
-                bool Matches(string fq)
-                {
-                    if (procedureFilterExact.Contains(fq)) return true;
-                    if (procedureFilterWildcard.Count == 0) return false;
-                    foreach (var rx in procedureFilterWildcard) { if (rx.IsMatch(fq)) return true; }
-                    return false;
-                }
-                storedProcedures = storedProcedures.Where(sp => Matches($"{sp.SchemaName}.{sp.Name}")).ToList();
-                var kept = storedProcedures.Count;
-                if (kept != beforeCount)
-                {
-                    consoleService.Verbose($"[procedure-filter] Filtered to {kept} procedure(s) via --procedure flag (was {beforeCount})");
-                }
+                consoleService.Verbose($"[procedure-filter] Filtered to {kept} procedure(s) via --procedure flag (was {beforeCount})");
             }
         }
 
@@ -546,22 +514,15 @@ internal sealed class SchemaManager(
                 var previousModifiedTicks = cacheEntry?.ModifiedTicks;
                 var canSkipDetails = !disableCache && previousModifiedTicks.HasValue && previousModifiedTicks.Value == currentModifiedTicks;
                 // Force re-parse for procedures selected via --procedure (per-proc, not global), wildcard-aware
-                if (hasProcedureFilter)
+                if (procedureFilter.HasFilter)
                 {
                     var fq = $"{storedProcedure.SchemaName}.{storedProcedure.Name}";
-                    bool Matches(string name)
-                    {
-                        if (procedureFilterExact != null && procedureFilterExact.Contains(name)) return true;
-                        if (procedureFilterWildcard != null)
-                        {
-                            foreach (var rx in procedureFilterWildcard) { if (rx.IsMatch(name)) return true; }
-                        }
-                        return false;
-                    }
-                    if (Matches(fq))
+                    if (procedureFilter.Matches(fq))
                     {
                         if (canSkipDetails && jsonTypeLogLevel == JsonTypeLogLevel.Detailed)
+                        {
                             consoleService.Verbose($"[cache] Re-parse forced for {fq} due to --procedure flag");
+                        }
                         canSkipDetails = false;
                     }
                 }
