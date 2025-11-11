@@ -142,7 +142,21 @@ internal static class JsonSupport
         {
             if (property.AttributeProvider?.IsDefined(typeof(JsonIncludeNullValuesAttribute), inherit: true) == true)
             {
-                property.IgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never;
+                var metaType = property.GetType();
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+                var ignoreCondition = metaType.GetProperty("IgnoreCondition", flags);
+                if (ignoreCondition?.CanWrite == true)
+                {
+                    ignoreCondition.SetValue(property, System.Text.Json.Serialization.JsonIgnoreCondition.Never);
+                    continue;
+                }
+
+                var defaultIgnoreCondition = metaType.GetProperty("DefaultIgnoreCondition", flags);
+                if (defaultIgnoreCondition?.CanWrite == true)
+                {
+                    defaultIgnoreCondition.SetValue(property, System.Text.Json.Serialization.JsonIgnoreCondition.Never);
+                }
             }
         }
     }

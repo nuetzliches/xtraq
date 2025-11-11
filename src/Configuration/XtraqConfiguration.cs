@@ -259,7 +259,7 @@ public sealed class XtraqConfiguration
                 throw new InvalidOperationException(".env file has no XTRAQ_ marker lines.");
         }
         if (string.IsNullOrWhiteSpace(cfg.GeneratorConnectionString))
-            throw new InvalidOperationException("XTRAQ_GENERATOR_DB must be configured via environment variables or .env. Run 'xtraq init' to scaffold the file.");
+            throw new InvalidOperationException("XTRAQ_GENERATOR_DB must be configured via environment variables or .env.");
         foreach (var schema in cfg.BuildSchemas)
         {
             var s = schema.Trim(); if (s.Length == 0) continue;

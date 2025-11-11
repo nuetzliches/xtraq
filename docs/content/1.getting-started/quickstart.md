@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 description: From zero to first generated code in minutes.
-version: 1.0.0-alpha.2
+version: 1.0.0-alpha.3
 ---
 
 # Quickstart
