@@ -392,7 +392,8 @@ namespace Xtraq.Metadata
                             var attrs = new List<string> { "[TableType]" };
                             if (!string.IsNullOrWhiteSpace(ttSchema)) attrs.Add($"[TableTypeSchema({ttSchema})]");
                             var sqlIdentifier = string.IsNullOrWhiteSpace(typeRef) ? ttName! : typeRef!;
-                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), pascal, false, sqlIdentifier, null, Documentation: null, Attributes: attrs);
+                            var clrType = $"IReadOnlyList<{pascal}>?";
+                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs);
                         }
                         else
                         {
