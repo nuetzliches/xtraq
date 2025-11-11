@@ -1,6 +1,6 @@
 ---
 title: init
-description: Initialize a xtraq project using the .env based configuration model.
+description: Initialize a xtraq project with a tracked `.xtraqconfig` snapshot and minimal `.env` secrets.
 versionIntroduced: 1.0.0-alpha
 experimental: false
 authoritative: true
@@ -35,7 +35,7 @@ xtraq init [options]
 {
   "command": "init",
   "idempotent": true,
-  "writes": [".env", "debug/.xtraqconfig"],
+  "writes": [".env", ".env.example", ".xtraqconfig"],
   "reads": [".env", ".env.example"],
   "exitCodes": { "0": "Success", "2": "WriteFailure" },
   "sideEffects": ["Preserves unknown XTRAQ_* keys and updates provided values"]
@@ -54,11 +54,11 @@ xtraq init -n Acme.Product.Data -c "Server=.;Database=AppDb;Trusted_Connection=T
 
 ## Notes
 
-- The command is safe to run multiple times; it only updates specified keys and rewrites the tracked `.xtraqconfig` when inputs change.
+- `.env` contains only the sensitive `XTRAQ_GENERATOR_DB` placeholder/value. All other defaults live in `.xtraqconfig`.
 - Unknown XTRAQ\_\* keys in existing `.env` are preserved verbatim.
 - Follow up with `xtraq snapshot` to refresh metadata before building or testing.
-- Keep `debug/.xtraqconfig` under source control so CI and teammates inherit the same defaults.
+- Keep `.xtraqconfig` under source control so CI and teammates inherit the same defaults.
 
 ## See Also
 
-- [Environment Bootstrap & Configuration](../../3.reference/env-bootstrap.md)
+- [Tracked Configuration & Environment Bootstrap](../../3.reference/env-bootstrap.md)

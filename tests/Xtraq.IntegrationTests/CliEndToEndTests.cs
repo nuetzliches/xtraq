@@ -663,10 +663,6 @@ public sealed class CliEndToEndTests : IAsyncLifetime
                 }
                 """;
 
-        var debugDirectory = Path.Combine(projectRoot, "debug");
-        Directory.CreateDirectory(debugDirectory);
-        await File.WriteAllTextAsync(Path.Combine(debugDirectory, ".xtraqconfig"), configContent).ConfigureAwait(false);
-
         await File.WriteAllTextAsync(Path.Combine(projectRoot, ".xtraqconfig"), configContent).ConfigureAwait(false);
     }
 

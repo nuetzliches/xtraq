@@ -56,7 +56,8 @@ internal sealed class XtraqCliRuntime(
         }
         catch (Exception envEx)
         {
-            consoleService.Error($"Failed to load environment configuration: {envEx.Message}");
+            consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
+            consoleService.Output("run xtraq init?");
             return ExecuteResultEnum.Error;
         }
 
@@ -332,7 +333,8 @@ internal sealed class XtraqCliRuntime(
         }
         catch (Exception envEx)
         {
-            consoleService.Error($"Failed to load environment configuration: {envEx.Message}");
+            consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
+            consoleService.Output("run xtraq init?");
             return ExecuteResultEnum.Error;
         }
 
@@ -372,7 +374,9 @@ internal sealed class XtraqCliRuntime(
             var renderer = new SimpleTemplateEngine();
             var toolRoot = Directory.GetCurrentDirectory();
             var templatesDir = Path.Combine(toolRoot, "src", "Templates");
-            ITemplateLoader? loader = Directory.Exists(templatesDir) ? new FileSystemTemplateLoader(templatesDir) : null;
+            ITemplateLoader loader = Directory.Exists(templatesDir)
+                ? new FileSystemTemplateLoader(templatesDir)
+                : new EmbeddedResourceTemplateLoader(typeof(XtraqCliRuntime).Assembly, "Xtraq.Templates.");
             var metadata = new TableTypeMetadataProvider(workingDirectory);
             var generator = new TableTypesGenerator(cfg, metadata, renderer, loader, workingDirectory);
             var tableTypesStopwatch = Stopwatch.StartNew();

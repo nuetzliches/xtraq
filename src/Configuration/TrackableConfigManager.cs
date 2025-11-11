@@ -1,7 +1,7 @@
 namespace Xtraq.Configuration;
 
 /// <summary>
-/// Manages the tracked configuration file (debug/.xtraqconfig) derived from non-sensitive .env values.
+/// Manages the tracked configuration file (.xtraqconfig) derived from non-sensitive .env values.
 /// </summary>
 internal static class TrackableConfigManager
 {
@@ -62,11 +62,28 @@ internal static class TrackableConfigManager
             return;
         }
 
-        var debugDir = Path.Combine(projectRoot, "debug");
-        Directory.CreateDirectory(debugDir);
+        Directory.CreateDirectory(projectRoot);
 
+        var existing = LoadTrackableConfigPairs(projectRoot);
+
+        string? ResolveValue(string key)
+        {
+            if (envValues.TryGetValue(key, out var candidate) && !string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate.Trim();
+            }
+
+            if (existing.TryGetValue(key, out var current) && !string.IsNullOrWhiteSpace(current))
+            {
+                return current.Trim();
+            }
+
+            return null;
+        }
+
+        var schemasRaw = ResolveValue("XTRAQ_BUILD_SCHEMAS");
         var buildSchemas = Array.Empty<string>();
-        if (envValues.TryGetValue("XTRAQ_BUILD_SCHEMAS", out var schemasRaw) && !string.IsNullOrWhiteSpace(schemasRaw))
+        if (!string.IsNullOrWhiteSpace(schemasRaw))
         {
             var buffer = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -83,19 +100,19 @@ internal static class TrackableConfigManager
             buildSchemas = buffer.ToArray();
         }
 
-        envValues.TryGetValue("XTRAQ_NAMESPACE", out var nsValue);
-        envValues.TryGetValue("XTRAQ_OUTPUT_DIR", out var outputDirValue);
-        envValues.TryGetValue("XTRAQ_TFM", out var tfmValue);
+        var nsValue = ResolveValue("XTRAQ_NAMESPACE");
+        var outputDirValue = ResolveValue("XTRAQ_OUTPUT_DIR");
+        var tfmValue = ResolveValue("XTRAQ_TFM");
 
         var payload = new
         {
-            Namespace = nsValue?.Trim() ?? string.Empty,
-            OutputDir = string.IsNullOrWhiteSpace(outputDirValue) ? "Xtraq" : outputDirValue!.Trim(),
-            TargetFramework = tfmValue?.Trim() ?? string.Empty,
+            Namespace = nsValue ?? string.Empty,
+            OutputDir = string.IsNullOrWhiteSpace(outputDirValue) ? "Xtraq" : outputDirValue!,
+            TargetFramework = tfmValue ?? string.Empty,
             BuildSchemas = buildSchemas
         };
 
-        var configPath = Path.Combine(debugDir, ".xtraqconfig");
+        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
         var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(configPath, json + Environment.NewLine);
     }
@@ -119,5 +136,101 @@ internal static class TrackableConfigManager
 
         var map = BuildEnvMap(File.ReadAllLines(envPath));
         Write(projectRoot, map);
+    }
+
+    private static Dictionary<string, string?> LoadTrackableConfigPairs(string projectRoot)
+    {
+        var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return map;
+        }
+
+        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
+        if (!File.Exists(configPath))
+        {
+            return map;
+        }
+
+        using var stream = File.OpenRead(configPath);
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+
+        if (root.TryGetProperty("Namespace", out var namespaceProperty) && namespaceProperty.ValueKind == JsonValueKind.String)
+        {
+            var value = namespaceProperty.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                map["XTRAQ_NAMESPACE"] = value.Trim();
+            }
+        }
+
+        if (root.TryGetProperty("OutputDir", out var outputDirProperty) && outputDirProperty.ValueKind == JsonValueKind.String)
+        {
+            var value = outputDirProperty.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                map["XTRAQ_OUTPUT_DIR"] = value.Trim();
+            }
+        }
+
+        if (root.TryGetProperty("TargetFramework", out var tfmProperty) && tfmProperty.ValueKind == JsonValueKind.String)
+        {
+            var value = tfmProperty.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                map["XTRAQ_TFM"] = value.Trim();
+            }
+        }
+
+        if (root.TryGetProperty("BuildSchemas", out var schemasProperty))
+        {
+            switch (schemasProperty.ValueKind)
+            {
+                case JsonValueKind.Array:
+                    {
+                        var ordered = new List<string>();
+                        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var item in schemasProperty.EnumerateArray())
+                        {
+                            if (item.ValueKind != JsonValueKind.String)
+                            {
+                                continue;
+                            }
+
+                            var schema = item.GetString();
+                            if (string.IsNullOrWhiteSpace(schema))
+                            {
+                                continue;
+                            }
+
+                            var trimmed = schema.Trim();
+                            if (unique.Add(trimmed))
+                            {
+                                ordered.Add(trimmed);
+                            }
+                        }
+
+                        if (ordered.Count > 0)
+                        {
+                            map["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', ordered);
+                        }
+
+                        break;
+                    }
+                case JsonValueKind.String:
+                    {
+                        var value = schemasProperty.GetString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            map["XTRAQ_BUILD_SCHEMAS"] = value.Trim();
+                        }
+
+                        break;
+                    }
+            }
+        }
+
+        return map;
     }
 }

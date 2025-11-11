@@ -33,8 +33,7 @@ public sealed class XtraqConfigurationTests
         try
         {
             File.WriteAllText(Path.Combine(projectRoot, ".env"), "XTRAQ_GENERATOR_DB=Server=(local);\n");
-            Directory.CreateDirectory(Path.Combine(projectRoot, "debug"));
-            File.WriteAllText(Path.Combine(projectRoot, "debug", ".xtraqconfig"),
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
                 "{\n"
                 + "  \"Namespace\": \"Tracked.Namespace\",\n"
                 + "  \"OutputDir\": \"Artifacts\",\n"

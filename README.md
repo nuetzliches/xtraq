@@ -39,7 +39,7 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 ## Quick start
 
 1. **Install** – `dotnet tool install --global xtraq`
-2. **Configure** – `xtraq init` writes non-secret defaults to `debug/.xtraqconfig` and sensitive values to a project-scoped `.env` file.
+2. **Configure** – `xtraq init` writes non-secret defaults to `.xtraqconfig`, ships an `.env.example` template, and keeps sensitive values in a project-scoped `.env` file.
 3. **Snapshot** – `xtraq snapshot` pulls stored procedure metadata and result shapes into the local cache.
 4. **Generate** – `xtraq build` emits strongly typed C# artefacts ready to commit, package, or publish.
 

@@ -19,7 +19,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>xtraq</ToolCommandName>
     <PackageId>xtraq</PackageId>
-    <Version>1.0.0-alpha</Version>
+  <Version>1.0.0-alpha.1</Version>
     <Authors>Xtraq Team</Authors>
     <Description>Xtraq CLI Tool with auto-update capabilities</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -38,6 +38,10 @@
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
     <None Include="../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\**\*.spt" />
   </ItemGroup>
 
   <ItemGroup>

@@ -308,7 +308,7 @@ public sealed class XtraqConfiguration
     }
 
     /// <summary>
-    /// Merges values sourced from debug/.xtraqconfig into the provided environment collection.
+    /// Merges values sourced from .xtraqconfig into the provided environment collection.
     /// </summary>
     /// <param name="projectRoot">Project root that hosts the tracked configuration file.</param>
     /// <param name="pairs">Environment key/value pairs populated from .env.</param>
@@ -345,7 +345,7 @@ public sealed class XtraqConfiguration
         {
             if (Xtraq.Utils.EnvironmentHelper.IsTrue("XTRAQ_VERBOSE"))
             {
-                Console.Error.WriteLine($"[xtraq] Warning: failed to merge debug/.xtraqconfig: {ex.Message}");
+                Console.Error.WriteLine($"[xtraq] Warning: failed to merge .xtraqconfig: {ex.Message}");
             }
         }
     }
@@ -363,7 +363,7 @@ public sealed class XtraqConfiguration
             return map;
         }
 
-        var configPath = Path.Combine(projectRoot, "debug", ".xtraqconfig");
+        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
         if (!File.Exists(configPath))
         {
             return map;
@@ -490,7 +490,7 @@ public sealed class XtraqConfiguration
     /// Returns whether the tracked configuration file exists for the provided project root.
     /// </summary>
     /// <param name="projectRoot">Project root directory.</param>
-    /// <returns><c>true</c> when debug/.xtraqconfig exists; otherwise <c>false</c>.</returns>
+    /// <returns><c>true</c> when .xtraqconfig exists; otherwise <c>false</c>.</returns>
     private static bool TrackableConfigExists(string? projectRoot)
     {
         if (string.IsNullOrWhiteSpace(projectRoot))
@@ -498,7 +498,7 @@ public sealed class XtraqConfiguration
             return false;
         }
 
-        var configPath = Path.Combine(projectRoot, "debug", ".xtraqconfig");
+        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
         return File.Exists(configPath);
     }
 

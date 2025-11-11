@@ -441,11 +441,10 @@ public static class Program
 
         initCommand.SetHandler(async context =>
         {
-            static void EnsureDebugGitignore(string projectRoot)
+            static void EnsureProjectGitignore(string projectRoot)
             {
-                var debugDir = Path.Combine(projectRoot, "debug");
-                Directory.CreateDirectory(debugDir);
-                var gitignorePath = Path.Combine(debugDir, ".gitignore");
+                Directory.CreateDirectory(projectRoot);
+                var gitignorePath = Path.Combine(projectRoot, ".gitignore");
                 var existing = File.Exists(gitignorePath) ? File.ReadAllLines(gitignorePath).ToList() : new List<string>();
                 var entries = new HashSet<string>(existing, StringComparer.Ordinal);
                 var required = new[] { ".xtraq/cache/", ".xtraq/telemetry/" };
@@ -481,6 +480,7 @@ public static class Program
             Directory.CreateDirectory(resolved);
 
             var envPath = await Xtraq.Cli.ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolved, autoApprove: true, force: force).ConfigureAwait(false);
+            var examplePath = Xtraq.Cli.ProjectEnvironmentBootstrapper.EnsureEnvExample(resolved, force);
 
             try
             {
@@ -505,23 +505,9 @@ public static class Program
                     lines[^1] = normalized + "=" + value;
                 }
 
-                if (!string.IsNullOrWhiteSpace(nsValue))
-                {
-                    Upsert("XTRAQ_NAMESPACE", nsValue);
-                }
-
                 if (!string.IsNullOrWhiteSpace(connection))
                 {
                     Upsert("XTRAQ_GENERATOR_DB", connection);
-                }
-
-                if (!string.IsNullOrWhiteSpace(schemas))
-                {
-                    var normalizedSchemas = string.Join(',', schemas.Split(',').Select(static s => s.Trim()).Where(static s => s.Length > 0));
-                    if (!string.IsNullOrWhiteSpace(normalizedSchemas))
-                    {
-                        Upsert("XTRAQ_BUILD_SCHEMAS", normalizedSchemas);
-                    }
                 }
 
                 File.WriteAllLines(envPath, lines);
@@ -529,9 +515,29 @@ public static class Program
                 try
                 {
                     var envValues = Xtraq.Configuration.TrackableConfigManager.BuildEnvMap(lines);
+
+                    if (!string.IsNullOrWhiteSpace(nsValue))
+                    {
+                        envValues["XTRAQ_NAMESPACE"] = nsValue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(schemas))
+                    {
+                        var normalizedSchemas = string.Join(',', schemas
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(static s => s.Trim())
+                            .Where(static s => s.Length > 0)
+                            .Distinct(StringComparer.OrdinalIgnoreCase));
+
+                        if (!string.IsNullOrWhiteSpace(normalizedSchemas))
+                        {
+                            envValues["XTRAQ_BUILD_SCHEMAS"] = normalizedSchemas;
+                        }
+                    }
+
                     Xtraq.Configuration.TrackableConfigManager.Write(resolved, envValues);
-                    EnsureDebugGitignore(resolved);
-                    Console.WriteLine($"[xtraq init] Trackable config updated at {Path.Combine(resolved, "debug", ".xtraqconfig")}");
+                    EnsureProjectGitignore(resolved);
+                    Console.WriteLine($"[xtraq init] Trackable config updated at {Path.Combine(resolved, ".xtraqconfig")}");
                 }
                 catch (Exception configEx)
                 {
@@ -544,6 +550,7 @@ public static class Program
             }
 
             Console.WriteLine($"[xtraq init] .env ready at {envPath}");
+            Console.WriteLine($"[xtraq init] Template available at {examplePath}");
             Console.WriteLine("JSON helpers ship enabled by default; no preview flags required.");
             Console.WriteLine("Next: run 'xtraq snapshot' followed by 'xtraq build' (or just 'xtraq').");
             DirectoryUtils.ResetBasePath();

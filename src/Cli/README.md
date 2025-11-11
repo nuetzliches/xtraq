@@ -41,14 +41,14 @@ xtraq [project-path] [options]
 
 ### `xtraq init`
 
-- Description: bootstrap a project `.env` and supporting debug artefacts.
+- Description: bootstrap a project `.env` and supporting artefacts.
 - Options:
   - `--path`, `-p`: target directory (defaults to current directory).
   - `--force`, `-f`: overwrite an existing `.env`.
   - `--namespace`, `-n`: seed `XTRAQ_NAMESPACE` in the generated `.env`.
   - `--connection`, `-c`: seed `XTRAQ_GENERATOR_DB`.
   - `--schemas`, `-s`: comma-separated allow-list for `XTRAQ_BUILD_SCHEMAS`.
-- Side effects: writes/updates `debug/.xtraqconfig`, ensures `debug/.gitignore`, and normalises `.env` keys to uppercase.
+- Side effects: writes/updates `.xtraqconfig`, ensures `.env.example` and `.gitignore`, and normalises `.env` keys to uppercase.
 
 ## Option semantics
 
@@ -67,7 +67,7 @@ To design the next iteration of the CLI without legacy constraints, adopt the fo
 3. **Default workflow:**
 
 - Bare `xtraq` (no arguments) resolves to `build --refresh-snapshot`, i.e. snapshot followed by build. This behaviour should be implemented by routing the root command to the `BuildCommand` with a `RefreshSnapshot` flag set.
-- When invoked, the root command first probes the target project (current directory or the positional path argument). If `.env`, `debug/.xtraqconfig`, or `.xtraq/` are missing, emit a status block explaining that the project is uninitialised and offer to run `xtraq init <path>`. Include a `--yes` switch for fully automated bootstraps.
+- When invoked, the root command first probes the target project (current directory or the positional path argument). If `.env`, `.xtraqconfig`, or `.xtraq/` are missing, emit a status block explaining that the project is uninitialised and offer to run `xtraq init <path>`. Include a `--yes` switch for fully automated bootstraps.
 - `xtraq <path>` is equivalent to `xtraq <path> build --refresh-snapshot`, while `xtraq <path> snapshot` and `xtraq <path> build` map directly to the respective verbs.
 - `snapshot` only refreshes metadata; `build` compiles artefacts; `build --refresh-snapshot` executes both steps; no separate `rebuild` verb exists.
 

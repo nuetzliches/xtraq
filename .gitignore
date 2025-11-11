@@ -4,7 +4,6 @@ debug/*
 !debug/.env.example
 !debug/*.md
 !debug/*Demo.cs
-!debug/.xtraqconfig
 
 # Untracked local documentation
 *.LocalOnly.md
@@ -17,6 +16,7 @@ old-tests/
 .env
 .env.local
 .env.*.local
+!.xtraqconfig
 
 # Build results
 [Dd]ebugPublic/
