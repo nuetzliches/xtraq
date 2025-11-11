@@ -643,30 +643,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var jsonInfo = rs.JsonPayload;
                     var isJson = jsonInfo != null;
                     var isJsonArray = jsonInfo?.IsArray ?? false;
-                    string jsonFallback = string.Empty;
+                    string ordinalDecls = string.Join(" ", ordinalAssignments); // classic mapping with cached ordinals (debug dump removed)
                     if (isJson)
                     {
-                        // Simplified direct deserialization: SQL returns exactly one row with a single NVARCHAR(MAX) JSON column.
-                        // No loop or fallback required; flags decide array vs single item handling.
-                        var optionsLiteral = "JsonSupport.Options";
-                        if (isJsonArray)
-                        {
-                            jsonFallback = $"{{ if (await r.ReadAsync(ct).ConfigureAwait(false) && !r.IsDBNull(0)) {{ var __raw = r.GetString(0); try {{ var __list = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, {optionsLiteral}); if (__list != null) foreach (var __e in __list) if (__e is {{ }} __value) list.Add(__value); }} catch {{ }} }} }}";
-                        }
-                        else
-                        {
-                            jsonFallback = $"{{ if (await r.ReadAsync(ct).ConfigureAwait(false) && !r.IsDBNull(0)) {{ var __raw = r.GetString(0); try {{ var __single = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, {optionsLiteral}); if (__single is {{ }} __value) list.Add(__value); }} catch {{ }} }} }}";
-                        }
-                    }
-                    string ordinalDecls;
-                    if (isJson)
-                    {
-                        // JSON result sets skip ordinal discovery; emit only the deserialization path
-                        ordinalDecls = jsonFallback;
-                    }
-                    else
-                    {
-                        ordinalDecls = string.Join(" ", ordinalAssignments); // classic mapping with cached ordinals (debug dump removed)
+                        ordinalDecls = string.Empty;
                     }
                     var fieldExprs = string.Join(", ", effectiveFields.Select((f, idx) => MaterializeFieldExpressionCached(f, idx)));
                     // Preserve property naming pattern Result, Result1, Result2 ... so existing tests stay unchanged
@@ -675,15 +655,35 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     string propType;
                     string propDefault;
                     string aggregateAssignment = initializerExpr;
-                    if (isJson && !isJsonArray)
+                    var hasRaw = false;
+                    string rawPropName = string.Empty;
+                    const string rawPropDefault = "null";
+                    string rawAggregateAssignment = "null";
+                    if (isJson)
                     {
-                        var rowsVar = $"rows{rsIdx}";
-                        var firstVar = $"first{rsIdx}";
-                        var listVar = $"list{rsIdx}";
-                        var listFirstVar = $"listFirst{rsIdx}";
-                        aggregateAssignment = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] {rowsVar} && {rowsVar}.Length > 0 && {rowsVar}[0] is {rsType} {firstVar} ? {firstVar} : (rs.Length > {rsIdx} && rs[{rsIdx}] is System.Collections.Generic.List<object> {listVar} && {listVar}.Count > 0 && {listVar}[0] is {rsType} {listFirstVar} ? {listFirstVar} : ({rsType}?)null)";
-                        propType = rsType + "?";
-                        propDefault = "null";
+                        hasRaw = true;
+                        rawPropName = propName + "RawJson";
+                        var rawRowsVar = $"rows{rsIdx}_raw";
+                        var rawEnvVar = $"env{rsIdx}_raw";
+                        rawAggregateAssignment = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] {rawRowsVar} && {rawRowsVar}.Length > 0 && {rawRowsVar}[0] is JsonResultEnvelope<{rsType}> {rawEnvVar} ? {rawEnvVar}.RawJson : null";
+
+                        if (isJsonArray)
+                        {
+                            var rowsVar = $"rows{rsIdx}";
+                            var envVar = $"env{rsIdx}";
+                            aggregateAssignment = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] {rowsVar} && {rowsVar}.Length > 0 && {rowsVar}[0] is JsonResultEnvelope<{rsType}> {envVar} ? {envVar}.Items : System.Array.Empty<{rsType}>()";
+                            propType = $"IReadOnlyList<{rsType}>";
+                            propDefault = $"Array.Empty<{rsType}>()";
+                        }
+                        else
+                        {
+                            var rowsVar = $"rows{rsIdx}";
+                            var envVar = $"env{rsIdx}";
+                            var valueVar = $"value{rsIdx}";
+                            aggregateAssignment = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] {rowsVar} && {rowsVar}.Length > 0 && {rowsVar}[0] is JsonResultEnvelope<{rsType}> {envVar} && {envVar}.TryGetFirst(out var {valueVar}) ? {valueVar} : ({rsType}?)null";
+                            propType = rsType + "?";
+                            propDefault = "null";
+                        }
                     }
                     else
                     {
@@ -694,7 +694,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     string bodyBlock;
                     if (isJson)
                     {
-                        bodyBlock = $"var list = new System.Collections.Generic.List<object>(); {jsonFallback} return list;";
+                        if (isJsonArray)
+                        {
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\nstring? __raw = null;\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (await r.ReadAsync(ct).ConfigureAwait(false))\n{{\n    if (!r.IsDBNull(0))\n    {{\n        __raw = r.GetString(0);\n        try\n        {{\n            var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, JsonSupport.Options);\n            if (__parsed is not null)\n            {{\n                foreach (var __entry in __parsed)\n                {{\n                    if (__entry is {{ }} __value)\n                    {{\n                        __items.Add(__value);\n                    }}\n                }}\n            }}\n        }}\n        catch\n        {{\n        }}\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                        }
+                        else
+                        {
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\nstring? __raw = null;\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (await r.ReadAsync(ct).ConfigureAwait(false))\n{{\n    if (!r.IsDBNull(0))\n    {{\n        __raw = r.GetString(0);\n        try\n        {{\n            var __parsed = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, JsonSupport.Options);\n            if (__parsed is {{ }} __value)\n            {{\n                __items.Add(__value);\n            }}\n        }}\n        catch\n        {{\n        }}\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                        }
                     }
                     else
                     {
@@ -928,6 +935,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             PropName = propName,
                             PropType = propType,
                             PropDefault = propDefault,
+                            HasRaw = hasRaw,
+                            RawPropName = rawPropName,
+                            RawPropDefault = rawPropDefault,
+                            RawAggregateAssignment = rawAggregateAssignment,
                             OrdinalDecls = ordinalDecls,
                             FieldExprs = fieldExprs,
                             Index = rsIdx,
@@ -1077,6 +1088,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             PropName = propName,
                             PropType = propType,
                             PropDefault = propDefault,
+                            HasRaw = hasRaw,
+                            RawPropName = rawPropName,
+                            RawPropDefault = rawPropDefault,
+                            RawAggregateAssignment = rawAggregateAssignment,
                             OrdinalDecls = ordinalDecls,
                             FieldExprs = constructorArgs,
                             Index = rsIdx,
@@ -1104,6 +1119,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             PropName = propName,
                             PropType = propType,
                             PropDefault = propDefault,
+                            HasRaw = hasRaw,
+                            RawPropName = rawPropName,
+                            RawPropDefault = rawPropDefault,
+                            RawAggregateAssignment = rawAggregateAssignment,
                             OrdinalDecls = ordinalDecls,
                             FieldExprs = fieldExprs,
                             Index = rsIdx,

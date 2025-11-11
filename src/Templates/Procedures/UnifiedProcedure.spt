@@ -58,6 +58,12 @@ public sealed class {{ UnifiedResultTypeName }}
 	/// Result set <c>{{ resultSet.Name }}</c> projected as a strongly typed sequence.
 	/// </summary>
 	public {{ resultSet.PropType }} {{ resultSet.PropName }} { get; init; } = {{ resultSet.PropDefault }};
+{{#if resultSet.HasRaw}}
+	/// <summary>
+	/// Raw JSON payload captured for result set <c>{{ resultSet.Name }}</c>.
+	/// </summary>
+	public string? {{ resultSet.RawPropName }} { get; init; } = {{ resultSet.RawPropDefault }};
+{{/if}}
 {{/each}}
 {{/if}}
 }
@@ -99,7 +105,8 @@ internal static partial class {{ PlanTypeName }}
 				Error = error{{#if HasOutput}},
 				Output = ({{ OutputTypeName }}?)output{{/if}}{{#if HasResultSets}}{{#each ResultSets as resultSet}},
 				// ResultSet {{ resultSet.Index }} -> {{ resultSet.PropName }}
-				{{ resultSet.PropName }} = {{ resultSet.AggregateAssignment }}{{/each}}{{/if}}
+				{{ resultSet.PropName }} = {{ resultSet.AggregateAssignment }}{{#if resultSet.HasRaw}},
+				{{ resultSet.RawPropName }} = {{ resultSet.RawAggregateAssignment }}{{/if}}{{/each}}{{/if}}
 			};
 		};
 		void Binder(DbCommand cmd, object? state)

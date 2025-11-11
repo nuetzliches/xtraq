@@ -162,6 +162,43 @@ internal static class JsonSupport
     }
 }
 
+internal sealed class JsonResultEnvelope<T>
+{
+    private readonly IReadOnlyList<T> _items;
+
+    private JsonResultEnvelope(IReadOnlyList<T> items, string? rawJson)
+    {
+        _items = items ?? Array.Empty<T>();
+        RawJson = rawJson;
+    }
+
+    public static JsonResultEnvelope<T> Create(IEnumerable<T> items, string? rawJson)
+    {
+        if (items is IReadOnlyList<T> list)
+        {
+            return new JsonResultEnvelope<T>(list, rawJson);
+        }
+
+        return new JsonResultEnvelope<T>(items?.ToArray() ?? Array.Empty<T>(), rawJson);
+    }
+
+    public IReadOnlyList<T> Items => _items;
+
+    public string? RawJson { get; }
+
+    public bool TryGetFirst(out T value)
+    {
+        if (_items.Count > 0)
+        {
+            value = _items[0];
+            return true;
+        }
+
+        value = default!;
+        return false;
+    }
+}
+
 internal static class ProcedureExecutor
 {
     public static async Task<T> ExecuteAsync<T>(DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
