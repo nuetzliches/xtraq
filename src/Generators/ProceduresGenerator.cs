@@ -946,7 +946,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             FieldsBlock = rootFieldsBlock,
                             ReturnsJson = isJson,
                             ReturnsJsonArray = isJsonArray,
-                            BodyBlock = bodyBlock,
+                            BodyBlock = IndentBlock(bodyBlock, "                "),
                             NestedRecordsBlock = nestedRecordsBlock
                         });
                         rsIdx++;
@@ -1099,7 +1099,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             FieldsBlock = rootFieldsBlock,
                             ReturnsJson = isJson,
                             ReturnsJsonArray = isJsonArray,
-                            BodyBlock = bodyBlock,
+                            BodyBlock = IndentBlock(bodyBlock, "                "),
                             NestedRecordsBlock = nestedRecordsBlock
                         });
                         rsIdx++;
@@ -1130,7 +1130,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             FieldsBlock = fieldsBlock,
                             ReturnsJson = isJson,
                             ReturnsJsonArray = isJsonArray,
-                            BodyBlock = bodyBlock,
+                            BodyBlock = IndentBlock(bodyBlock, "                "),
                             NestedRecordsBlock = nestedRecordsBlock
                         });
                         rsIdx++;
@@ -1383,6 +1383,29 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
         var elementType = GetArrayElementType(f.ClrType);
         return $"System.Array.Empty<{elementType}>()";
+    }
+
+    private static string IndentBlock(string text, string indent)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var lines = text.Split('\n');
+        var sb = new System.Text.StringBuilder(text.Length + indent.Length * lines.Length);
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].TrimEnd('\r');
+            sb.Append(indent);
+            sb.Append(line);
+            if (i < lines.Length - 1)
+            {
+                sb.Append('\n');
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static string BuildJsonArrayMaterializer(FieldDescriptor f)

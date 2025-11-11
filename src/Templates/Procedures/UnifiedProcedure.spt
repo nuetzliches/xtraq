@@ -87,9 +87,9 @@ internal static partial class {{ PlanTypeName }}
 		var resultSets = new ResultSetMapping[]
 		{
 {{#each ResultSets as resultSet}}            new("{{ resultSet.Name }}", async (r, ct) =>
-    	{
-			{{ resultSet.BodyBlock }}
-    	}),
+			{
+{{ resultSet.BodyBlock }}
+			}),
 
 {{/each}}        };
 {{else}}
@@ -108,7 +108,7 @@ internal static partial class {{ PlanTypeName }}
 				{{ resultSet.PropName }} = {{ resultSet.AggregateAssignment }}{{#if resultSet.HasRaw}},
 				{{ resultSet.RawPropName }} = {{ resultSet.RawAggregateAssignment }}{{/if}}{{/each}}{{/if}}
 			};
-		};
+		}
 		void Binder(DbCommand cmd, object? state)
 		{
 {{#if HasInput}}

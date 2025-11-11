@@ -164,12 +164,13 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                                 var prec = c.GetPropertyOrDefaultInt("Precision");
                                 var scale = c.GetPropertyOrDefaultInt("Scale");
                                 var resolved = _typeResolver.Resolve(typeRef, maxLen, prec, scale);
+                                var nullableFlag = c.GetPropertyOrNullBool("IsNullable");
                                 cols.Add(new ColumnInfo
                                 {
                                     Name = c.GetPropertyOrDefault("Name") ?? string.Empty,
                                     TypeRef = typeRef ?? string.Empty,
                                     SqlType = resolved?.SqlType ?? c.GetPropertyOrDefault("SqlTypeName") ?? string.Empty,
-                                    IsNullable = c.GetPropertyOrDefaultBool("IsNullable"),
+                                    IsNullable = nullableFlag ?? resolved?.IsNullable ?? false,
                                     MaxLength = resolved?.MaxLength ?? maxLen,
                                     Precision = resolved?.Precision ?? prec,
                                     Scale = resolved?.Scale ?? scale,
@@ -266,12 +267,13 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                     var prec = c.GetPropertyOrDefaultInt("Precision");
                     var scale = c.GetPropertyOrDefaultInt("Scale");
                     var resolved = _typeResolver.Resolve(typeRef, maxLen, prec, scale);
+                    var nullableFlag = c.GetPropertyOrNullBool("IsNullable");
                     cols.Add(new ColumnInfo
                     {
                         Name = c.GetPropertyOrDefault("Name") ?? string.Empty,
                         TypeRef = typeRef ?? string.Empty,
                         SqlType = resolved?.SqlType ?? c.GetPropertyOrDefault("SqlTypeName") ?? string.Empty,
-                        IsNullable = c.GetPropertyOrDefaultBool("IsNullable"),
+                        IsNullable = nullableFlag ?? resolved?.IsNullable ?? false,
                         MaxLength = resolved?.MaxLength ?? maxLen,
                         Precision = resolved?.Precision ?? prec,
                         Scale = resolved?.Scale ?? scale,
