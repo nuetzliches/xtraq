@@ -1,0 +1,21 @@
+name: Deploy Docs Site (disabled)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-site
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docs deployment disabled
+        run: echo "Docs deployment handled from publish workflow."

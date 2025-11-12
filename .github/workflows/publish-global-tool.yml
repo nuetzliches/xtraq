@@ -11,6 +11,11 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build-and-publish:
     name: Build and publish tool package
@@ -57,4 +62,40 @@ jobs:
           path: artifacts/nuget
           overwrite: true
           if-no-files-found: error
+
+  docs-site:
+    name: Build and deploy docs site (inactive)
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && false }}
+    env:
+      NODE_ENV: production
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate static site
+        run: npm run generate
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.output/public
+
+      - name: Deploy to GitHub Pages
+        id: deploy-pages
+        uses: actions/deploy-pages@v4
 
