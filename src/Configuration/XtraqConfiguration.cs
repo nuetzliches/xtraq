@@ -50,114 +50,62 @@ public sealed class XtraqConfiguration
     public static XtraqConfiguration Load(string? projectRoot = null, IDictionary<string, string?>? cliOverrides = null, string? explicitConfigPath = null)
     {
         var verbose = Xtraq.Utils.EnvironmentHelper.IsTrue("XTRAQ_VERBOSE");
-        projectRoot ??= Directory.GetCurrentDirectory();
 
-        static string ResolveAgainst(string baseDir, string hint)
+        static string DetermineSearchBase(string? rootHint, string? configHint)
         {
-            if (string.IsNullOrWhiteSpace(hint))
+            string? candidate = null;
+
+            if (!string.IsNullOrWhiteSpace(configHint))
             {
-                return hint;
+                candidate = configHint.Trim();
+            }
+            else if (!string.IsNullOrWhiteSpace(rootHint))
+            {
+                candidate = rootHint.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return Directory.GetCurrentDirectory();
             }
 
             try
             {
-                if (Path.IsPathRooted(hint))
-                {
-                    return Path.GetFullPath(hint);
-                }
-
-                var effectiveBase = string.IsNullOrWhiteSpace(baseDir) ? Directory.GetCurrentDirectory() : baseDir;
-                return Path.GetFullPath(Path.Combine(effectiveBase, hint));
+                candidate = Path.GetFullPath(candidate);
             }
             catch
             {
-                return hint;
+                // fall back to raw candidate when normalisation fails
             }
+
+            if (File.Exists(candidate))
+            {
+                return Path.GetDirectoryName(candidate) ?? Directory.GetCurrentDirectory();
+            }
+
+            return candidate;
         }
 
-        var envFilePath = ResolveEnvFile(projectRoot);
-        var filePairs = LoadDotEnv(envFilePath);
-        MergeTrackableConfig(projectRoot, filePairs);
-        PublishEnvironmentVariables(filePairs);
+        var searchBase = DetermineSearchBase(projectRoot, explicitConfigPath);
+        var configDirectory = TrackableConfigManager.LocateConfigDirectory(searchBase);
+        var configFilePath = Path.Combine(configDirectory, ".xtraqconfig");
 
-        string? configHint = string.IsNullOrWhiteSpace(explicitConfigPath) ? null : explicitConfigPath;
-        if (string.IsNullOrWhiteSpace(configHint))
-        {
-            var fromProcessHint = Environment.GetEnvironmentVariable("XTRAQ_CONFIG_PATH");
-            if (!string.IsNullOrWhiteSpace(fromProcessHint))
-            {
-                configHint = fromProcessHint;
-            }
-            else if (filePairs.TryGetValue("XTRAQ_CONFIG_PATH", out var fromFileHint) && !string.IsNullOrWhiteSpace(fromFileHint))
-            {
-                configHint = fromFileHint;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(configHint))
-        {
-            try
-            {
-                var baseDirForHint = envFilePath is not null && envFilePath.Length > 0
-                    ? Path.GetDirectoryName(envFilePath) ?? projectRoot
-                    : projectRoot;
-
-                var resolvedHint = ResolveAgainst(baseDirForHint, configHint);
-                explicitConfigPath = resolvedHint;
-
-                string? newRoot = null;
-                if (!string.IsNullOrWhiteSpace(resolvedHint))
-                {
-                    if (Directory.Exists(resolvedHint))
-                    {
-                        newRoot = resolvedHint;
-                    }
-                    else if (File.Exists(resolvedHint))
-                    {
-                        newRoot = Path.GetDirectoryName(resolvedHint);
-                    }
-                    else
-                    {
-                        var hintParent = Path.GetDirectoryName(resolvedHint);
-                        if (!string.IsNullOrWhiteSpace(hintParent) && Directory.Exists(hintParent))
-                        {
-                            newRoot = hintParent;
-                        }
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(newRoot))
-                {
-                    projectRoot = newRoot!;
-                    envFilePath = ResolveEnvFile(projectRoot);
-                    filePairs = LoadDotEnv(envFilePath);
-                    MergeTrackableConfig(projectRoot, filePairs);
-                }
-            }
-            catch
-            {
-                if (verbose) Console.Error.WriteLine("[xtraq] Warning: config path resolution failed; using default project root.");
-            }
-        }
-
-        MergeTrackableConfig(projectRoot, filePairs);
-        PublishEnvironmentVariables(filePairs, overwrite: true);
-
-        if (!TrackableConfigExists(projectRoot))
+        if (!File.Exists(configFilePath))
         {
             throw new InvalidOperationException("Xtraq project is not initialised. Run 'xtraq init'.");
         }
+
+        projectRoot = TrackableConfigManager.ResolveRedirectTargets(configDirectory) ?? configDirectory;
+
+        var envFilePath = ResolveEnvFile(projectRoot);
+        var filePairs = LoadDotEnv(envFilePath);
+        PublishEnvironmentVariables(filePairs, overwrite: true);
 
         try
         {
             if (!string.IsNullOrWhiteSpace(projectRoot))
             {
                 Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", Path.GetFullPath(projectRoot));
-            }
-
-            if (!string.IsNullOrWhiteSpace(explicitConfigPath))
-            {
-                Environment.SetEnvironmentVariable("XTRAQ_CONFIG_PATH", Path.GetFullPath(explicitConfigPath));
             }
         }
         catch
@@ -190,7 +138,7 @@ public sealed class XtraqConfiguration
             DefaultConnection = fullConn,
             NamespaceRoot = NullIfEmpty(Get("XTRAQ_NAMESPACE")),
             OutputDir = outputDirResolved,
-            ConfigPath = explicitConfigPath,
+            ConfigPath = File.Exists(configFilePath) ? configFilePath : null,
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
             EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues
@@ -222,9 +170,10 @@ public sealed class XtraqConfiguration
                 throw new InvalidOperationException(".env bootstrap failed - required for Xtraq.");
             }
 
+            Xtraq.Configuration.TrackableConfigManager.WriteDefaultProjectPath(projectRoot);
+
             envFilePath = bootstrapPath;
             filePairs = LoadDotEnv(envFilePath);
-            MergeTrackableConfig(projectRoot, filePairs);
             PublishEnvironmentVariables(filePairs, overwrite: true);
         }
         Validate(cfg, envFilePath);
@@ -249,7 +198,7 @@ public sealed class XtraqConfiguration
         }
         if (!string.IsNullOrWhiteSpace(cfg.OutputDir) && cfg.OutputDir.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             throw new InvalidOperationException($"XTRAQ_OUTPUT_DIR '{cfg.OutputDir}' contains invalid chars.");
-        if (!TrackableConfigExists(cfg.ProjectRoot))
+        if (string.IsNullOrWhiteSpace(cfg.ConfigPath) || !File.Exists(cfg.ConfigPath))
             throw new InvalidOperationException("Xtraq project is not initialised. Run 'xtraq init'.");
 
         if (!string.IsNullOrWhiteSpace(envFilePath) && File.Exists(envFilePath))
@@ -308,150 +257,6 @@ public sealed class XtraqConfiguration
     }
 
     /// <summary>
-    /// Merges values sourced from .xtraqconfig into the provided environment collection.
-    /// </summary>
-    /// <param name="projectRoot">Project root that hosts the tracked configuration file.</param>
-    /// <param name="pairs">Environment key/value pairs populated from .env.</param>
-    private static void MergeTrackableConfig(string? projectRoot, IDictionary<string, string?> pairs)
-    {
-        if (string.IsNullOrWhiteSpace(projectRoot) || pairs == null)
-        {
-            return;
-        }
-
-        try
-        {
-            var trackable = LoadTrackableConfigPairs(projectRoot);
-            if (trackable.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var entry in trackable)
-            {
-                var value = entry.Value;
-                if (string.IsNullOrWhiteSpace(value))
-                {
-                    continue;
-                }
-
-                if (!pairs.TryGetValue(entry.Key, out var existing) || string.IsNullOrWhiteSpace(existing))
-                {
-                    pairs[entry.Key] = value;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            if (Xtraq.Utils.EnvironmentHelper.IsTrue("XTRAQ_VERBOSE"))
-            {
-                Console.Error.WriteLine($"[xtraq] Warning: failed to merge .xtraqconfig: {ex.Message}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Reads the tracked configuration JSON file and translates supported keys to environment equivalents.
-    /// </summary>
-    /// <param name="projectRoot">Project root directory.</param>
-    /// <returns>Dictionary containing trackable configuration keys mapped to environment variables.</returns>
-    private static Dictionary<string, string?> LoadTrackableConfigPairs(string projectRoot)
-    {
-        var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(projectRoot))
-        {
-            return map;
-        }
-
-        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
-        if (!File.Exists(configPath))
-        {
-            return map;
-        }
-
-        using var stream = File.OpenRead(configPath);
-        using var document = JsonDocument.Parse(stream);
-        var root = document.RootElement;
-
-        if (root.TryGetProperty("Namespace", out var namespaceProperty) && namespaceProperty.ValueKind == JsonValueKind.String)
-        {
-            var value = namespaceProperty.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                map["XTRAQ_NAMESPACE"] = value.Trim();
-            }
-        }
-
-        if (root.TryGetProperty("OutputDir", out var outputDirProperty) && outputDirProperty.ValueKind == JsonValueKind.String)
-        {
-            var value = outputDirProperty.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                map["XTRAQ_OUTPUT_DIR"] = value.Trim();
-            }
-        }
-
-        if (root.TryGetProperty("TargetFramework", out var tfmProperty) && tfmProperty.ValueKind == JsonValueKind.String)
-        {
-            var value = tfmProperty.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                map["XTRAQ_TFM"] = value.Trim();
-            }
-        }
-
-        if (root.TryGetProperty("BuildSchemas", out var schemasProperty))
-        {
-            switch (schemasProperty.ValueKind)
-            {
-                case JsonValueKind.Array:
-                    {
-                        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        var ordered = new List<string>();
-                        foreach (var item in schemasProperty.EnumerateArray())
-                        {
-                            if (item.ValueKind != JsonValueKind.String)
-                            {
-                                continue;
-                            }
-
-                            var schema = item.GetString();
-                            if (string.IsNullOrWhiteSpace(schema))
-                            {
-                                continue;
-                            }
-
-                            var trimmed = schema.Trim();
-                            if (unique.Add(trimmed))
-                            {
-                                ordered.Add(trimmed);
-                            }
-                        }
-
-                        if (ordered.Count > 0)
-                        {
-                            map["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', ordered);
-                        }
-
-                        break;
-                    }
-                case JsonValueKind.String:
-                    {
-                        var value = schemasProperty.GetString();
-                        if (!string.IsNullOrWhiteSpace(value))
-                        {
-                            map["XTRAQ_BUILD_SCHEMAS"] = value.Trim();
-                        }
-
-                        break;
-                    }
-            }
-        }
-
-        return map;
-    }
-
-    /// <summary>
     /// Publishes the supplied key/value pairs to the current process environment.
     /// </summary>
     /// <param name="pairs">The environment variable pairs to publish.</param>
@@ -484,22 +289,6 @@ public sealed class XtraqConfiguration
 
             Environment.SetEnvironmentVariable(key, value);
         }
-    }
-
-    /// <summary>
-    /// Returns whether the tracked configuration file exists for the provided project root.
-    /// </summary>
-    /// <param name="projectRoot">Project root directory.</param>
-    /// <returns><c>true</c> when .xtraqconfig exists; otherwise <c>false</c>.</returns>
-    private static bool TrackableConfigExists(string? projectRoot)
-    {
-        if (string.IsNullOrWhiteSpace(projectRoot))
-        {
-            return false;
-        }
-
-        var configPath = Path.Combine(projectRoot, ".xtraqconfig");
-        return File.Exists(configPath);
     }
 
     /// <summary>

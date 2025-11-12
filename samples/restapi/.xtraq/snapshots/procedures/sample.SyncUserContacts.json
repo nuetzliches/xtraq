@@ -16,25 +16,36 @@
           "MaxLength": 10
         },
         {
-          "Name": "ContactId"
+          "Name": "ContactId",
+          "TypeRef": "sys.int"
         },
         {
-          "Name": "UserId"
+          "Name": "UserId",
+          "TypeRef": "sys.int"
         },
         {
-          "Name": "Email"
+          "Name": "Email",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 320
         },
         {
-          "Name": "DisplayName"
+          "Name": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200
         },
         {
-          "Name": "Preferred"
+          "Name": "Preferred",
+          "TypeRef": "sys.bit"
         },
         {
-          "Name": "LastInteractionUtc"
+          "Name": "LastInteractionUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
         },
         {
-          "Name": "UpdatedAtUtc"
+          "Name": "UpdatedAtUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
         }
       ]
     }

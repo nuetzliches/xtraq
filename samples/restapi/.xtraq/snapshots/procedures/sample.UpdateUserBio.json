@@ -21,7 +21,7 @@
         },
         {
           "Name": "DisplayName",
-          "TypeRef": "sys.nvarchar(200)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 200
         },
         {
@@ -30,9 +30,8 @@
         },
         {
           "Name": "UpdatedAtUtc",
-          "TypeRef": "sys.datetime2(3)",
-          "IsNullable": true,
-          "MaxLength": 7
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
         }
       ]
     }

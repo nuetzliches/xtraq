@@ -1,11 +1,13 @@
 
+using Xtraq.Configuration;
+
 namespace Xtraq.Utils;
 
 /// <summary>
 /// Centralized resolution of the active project root for generation.
 /// Order of precedence:
-/// 1. Explicit environment variable XTRAQ_CONFIG_PATH (file) or XTRAQ_PROJECT_ROOT (directory)
-/// 2. Command line -p resolved earlier via DirectoryUtils.SetBasePath (stored as working directory)
+/// 1. Environment variable XTRAQ_PROJECT_ROOT when it points to an existing directory
+/// 2. .xtraqconfig discovery from the current working directory upwards
 /// 3. Current working directory
 /// Falls back gracefully and never throws.
 /// Provides also a heuristic for the solution root (first parent containing src/Xtraq.csproj or .git folder).
@@ -16,34 +18,24 @@ internal static class ProjectRootResolver
     {
         try
         {
-            // If process env passes explicit config path, prefer its directory. Accept both files and directories.
-            var cfgPath = Environment.GetEnvironmentVariable("XTRAQ_CONFIG_PATH");
-            if (!string.IsNullOrWhiteSpace(cfgPath))
+            var projRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+            if (!string.IsNullOrWhiteSpace(projRoot))
             {
                 try
                 {
-                    var fullCfg = Path.GetFullPath(cfgPath);
-                    if (File.Exists(fullCfg))
+                    var normalized = Path.GetFullPath(projRoot);
+                    if (Directory.Exists(normalized))
                     {
-                        return Path.GetDirectoryName(fullCfg) ?? Directory.GetCurrentDirectory();
-                    }
-
-                    if (Directory.Exists(fullCfg))
-                    {
-                        return fullCfg;
+                        return normalized;
                     }
                 }
                 catch
                 {
-                    // ignore invalid config path
+                    // ignore invalid env hints
                 }
             }
 
-            var projRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
-            if (!string.IsNullOrWhiteSpace(projRoot) && Directory.Exists(projRoot))
-            {
-                return Path.GetFullPath(projRoot);
-            }
+            return TrackableConfigManager.ResolveProjectRoot(Directory.GetCurrentDirectory());
         }
         catch { }
         // Fallback: current working directory (already adjusted by -p via DirectoryUtils.SetBasePath in CommandBase)

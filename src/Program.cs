@@ -38,18 +38,12 @@ public static class Program
 
         try
         {
-            var projectHint = TryExtractProjectHint(normalizedArgs);
-            if (!string.IsNullOrWhiteSpace(projectHint))
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT")))
             {
-                var (configHint, projectRoot) = NormalizeCliProjectHint(projectHint);
-                if (!string.IsNullOrWhiteSpace(configHint))
+                var defaultRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(Directory.GetCurrentDirectory());
+                if (!string.IsNullOrWhiteSpace(defaultRoot))
                 {
-                    Environment.SetEnvironmentVariable("XTRAQ_CONFIG_PATH", configHint);
-                }
-
-                if (!string.IsNullOrWhiteSpace(projectRoot))
-                {
-                    Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", projectRoot);
+                    Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", defaultRoot);
                 }
             }
         }
@@ -98,17 +92,16 @@ public static class Program
             var cwd = Directory.GetCurrentDirectory();
             LoadSkipVarsFromEnv(Path.Combine(cwd, ".env"));
 
-            var cfgPath = Environment.GetEnvironmentVariable("XTRAQ_CONFIG_PATH");
-            if (!string.IsNullOrWhiteSpace(cfgPath))
+            try
             {
-                try
+                var resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(cwd);
+                if (!string.Equals(resolvedRoot, cwd, StringComparison.OrdinalIgnoreCase))
                 {
-                    string directory = File.Exists(cfgPath) ? Path.GetDirectoryName(cfgPath)! : cfgPath;
-                    LoadSkipVarsFromEnv(Path.Combine(directory, ".env"));
+                    LoadSkipVarsFromEnv(Path.Combine(resolvedRoot, ".env"));
                 }
-                catch
-                {
-                }
+            }
+            catch
+            {
             }
         }
         catch
@@ -267,32 +260,65 @@ public static class Program
 
         string NormalizeProjectPath(string? value)
         {
+            static bool LooksLikeEnv(string hint) => hint.EndsWith(".env", StringComparison.OrdinalIgnoreCase) || hint.EndsWith(".env.local", StringComparison.OrdinalIgnoreCase);
+
+            var fallback = Directory.GetCurrentDirectory();
             if (string.IsNullOrWhiteSpace(value))
             {
-                return Directory.GetCurrentDirectory();
+                var resolvedDefault = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(fallback);
+                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", resolvedDefault);
+                return resolvedDefault;
             }
 
             var trimmed = value.Trim();
-            var (configHint, projectRoot) = NormalizeCliProjectHint(trimmed);
-            if (!string.IsNullOrWhiteSpace(configHint))
-            {
-                Environment.SetEnvironmentVariable("XTRAQ_CONFIG_PATH", configHint);
-            }
-
-            if (!string.IsNullOrWhiteSpace(projectRoot))
-            {
-                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", projectRoot);
-                return projectRoot;
-            }
-
+            string candidate;
             try
             {
-                return Path.GetFullPath(trimmed);
+                candidate = Path.GetFullPath(trimmed);
             }
             catch
             {
-                return trimmed;
+                candidate = trimmed;
             }
+
+            string DetermineRootForFilePath(string path)
+            {
+                var directory = Path.GetDirectoryName(path) ?? fallback;
+                if (LooksLikeEnv(path))
+                {
+                    return Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
+                }
+
+                if (string.Equals(Path.GetFileName(path), ".xtraqconfig", StringComparison.OrdinalIgnoreCase))
+                {
+                    var redirected = Xtraq.Configuration.TrackableConfigManager.ResolveRedirectTargets(directory);
+                    return redirected ?? directory;
+                }
+
+                return Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
+            }
+
+            string resolvedRoot;
+            if (File.Exists(candidate))
+            {
+                resolvedRoot = DetermineRootForFilePath(candidate);
+            }
+            else if (Directory.Exists(candidate))
+            {
+                resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(candidate);
+            }
+            else if (LooksLikeEnv(candidate))
+            {
+                var directory = Path.GetDirectoryName(candidate) ?? fallback;
+                resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
+            }
+            else
+            {
+                resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(candidate);
+            }
+
+            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", resolvedRoot);
+            return resolvedRoot;
         }
 
         async Task ExecuteCommandAsync(
@@ -562,10 +588,11 @@ public static class Program
             ["environment"] = string.IsNullOrWhiteSpace(environment) ? "Production" : environment
         };
 
-        var configHint = Environment.GetEnvironmentVariable("XTRAQ_CONFIG_PATH");
-        if (!string.IsNullOrWhiteSpace(configHint))
+        var configDirectory = Xtraq.Configuration.TrackableConfigManager.LocateConfigDirectory(resolvedRoot);
+        var configPath = Path.Combine(configDirectory, ".xtraqconfig");
+        if (File.Exists(configPath))
         {
-            metadata["configPath"] = NormalizePathSafe(configHint);
+            metadata["configPath"] = NormalizePathSafe(configPath);
         }
 
         var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");

@@ -19,34 +19,32 @@
         },
         {
           "Name": "OrderNumber",
-          "TypeRef": "sys.nvarchar(40)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 40
         },
         {
           "Name": "Status",
-          "TypeRef": "sys.nvarchar(50)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 50
         },
         {
           "Name": "TotalAmount",
-          "TypeRef": "sys.decimal(18,2)",
+          "TypeRef": "sys.decimal",
           "MaxLength": 9
         },
         {
           "Name": "Currency",
-          "TypeRef": "sys.char(3)",
+          "TypeRef": "sys.char",
           "MaxLength": 3
         },
         {
           "Name": "PlacedAtUtc",
-          "TypeRef": "sys.datetime2(3)",
-          "MaxLength": 7
+          "TypeRef": "sys.datetime2"
         },
         {
           "Name": "RequiredAtUtc",
-          "TypeRef": "sys.datetime2(3)",
-          "IsNullable": true,
-          "MaxLength": 7
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
         },
         {
           "Name": "Payments",
@@ -60,23 +58,22 @@
             },
             {
               "Name": "Gateway",
-              "TypeRef": "sys.nvarchar(50)",
+              "TypeRef": "sys.nvarchar",
               "MaxLength": 50
             },
             {
               "Name": "Amount",
-              "TypeRef": "sys.decimal(18,4)",
+              "TypeRef": "sys.decimal",
               "MaxLength": 9
             },
             {
               "Name": "CapturedAtUtc",
-              "TypeRef": "sys.datetime2(3)",
-              "IsNullable": true,
-              "MaxLength": 7
+              "TypeRef": "sys.datetime2",
+              "IsNullable": true
             },
             {
               "Name": "FailureReason",
-              "TypeRef": "sys.nvarchar(400)",
+              "TypeRef": "sys.nvarchar",
               "IsNullable": true,
               "MaxLength": 400
             }

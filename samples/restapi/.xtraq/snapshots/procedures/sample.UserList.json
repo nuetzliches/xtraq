@@ -17,18 +17,18 @@
         },
         {
           "Name": "Alias",
-          "TypeRef": "sys.nvarchar(120)",
+          "TypeRef": "sys.nvarchar",
           "IsNullable": true,
           "MaxLength": 120
         },
         {
           "Name": "DisplayName",
-          "TypeRef": "sys.nvarchar(200)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 200
         },
         {
           "Name": "Email",
-          "TypeRef": "sys.nvarchar(320)",
+          "TypeRef": "sys.nvarchar",
           "IsNullable": true,
           "MaxLength": 320
         },
@@ -38,23 +38,21 @@
         },
         {
           "Name": "PreferredLocale",
-          "TypeRef": "sys.nvarchar(10)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 10
         },
         {
           "Name": "CreatedAtUtc",
-          "TypeRef": "sys.datetime2(3)",
-          "MaxLength": 7
+          "TypeRef": "sys.datetime2"
         },
         {
           "Name": "UpdatedAtUtc",
-          "TypeRef": "sys.datetime2(3)",
-          "IsNullable": true,
-          "MaxLength": 7
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
         },
         {
           "Name": "SearchName",
-          "TypeRef": "sys.nvarchar(321)",
+          "TypeRef": "sys.nvarchar",
           "MaxLength": 321
         }
       ]
