@@ -43,8 +43,9 @@ internal sealed class SchemaManager(
     // [cache]                     Local cache snapshot load/save events.
     // [timing]                    Overall timing diagnostics.
     // These prefixes allow downstream log consumers to filter transformation phases precisely.
-    public async Task<List<SchemaModel>> ListAsync(ConfigurationModel config, bool noCache = false, CancellationToken cancellationToken = default)
+    public async Task<List<SchemaModel>> ListAsync(SchemaSelectionContext? context, bool noCache = false, CancellationToken cancellationToken = default)
     {
+        context ??= new SchemaSelectionContext();
         // Ensure AST parser can resolve table column types for CTE type propagation into nested JSON
         if (StoredProcedureContentModel.ResolveTableColumnType == null)
         {
@@ -180,214 +181,25 @@ internal sealed class SchemaManager(
 
         var schemas = dbSchemas.Select(static i => new SchemaModel(i)).ToList();
 
-        // Legacy schema list (config.Schema) still present -> use its statuses first
-        if (config?.Schema != null)
+        var statusEvaluator = new SchemaStatusEvaluator();
+        var statusResult = statusEvaluator.Evaluate(context, schemas);
+        schemas = statusResult.Schemas;
+        var activeSchemas = statusResult.ActiveSchemas;
+
+        if (statusResult.BuildSchemasChanged)
         {
-            foreach (var schema in schemas)
-            {
-                var currentSchema = config.Schema.SingleOrDefault(i => i.Name == schema.Name);
-                schema.Status = (currentSchema != null)
-                    ? currentSchema.Status
-                    : config.Project.DefaultSchemaStatus;
-            }
-        }
-        else if (config?.Project != null)
-        {
-            // Snapshot-only mode (legacy schema node removed).
-            // Revised semantics for DefaultSchemaStatus=Ignore:
-            //   - ONLY brand new schemas (not present in the latest snapshot) are auto-ignored and added to IgnoredSchemas.
-            //   - Previously known schemas default to Build unless explicitly ignored.
-            // For any other default value the prior fallback behavior applies.
-
-            var ignored = config.Project.IgnoredSchemas ?? new List<string>();
-            var defaultStatus = config.Project.DefaultSchemaStatus;
-
-            // Determine known schemas from latest snapshot (if present)
-            var knownSchemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                var working = DirectoryUtils.GetWorkingDirectory();
-                var schemaDir = System.IO.Path.Combine(working, ".xtraq", "snapshots");
-                // Fixup phase: repair procedures that have exactly one EXEC placeholder but are missing a local JSON result set.
-                // Scenario: parser did not capture the FOR JSON SELECT (e.g. complex construction) and after forwarding only a placeholder remains.
-                // Heuristic: If definition contains "FOR JSON" and ResultSets has exactly one placeholder (empty columns, ExecSource set, ReturnsJson=false) -> attempt reparse.
-                // If reparse yields no JSON sets: add a minimal synthetic empty JSON set to preserve structure for downstream generation.
-                // Removed: automatic placeholder reparse and synthetic JSON set generation.
-                // AST-only mode: produce optional logging when potential missed JSON sets are detected.
-                try
-                {
-                    bool enableLegacyPlaceholderReparse = EnvironmentHelper.IsTrue("XTRAQ_JSON_PLACEHOLDER_REPARSE");
-                    foreach (var schema in schemas)
-                    {
-                        foreach (var proc in schema.StoredProcedures ?? Enumerable.Empty<StoredProcedureModel>())
-                        {
-                            var content = proc.Content;
-                            if (content?.ResultSets == null) continue;
-                            if (content.ResultSets.Count != 1) continue;
-                            var rs0 = content.ResultSets[0];
-                            bool isExecPlaceholderOnly = !rs0.ReturnsJson && !rs0.ReturnsJsonArray && !string.IsNullOrEmpty(rs0.ExecSourceProcedureName) && (rs0.Columns == null || rs0.Columns.Count == 0);
-                            if (!isExecPlaceholderOnly) continue;
-                            var def = content.Definition;
-                            if (string.IsNullOrWhiteSpace(def)) continue;
-                            if (def.IndexOf("FOR JSON", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                            if (enableLegacyPlaceholderReparse)
-                            {
-                                StoredProcedureContentModel? reparsed = null;
-                                try { reparsed = StoredProcedureContentModel.Parse(def, proc.SchemaName); } catch { }
-                                var jsonSets = reparsed?.ResultSets?.Where(r => r.ReturnsJson)?.ToList();
-                                if (jsonSets != null && jsonSets.Count > 0)
-                                {
-                                    var newSets = new List<StoredProcedureContentModel.ResultSet> { rs0 };
-                                    newSets.AddRange(jsonSets);
-                                    proc.Content = new StoredProcedureContentModel
-                                    {
-                                        Definition = content.Definition,
-                                        Statements = content.Statements,
-                                        ContainsSelect = content.ContainsSelect,
-                                        ContainsInsert = content.ContainsInsert,
-                                        ContainsUpdate = content.ContainsUpdate,
-                                        ContainsDelete = content.ContainsDelete,
-                                        ContainsMerge = content.ContainsMerge,
-                                        ContainsOpenJson = content.ContainsOpenJson,
-                                        ResultSets = newSets,
-                                        UsedFallbackParser = content.UsedFallbackParser,
-                                        ParseErrorCount = content.ParseErrorCount,
-                                        FirstParseError = content.FirstParseError,
-                                        ExecutedProcedures = content.ExecutedProcedures,
-                                        ContainsExecKeyword = content.ContainsExecKeyword,
-                                        RawExecCandidates = content.RawExecCandidates,
-                                        RawExecCandidateKinds = content.RawExecCandidateKinds
-                                    };
-                                    consoleService.Verbose($"[proc-fixup-json-reparse] {proc.SchemaName}.{proc.Name} added {jsonSets.Count} JSON set(s) (legacy mode)");
-                                    continue;
-                                }
-                            }
-                            // Emit diagnostics only (no synthetic reconstruction anymore)
-                            if (ShouldDiagJsonMissAst())
-                            {
-                                consoleService.Output($"[proc-json-miss-ast] {proc.SchemaName}.{proc.Name} placeholder-only EXEC with FOR JSON detected but no AST JSON set (legacy reparse disabled)");
-                            }
-                        }
-                    }
-                }
-                catch (Exception jsonMissEx)
-                {
-                    consoleService.Verbose($"[proc-json-miss-ast-warn] {jsonMissEx.Message}");
-                }
-
-                var expandedSnapshot = expandedSnapshotService.LoadExpanded();
-                if (expandedSnapshot?.Schemas != null)
-                {
-                    foreach (var s in expandedSnapshot.Schemas)
-                    {
-                        if (!string.IsNullOrWhiteSpace(s.Name))
-                        {
-                            knownSchemas.Add(s.Name);
-                        }
-                    }
-                }
-            }
-            catch { /* best effort */ }
-
-            bool addedNewIgnored = false;
-            var initialIgnoredSet = new HashSet<string>(ignored, StringComparer.OrdinalIgnoreCase); // track originally ignored for delta detection
-            var autoAddedIgnored = new List<string>();
-
-            foreach (var schema in schemas)
-            {
-                var isExplicitlyIgnored = ignored.Contains(schema.Name, StringComparer.OrdinalIgnoreCase);
-                var isKnown = knownSchemas.Contains(schema.Name);
-
-                if (defaultStatus == SchemaStatusEnum.Ignore)
-                {
-                    // FIRST RUN (no snapshot): do NOT auto-extend IgnoredSchemas.
-                    if (knownSchemas.Count == 0)
-                    {
-                        schema.Status = isExplicitlyIgnored ? SchemaStatusEnum.Ignore : SchemaStatusEnum.Build;
-                        continue;
-                    }
-
-                    // Subsequent runs: only truly new (unknown) schemas become auto-ignored.
-                    if (isExplicitlyIgnored)
-                    {
-                        schema.Status = SchemaStatusEnum.Ignore;
-                    }
-                    else if (!isKnown)
-                    {
-                        schema.Status = SchemaStatusEnum.Ignore;
-                        if (!ignored.Contains(schema.Name, StringComparer.OrdinalIgnoreCase))
-                        {
-                            ignored.Add(schema.Name);
-                            autoAddedIgnored.Add(schema.Name);
-                            addedNewIgnored = true;
-                        }
-                    }
-                    else
-                    {
-                        schema.Status = SchemaStatusEnum.Build;
-                    }
-                }
-                else
-                {
-                    schema.Status = defaultStatus;
-                    if (isExplicitlyIgnored)
-                    {
-                        schema.Status = SchemaStatusEnum.Ignore;
-                    }
-                }
-            }
-
-            // Update IgnoredSchemas in config (in-memory only here; persistence handled by caller)
-            if (addedNewIgnored)
-            {
-                // Ensure list stays de-duplicated and sorted
-                config.Project.IgnoredSchemas = ignored.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-                consoleService.Verbose($"[ignore] Auto-added {autoAddedIgnored.Count} new schema(s) to IgnoredSchemas (default=Ignore)");
-            }
-
-            // Bootstrap heuristic removed: on first run all non-explicitly ignored schemas are built.
-
-            if (ignored.Count > 0)
-            {
-                consoleService.Verbose($"[ignore] Applied IgnoredSchemas list ({ignored.Count}) (default={defaultStatus})");
-            }
+            context.BuildSchemas = statusResult.BuildSchemas.ToList();
         }
 
-        // If both legacy and IgnoredSchemas exist (edge case during migration), let IgnoredSchemas override
-        if (config?.Schema != null && config.Project?.IgnoredSchemas?.Any() == true)
+        if (statusResult.BuildSchemas.Count > 0)
         {
-            foreach (var schema in schemas)
-            {
-                if (config.Project.IgnoredSchemas.Contains(schema.Name, StringComparer.OrdinalIgnoreCase))
-                {
-                    schema.Status = SchemaStatusEnum.Ignore;
-                }
-            }
-            consoleService.Verbose($"[ignore] IgnoredSchemas override applied ({config.Project.IgnoredSchemas.Count})");
+            consoleService.Verbose($"[build-schemas] Build schema allow-list contains {statusResult.BuildSchemas.Count} schema(s)");
         }
-
-        // Reorder: ignored first (kept for legacy ordering expectations)
-        schemas = schemas.OrderByDescending(static schema => schema.Status).ToList();
-
-        var activeSchemas = schemas.Where(i => i.Status != SchemaStatusEnum.Ignore).ToList();
         // Build list only for later filtering/persistence logic; we enumerate procedures for all schemas unfiltered.
         var storedProcedures = await dbContext.StoredProcedureListAsync(string.Empty, cancellationToken) ?? new List<StoredProcedure>();
         var schemaListString = string.Join(',', activeSchemas.Select(i => $"'{i.Name}'"));
 
-        // Apply IgnoredProcedures filter (schema.name) early
-        var ignoredProcedures = config?.Project?.IgnoredProcedures ?? new List<string>();
-        var jsonTypeLogLevel = config?.Project?.JsonTypeLogLevel ?? JsonTypeLogLevel.Detailed;
-        if (ignoredProcedures.Count > 0)
-        {
-            var ignoredSet = new HashSet<string>(ignoredProcedures, StringComparer.OrdinalIgnoreCase);
-            var beforeCount = storedProcedures.Count;
-            storedProcedures = storedProcedures.Where(sp => !ignoredSet.Contains($"{sp.SchemaName}.{sp.Name}")).ToList();
-            var removed = beforeCount - storedProcedures.Count;
-            if (removed > 0)
-            {
-                consoleService.Verbose($"[ignore-proc] Filtered {removed} procedure(s) via IgnoredProcedures list");
-            }
-        }
+        var jsonTypeLogLevel = context.JsonTypeLogLevel;
 
         var buildProcedures = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
         var procedureFilter = ProcedureFilter.Create(buildProcedures, consoleService);
@@ -405,7 +217,7 @@ internal sealed class SchemaManager(
         }
 
         // Build a simple fingerprint (avoid secrets): use output namespace or role kind + schemas + SP count
-        var projectId = config?.Project?.Output?.Namespace ?? "UnknownProject";
+    var projectId = string.IsNullOrWhiteSpace(context.ProjectNamespace) ? "UnknownProject" : context.ProjectNamespace;
         var fingerprintRaw = $"{projectId}|{schemaListString}|{storedProcedures.Count}";
         var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fingerprintRaw))).Substring(0, 16);
 
