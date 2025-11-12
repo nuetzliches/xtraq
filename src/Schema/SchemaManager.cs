@@ -217,7 +217,7 @@ internal sealed class SchemaManager(
         }
 
         // Build a simple fingerprint (avoid secrets): use output namespace or role kind + schemas + SP count
-    var projectId = string.IsNullOrWhiteSpace(context.ProjectNamespace) ? "UnknownProject" : context.ProjectNamespace;
+        var projectId = string.IsNullOrWhiteSpace(context.ProjectNamespace) ? "UnknownProject" : context.ProjectNamespace;
         var fingerprintRaw = $"{projectId}|{schemaListString}|{storedProcedures.Count}";
         var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fingerprintRaw))).Substring(0, 16);
 
