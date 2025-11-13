@@ -484,6 +484,49 @@ internal static class TrackableConfigManager
         return parts.Count == 0 ? Array.Empty<string>() : parts;
     }
 
+    /// <summary>
+    /// Reads tracked defaults from the project configuration file and converts them to environment keys.
+    /// </summary>
+    /// <param name="projectRoot">Resolved project root that hosts the tracked configuration.</param>
+    /// <returns>Dictionary containing tracked defaults keyed by their corresponding environment variables.</returns>
+    public static IReadOnlyDictionary<string, string?> ReadDefaults(string projectRoot)
+    {
+        var defaults = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return defaults;
+        }
+
+        var normalizedRoot = SafeGetFullPath(projectRoot);
+        var payload = ReadExistingPayload(normalizedRoot);
+        if (payload is null)
+        {
+            return defaults;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.Namespace))
+        {
+            defaults["XTRAQ_NAMESPACE"] = payload.Namespace!.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.OutputDir))
+        {
+            defaults["XTRAQ_OUTPUT_DIR"] = payload.OutputDir!.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.TargetFramework))
+        {
+            defaults["XTRAQ_TARGET_FRAMEWORK"] = payload.TargetFramework!.Trim();
+        }
+
+        if (payload.BuildSchemas.Count > 0)
+        {
+            defaults["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', payload.BuildSchemas);
+        }
+
+        return defaults;
+    }
+
     private static bool ContainsRedirect(string configPath)
     {
         try

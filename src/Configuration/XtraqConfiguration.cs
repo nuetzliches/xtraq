@@ -96,6 +96,7 @@ public sealed class XtraqConfiguration
         }
 
         projectRoot = TrackableConfigManager.ResolveRedirectTargets(configDirectory) ?? configDirectory;
+        var trackedDefaults = TrackableConfigManager.ReadDefaults(projectRoot);
 
         var envFilePath = ResolveEnvFile(projectRoot);
         var filePairs = LoadDotEnv(envFilePath);
@@ -119,6 +120,7 @@ public sealed class XtraqConfiguration
             var fromProcess = Environment.GetEnvironmentVariable(key);
             if (!string.IsNullOrWhiteSpace(fromProcess)) return fromProcess!;
             if (filePairs.TryGetValue(key, out var fromFile) && !string.IsNullOrWhiteSpace(fromFile)) return fromFile!;
+            if (trackedDefaults.TryGetValue(key, out var fromTracked) && !string.IsNullOrWhiteSpace(fromTracked)) return fromTracked!;
             return string.Empty;
         }
 

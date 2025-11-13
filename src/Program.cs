@@ -577,28 +577,57 @@ public static class Program
     private static string BuildSessionMetadataJson(string commandName, CliCommandOptions options, string projectPath, string environment, bool refreshRequested)
     {
         var resolvedRoot = ProjectRootResolver.ResolveCurrent();
+        var workingDirectory = NormalizePathSafe(Directory.GetCurrentDirectory());
+        var normalizedProjectPath = NormalizePathSafe(projectPath);
+        var normalizedProjectRoot = NormalizePathSafe(resolvedRoot);
+
         var metadata = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["command"] = string.IsNullOrWhiteSpace(commandName) ? "default" : commandName,
             ["version"] = ResolveProductVersion(),
-            ["timestampUtc"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-            ["workingDirectory"] = NormalizePathSafe(Directory.GetCurrentDirectory()),
-            ["projectPath"] = NormalizePathSafe(projectPath),
-            ["projectRoot"] = NormalizePathSafe(resolvedRoot),
-            ["environment"] = string.IsNullOrWhiteSpace(environment) ? "Production" : environment
+            ["timestampUtc"] = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture),
+            ["workingDirectory"] = workingDirectory,
+            ["projectPath"] = normalizedProjectPath
         };
+
+        if (!string.IsNullOrWhiteSpace(environment) && !string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata["environment"] = environment;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedProjectRoot))
+        {
+            var differsFromPath = !string.Equals(normalizedProjectRoot, normalizedProjectPath, StringComparison.OrdinalIgnoreCase);
+            if (differsFromPath || options.Verbose)
+            {
+                metadata["projectRoot"] = normalizedProjectRoot;
+            }
+        }
 
         var configDirectory = Xtraq.Configuration.TrackableConfigManager.LocateConfigDirectory(resolvedRoot);
         var configPath = Path.Combine(configDirectory, ".xtraqconfig");
         if (File.Exists(configPath))
         {
-            metadata["configPath"] = NormalizePathSafe(configPath);
+            var normalizedConfig = NormalizePathSafe(configPath);
+            var defaultConfigPath = string.IsNullOrWhiteSpace(normalizedProjectRoot)
+                ? string.Empty
+                : NormalizePathSafe(Path.Combine(normalizedProjectRoot, ".xtraqconfig"));
+
+            if (options.Verbose || !string.Equals(normalizedConfig, defaultConfigPath, StringComparison.OrdinalIgnoreCase))
+            {
+                metadata["configPath"] = normalizedConfig;
+            }
         }
 
         var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
         if (!string.IsNullOrWhiteSpace(projectHint))
         {
-            metadata["projectRootHint"] = NormalizePathSafe(projectHint);
+            var normalizedHint = NormalizePathSafe(projectHint);
+            var differsFromRoot = !string.Equals(normalizedHint, normalizedProjectRoot, StringComparison.OrdinalIgnoreCase);
+            if (differsFromRoot || options.Verbose)
+            {
+                metadata["projectRootHint"] = normalizedHint;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(options.Procedure))
@@ -641,8 +670,7 @@ public static class Program
 
     private static string ResolveProductBanner()
     {
-        var version = ResolveProductVersion();
-        return string.IsNullOrWhiteSpace(version) ? "Xtraq" : $"Xtraq v{version}";
+        return "Xtraq";
     }
 
     private static string ResolveProductVersion()
