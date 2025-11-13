@@ -50,4 +50,4 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is under [Free Use, No Warranty license](LICENSE).
