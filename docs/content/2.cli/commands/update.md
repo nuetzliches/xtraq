@@ -27,19 +27,15 @@ xtraq update [options]
 
 > `update` ignores project-path arguments because the tool update always targets the global installation.
 
-## Behavior Contract (Draft)
+## Behavior Contract
 
-```json
-{
-  "command": "update",
-  "reads": [],
-  "writes": [],
-  "exitCodes": {
-    "0": "Success",
-    "1": "UpdateFailed"
-  }
-}
-```
+| Aspect     | Details                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| Invocation | `xtraq update` (global-tool context only).                                                             |
+| Reads      | NuGet feed metadata via the update service.                                                           |
+| Writes     | Updates the globally installed `xtraq` tool; no project files are touched.                            |
+| Exit codes | `0` success; non-zero indicates the update service failed or surfaced an unexpected runtime error.       |
+| Notes      | Ignores `--project-path`; honours `--verbose`/`--ci` for output shaping.                               |
 
 ## Examples
 

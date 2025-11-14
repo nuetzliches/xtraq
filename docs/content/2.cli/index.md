@@ -5,12 +5,7 @@ description: Overview of xtraq command-line interface and global options.
 
 # CLI Overview
 
-The xtraq CLI uses a two-file configuration model:
-
-- `.env` (not committed) keeps sensitive values such as `XTRAQ_GENERATOR_DB`.
-- `.xtraqconfig` (tracked) mirrors non-sensitive settings so repositories have a stable baseline.
-
-Run `xtraq init` once to scaffold both files, then reuse them across `snapshot`, `build`, and future commands.
+The xtraq CLI uses a dual-file configuration model anchored on the tracked `.xtraqconfig` snapshot. Secrets remain outside of source control (typically in `.env` or environment variables). Run `xtraq init` once to scaffold both files, then reuse them across `snapshot`, `build`, and the default `xtraq` entry point.
 
 ## Global Options
 
@@ -29,13 +24,14 @@ Run `xtraq init` once to scaffold both files, then reuse them across `snapshot`,
 
 ## Core Commands
 
-| Command                           | Purpose                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------- |
-| [`init`](/cli/commands/init)         | Bootstrap `.env` configuration and namespace metadata.                              |
-| [`snapshot`](/cli/commands/snapshot) | Read stored procedures and schema metadata into `.xtraq/` using `.env` credentials. |
-| [`build`](/cli/commands/build)       | Generate runtime artefacts (table types, helpers) from the current snapshot.        |
-| [`version`](/cli/commands/version)   | Display installed and latest CLI versions, including update hints.                  |
-| [`update`](/cli/commands/update)     | Update the xtraq global tool to the latest available package.                       |
+| Command                                | Purpose                                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`xtraq`](/cli/commands/xtraq)         | Default entry point: refresh snapshot and build artefacts in one step (alias for `build --refresh-snapshot`). |
+| [`init`](/cli/commands/init)           | Bootstrap `.xtraqconfig` and optional `.env` secrets.                                                     |
+| [`snapshot`](/cli/commands/snapshot)   | Read stored procedures and schema metadata into `.xtraq/` using configured credentials.                   |
+| [`build`](/cli/commands/build)         | Generate runtime artefacts (table types, helpers) from the current snapshot.                              |
+| [`version`](/cli/commands/version)     | Display installed and latest CLI versions, including update hints.                                        |
+| [`update`](/cli/commands/update)       | Update the xtraq global tool to the latest available package.                                             |
 
 ## Examples
 

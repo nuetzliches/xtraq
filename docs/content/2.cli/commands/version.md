@@ -31,19 +31,15 @@ Version: 1.0.0-alpha
 - `-v, --verbose` emits additional diagnostic information (e.g., configured feeds).
 - `--ci` forces plain-text output for build logs.
 
-## Behavior Contract (Draft)
+## Behavior Contract
 
-```json
-{
-  "command": "version",
-  "reads": [],
-  "writes": [],
-  "exitCodes": {
-    "0": "Success",
-    "1": "VersionCheckFailed"
-  }
-}
-```
+| Aspect     | Details                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| Invocation | `xtraq version`.                                                                                        |
+| Reads      | Assembly informational version; optional update feed when verbose output is requested.                  |
+| Writes     | Console output only.                                                                                    |
+| Exit codes | `0` success; non-zero indicates version metadata could not be read or an unexpected runtime failure.     |
+| Notes      | Respects `--verbose` and `--ci`; never touches project configuration files.                             |
 
 ## Examples
 

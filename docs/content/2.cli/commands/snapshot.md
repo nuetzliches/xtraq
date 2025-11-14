@@ -20,9 +20,9 @@ xtraq snapshot [options]
 
 ## Configuration
 
-- `XTRAQ_GENERATOR_DB` **must** be set in `.env`. Run `xtraq init` to scaffold the key or update it manually.
-- `.xtraqconfig` must exist. The CLI treats its absence as "project not initialised" and exits early with guidance to run `xtraq init`.
-- Optional allow-list filters come from `.env` (`XTRAQ_BUILD_SCHEMAS=core,identity`).
+- `.xtraqconfig` **must** exist in the project root. When it is missing or invalid the CLI prompts to run `xtraq init` and, if approved, bootstraps the file before retrying.
+- `XTRAQ_GENERATOR_DB` must be supplied via environment variables or `.env`. The command fails fast (and preserves `.xtraqconfig`) when no connection string is available.
+- Optional allow-list filters come from `.xtraqconfig` (`BuildSchemas`) and can be overridden with `XTRAQ_BUILD_SCHEMAS` or `--procedure`.
 - Use `XTRAQ_BUILD_PROCEDURES` (set via `--procedure`) to target specific stored procedures when triaging issues.
 
 If the connection string is missing or empty, the command fails fast with guidance to update `.env`.
@@ -43,20 +43,16 @@ The remaining global switches (such as `--debug`, `--telemetry`, and `--ci`) beh
 
 When `--no-cache` is specified you will only see `[proc-loaded]` entries (no `[proc-skip]`) and the banner `[cache] Disabled (--no-cache)`. Use this after modifying parsing/JSON heuristics or when validating metadata changes.
 
-## Behavior Contract (Draft)
+## Behavior Contract
 
-```json
-{
-  "command": "snapshot",
-  "reads": [".env"],
-  "writes": [".xtraq/snapshots/**/*.json", ".xtraq/cache/*.json"],
-  "exitCodes": {
-    "0": "Success",
-    "1": "ValidationError",
-    "2": "ExtractionError"
-  }
-}
-```
+| Aspect         | Details                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Invocation     | `xtraq snapshot` with optional project path.                                                                                                     |
+| Reads          | `.xtraqconfig`, `.env` (when present), existing `.xtraq/cache` entries, stored procedure metadata from SQL Server.                               |
+| Writes         | `.xtraq/snapshots/**/*.json`, `.xtraq/cache/*.json`, optional telemetry files under `.xtraq/telemetry`.                                          |
+| Exit codes     | `0` success; non-zero indicates configuration/validation failure (missing config or connection) or database extraction errors.                    |
+| Preconditions  | Accessible `.xtraqconfig` and database connection string; optional schema/procedure filters respected from config and overrides.                |
+| Side effects   | May bootstrap `.xtraqconfig` via `xtraq init` when permitted; schedules background update check unless disabled; can emit telemetry summaries.   |
 
 ## Examples
 

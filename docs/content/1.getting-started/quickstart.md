@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 description: From zero to first generated code in minutes.
-version: 1.0.0-alpha.7
+version: 1.0.0-alpha.8
 ---
 
 # Quickstart
@@ -10,7 +10,7 @@ Follow these steps to install the xtraq CLI, initialize configuration, and gener
 
 ## Prerequisites
 
-- .NET 8 SDK (or newer) available on the PATH
+- .NET 8 SDK or newer on the PATH (the CLI targets net8.0 and net10.0)
 - Network access to the SQL Server instance that hosts your stored procedures
 
 ## 1. Install or Update the CLI
@@ -27,7 +27,7 @@ dotnet tool update -g xtraq
 xtraq init --connection "Server=.;Database=AppDb;Trusted_Connection=True;"
 ```
 
-This command creates (or updates) a tracked `.xtraqconfig` file for non-sensitive settings and a project-scoped `.env` for secrets such as `XTRAQ_GENERATOR_DB`. Re-running `xtraq init` safely updates only the keys you specify.
+This command creates (or updates) the tracked `.xtraqconfig` that carries non-sensitive defaults (namespace, output directory, schema allow-list). Secrets such as `XTRAQ_GENERATOR_DB` stay in a project-scoped `.env` or your preferred secrets store. Re-running `xtraq init` safely updates only the keys you specify.
 
 ## 3. Capture a Snapshot
 
@@ -35,7 +35,7 @@ This command creates (or updates) a tracked `.xtraqconfig` file for non-sensitiv
 xtraq snapshot
 ```
 
-`xtraq snapshot` captures the latest stored procedure metadata and writes it to `.xtraq/snapshots` using the connection string from `.env`. Non-sensitive defaults (namespace, output directory, schema allow-list) travel with the repository through `.xtraqconfig`, so teammates only need to supply their local secrets.
+`xtraq snapshot` captures the latest stored procedure metadata and writes it to `.xtraq/snapshots` using the connection string resolved from environment variables or `.env`. Non-sensitive defaults travel with the repository through `.xtraqconfig`, so teammates only need to supply their local secrets.
 
 ## 4. Generate Code
 

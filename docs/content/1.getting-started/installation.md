@@ -7,9 +7,9 @@ description: Installing xtraq and basic requirements.
 
 ## Prerequisites
 
-- .NET SDK (6.0 or higher, recommended 8.0+)
-- Access to SQL Server instance
-- Git (optional for project integration)
+- .NET SDK 8.0 or newer (the CLI ships targets for net8.0 and net10.0)
+- Access to a SQL Server instance
+- Git (optional, but recommended for project integration)
 
 ## Global Installation
 
