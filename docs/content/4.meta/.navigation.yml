@@ -2,8 +2,6 @@
 title: Meta
 navigation:
   icon: i-heroicons-information-circle
-items:
-  - title: Branch Protection & PR Validation
-    to: /4.meta/branch-protection
 ---
+
 

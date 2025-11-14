@@ -1,8 +1,7 @@
 ---
 title: Branch Protection & PR Validation
+description: Guard rails for merging into master
 navigation:
-  title: Branch Protection & PR Validation
-  description: Guard rails for merging into master
   icon: i-heroicons-shield-check
 ---
 

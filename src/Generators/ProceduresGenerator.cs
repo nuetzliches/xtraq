@@ -153,25 +153,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
         }
         */
 
-        // 2) Dynamic negative filter only when no positive list is active
-        //    Reads ignored schemas from XTRAQ_IGNORED_SCHEMAS env override
-        List<string> ignoredSchemas = new();
-        var envIgnored = Environment.GetEnvironmentVariable("XTRAQ_IGNORED_SCHEMAS");
-        if (!string.IsNullOrWhiteSpace(envIgnored))
-        {
-            ignoredSchemas.AddRange(envIgnored.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
-        }
-        if ((buildSchemas == null || buildSchemas.Count == 0) && ignoredSchemas.Count > 0)
-        {
-            var ignoredSet = new HashSet<string>(ignoredSchemas, StringComparer.OrdinalIgnoreCase);
-            var before = procs.Count;
-            procs = procs.Where(p => !ignoredSet.Contains(p.Schema ?? "dbo")).ToList();
-            var removed = before - procs.Count;
-            if (removed > 0)
-            {
-                try { Console.Out.WriteLine($"[xtraq] Info: Filtered ignored schemas (dynamic): removed {removed} procedures (total now {procs.Count})."); } catch { }
-            }
-        }
         if (procs.Count == 0)
         {
             try { Console.Out.WriteLine("[xtraq] Info: ProceduresGenerator skipped – provider returned 0 procedures."); } catch { }

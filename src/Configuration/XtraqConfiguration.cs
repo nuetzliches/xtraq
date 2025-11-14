@@ -2,7 +2,7 @@ namespace Xtraq.Configuration;
 
 /// <summary>
 /// Strongly typed configuration for generator with precedence:
-/// CLI overrides > Environment Variables > .env file (xtraq.json fallback removed)
+/// CLI overrides > Environment Variables > .env file > .xtraqconfig
 /// </summary>
 public sealed class XtraqConfiguration
 {
@@ -31,7 +31,7 @@ public sealed class XtraqConfiguration
     /// </summary>
     public string ProjectRoot { get; init; } = string.Empty;
     /// <summary>
-    /// Positive allow-list for schemas to generate (XTRAQ_BUILD_SCHEMAS). Empty => fallback to ignored-schemas exclusion.
+    /// Positive allow-list for schemas to generate (XTRAQ_BUILD_SCHEMAS). Empty => include every schema discovered by the snapshot.
     /// </summary>
     public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
     /// <summary>

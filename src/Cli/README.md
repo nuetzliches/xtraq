@@ -72,7 +72,7 @@ To design the next iteration of the CLI without legacy constraints, adopt the fo
 - `snapshot` only refreshes metadata; `build` compiles artefacts; `build --refresh-snapshot` executes both steps; no separate `rebuild` verb exists.
 
 4. **Shared option catalog:** centralise reusable options (`--verbose`, `--debug`, `--no-cache`, `--telemetry`, `--procedure`, `--json-include-null-values`, `--yes`) in a single builder so commands and automation scripts draw from the same definitions. Inject validators to ensure paths exist and procedure filters have valid syntax.
-5. **Observability:** emit structured telemetry for each command (verb, options, duration, exit code) and wire feature flags via configuration (`xtraq.json`) rather than environment variables to simplify testing.
+5. **Observability:** emit structured telemetry for each command (verb, options, duration, exit code) and surface feature flags through tracked configuration (`.xtraqconfig`) rather than scattered environment variables to simplify testing.
 
 With this foundation, additional verbs such as `doctor`, `cache clear`, or `plan` can be introduced by adding new `IXtraqCommand` implementations without touching the core parser.
 

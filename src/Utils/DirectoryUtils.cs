@@ -17,7 +17,7 @@ internal static class DirectoryUtils
         var candidate = path;
         try
         {
-            // Expand relative inputs (e.g. ./debug/xtraq.json or debug) against current directory
+            // Expand relative inputs (e.g. ./debug/.xtraqconfig or debug) against current directory
             if (!Path.IsPathRooted(candidate))
             {
                 candidate = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), candidate));
