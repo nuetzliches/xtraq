@@ -23,14 +23,9 @@ links:
     icon: i-simple-icons-github
     target: _blank
 ---
-#title
-xtraq: [SQL]{.text-primary} to [C#]{.text-primary} Code Generation
-#description
-Generate strongly typed C# classes from SQL Server stored procedures with minimal configuration. Reduce boilerplate, increase type safety, and boost development productivity.
-
 ::
 
-<UContainer>
+<!-- <UContainer>
 
 ::section
 ---
@@ -54,6 +49,7 @@ lead: xtraq keeps SQL Server stored procedures as the security boundary you alre
   ---
   Generate models, inputs, and execution helpers that mirror your schema—eliminating manual ADO.NET plumbing, typo-prone magic strings, and hand-written mapping layers.
   ::
+::
 ::
 
 ::section
@@ -154,4 +150,4 @@ lead: Follow the guides below to install, configure, and integrate xtraq into yo
   ::
 ::
 
-</UContainer>
+</UContainer> -->

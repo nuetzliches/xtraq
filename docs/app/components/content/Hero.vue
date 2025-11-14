@@ -24,9 +24,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 <template>
   <div class="relative overflow-hidden bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
-    <!-- Background -->
-    <HeroBackground />
-
     <!-- Content -->
     <div class="relative z-10 py-24 sm:py-32">
       <div class="mx-auto max-w-7xl px-6 lg:px-8">
