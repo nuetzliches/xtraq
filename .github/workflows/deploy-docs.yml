@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_ENV: production
+      NUXT_APP_BASE_URL: /${{ github.event.repository.name }}/
     defaults:
       run:
         working-directory: docs
