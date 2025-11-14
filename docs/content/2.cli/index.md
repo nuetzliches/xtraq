@@ -31,11 +31,11 @@ Run `xtraq init` once to scaffold both files, then reuse them across `snapshot`,
 
 | Command                           | Purpose                                                                             |
 | --------------------------------- | ----------------------------------------------------------------------------------- |
-| [`init`](./commands/init)         | Bootstrap `.env` configuration and namespace metadata.                              |
-| [`snapshot`](./commands/snapshot) | Read stored procedures and schema metadata into `.xtraq/` using `.env` credentials. |
-| [`build`](./commands/build)       | Generate runtime artefacts (table types, helpers) from the current snapshot.        |
-| [`version`](./commands/version)   | Display installed and latest CLI versions, including update hints.                  |
-| [`update`](./commands/update)     | Update the xtraq global tool to the latest available package.                       |
+| [`init`](/cli/commands/init)         | Bootstrap `.env` configuration and namespace metadata.                              |
+| [`snapshot`](/cli/commands/snapshot) | Read stored procedures and schema metadata into `.xtraq/` using `.env` credentials. |
+| [`build`](/cli/commands/build)       | Generate runtime artefacts (table types, helpers) from the current snapshot.        |
+| [`version`](/cli/commands/version)   | Display installed and latest CLI versions, including update hints.                  |
+| [`update`](/cli/commands/update)     | Update the xtraq global tool to the latest available package.                       |
 
 ## Examples
 
