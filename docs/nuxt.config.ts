@@ -1,6 +1,10 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   extends: ['docus'],
+  modules: ['@nuxt/eslint'],
+  eslint: {
+    checker: false
+  },
   app: {
     // Set via env NUXT_APP_BASE_URL="/xtraq/" for GitHub Pages; '/' for root hosting.
     baseURL: process.env.NUXT_APP_BASE_URL || '/'
@@ -76,12 +80,10 @@ export default defineNuxtConfig({
       logo: {
         light: '/xtraq-logo.svg',
         dark: '/xtraq-logo.svg'
-      },
-      showLinkIcon: true
+      }
     },
     seo: {
       title: 'xtraq',
-      titleTemplate: '%s · xtraq',
       description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.'
     }
   },
