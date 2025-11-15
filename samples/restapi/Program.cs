@@ -7,7 +7,6 @@ using global::Xtraq.Samples.RestApi.Xtraq.Sample;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Allow local overrides via appsettings.* or the XTRAQ_SAMPLE_SQL_CONNECTION environment variable.
 var configuredConnection = builder.Configuration.GetConnectionString("SampleDb");
 var environmentConnection = Environment.GetEnvironmentVariable("XTRAQ_SAMPLE_SQL_CONNECTION");
 var connectionString = string.IsNullOrWhiteSpace(environmentConnection) ? configuredConnection : environmentConnection;

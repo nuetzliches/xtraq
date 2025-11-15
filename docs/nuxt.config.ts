@@ -1,4 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const baseURL = process.env.NUXT_APP_BASE_URL || '/';
+const withBase = (path: string): string => {
+  const normalizedBase = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+};
+
 export default defineNuxtConfig({
   extends: ['docus'],
   modules: ['@nuxt/eslint'],
@@ -7,7 +14,16 @@ export default defineNuxtConfig({
   },
   app: {
     // Set via env NUXT_APP_BASE_URL="/xtraq/" for GitHub Pages; '/' for root hosting.
-    baseURL: process.env.NUXT_APP_BASE_URL || '/'
+    baseURL,
+    head: {
+      link: [
+        {
+          rel: 'icon',
+          type: 'image/svg+xml',
+          href: withBase('/favicon.svg')
+        }
+      ]
+    }
   },
   appConfig: {
     docus: {

@@ -11,7 +11,7 @@ description: Tracking upcoming work and temporary deferrals.
 ## ResultSet Naming
 
 - [ ] Infer final SELECT base table for CTE-backed procedures to enable renames.
-- [ ] Add explicit regression tests that dynamic SQL (`EXEC(@sql)`) keeps generic result-set names.
+- [x] Add explicit regression tests that dynamic SQL (`EXEC(@sql)`) keeps generic result-set names. _(Covered via `ResultSetNameResolverTests`.)_
 - [ ] Add negative tests covering deliberately invalid SQL to verify generic fallback behavior.
 - [ ] Finalise and document the streaming naming convention once helper APIs ship.
 - [ ] `FOR JSON PATH` root alias extraction so JSON-only result sets can reuse the declared root name.

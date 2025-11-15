@@ -383,6 +383,17 @@ internal static class TrackableConfigManager
         var outputDir = ResolveValue(envValues, "XTRAQ_OUTPUT_DIR") ?? existing?.OutputDir ?? "Xtraq";
         var targetFramework = ResolveValue(envValues, "XTRAQ_TARGET_FRAMEWORK") ?? existing?.TargetFramework ?? Constants.DefaultTargetFramework.ToFrameworkString();
 
+        var jsonIncludeNullValues = existing?.JsonIncludeNullValues;
+        var jsonIncludeNullValuesRaw = ResolveValue(envValues, "XTRAQ_JSON_INCLUDE_NULL_VALUES");
+        if (jsonIncludeNullValuesRaw is not null)
+        {
+            var parsed = ParseBoolean(jsonIncludeNullValuesRaw);
+            if (parsed.HasValue)
+            {
+                jsonIncludeNullValues = parsed;
+            }
+        }
+
         var buildSchemasRaw = ResolveValue(envValues, "XTRAQ_BUILD_SCHEMAS")
             ?? (existing is null ? null : string.Join(',', existing.BuildSchemas));
         var buildSchemas = ParseSchemas(buildSchemasRaw);
@@ -392,7 +403,8 @@ internal static class TrackableConfigManager
             Namespace = ns,
             OutputDir = outputDir,
             TargetFramework = targetFramework,
-            BuildSchemas = buildSchemas
+            BuildSchemas = buildSchemas,
+            JsonIncludeNullValues = jsonIncludeNullValues
         };
     }
 
@@ -431,6 +443,7 @@ internal static class TrackableConfigManager
             var ns = TryReadTrimmedString(root, "Namespace");
             var outputDir = TryReadTrimmedString(root, "OutputDir");
             var targetFramework = TryReadTrimmedString(root, "TargetFramework");
+            var jsonIncludeNullValues = TryReadNullableBoolean(root, "JsonIncludeNullValues");
             var schemas = ReadSchemaArray(root, "BuildSchemas");
 
             return new TrackableConfigPayload
@@ -438,7 +451,8 @@ internal static class TrackableConfigManager
                 Namespace = ns,
                 OutputDir = outputDir,
                 TargetFramework = targetFramework,
-                BuildSchemas = schemas
+                BuildSchemas = schemas,
+                JsonIncludeNullValues = jsonIncludeNullValues
             };
         }
         catch
@@ -467,6 +481,7 @@ internal static class TrackableConfigManager
         var namespaceValue = SelectString(overrides.Namespace, baseline.Namespace);
         var outputDirValue = SelectString(overrides.OutputDir, baseline.OutputDir);
         var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
+        var jsonIncludeNullValues = overrides.JsonIncludeNullValues ?? baseline.JsonIncludeNullValues;
         var schemas = overrides.BuildSchemas.Count > 0
             ? overrides.BuildSchemas
             : baseline.BuildSchemas;
@@ -476,7 +491,8 @@ internal static class TrackableConfigManager
             Namespace = namespaceValue,
             OutputDir = outputDirValue,
             TargetFramework = targetFrameworkValue,
-            BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>()
+            BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>(),
+            JsonIncludeNullValues = jsonIncludeNullValues
         };
     }
 
@@ -497,7 +513,8 @@ internal static class TrackableConfigManager
             Namespace = string.IsNullOrWhiteSpace(source.Namespace) ? null : source.Namespace.Trim(),
             OutputDir = string.IsNullOrWhiteSpace(source.OutputDir) ? null : source.OutputDir.Trim(),
             TargetFramework = string.IsNullOrWhiteSpace(source.TargetFramework) ? null : source.TargetFramework.Trim(),
-            BuildSchemas = source.BuildSchemas.Count > 0 ? source.BuildSchemas.ToArray() : Array.Empty<string>()
+            BuildSchemas = source.BuildSchemas.Count > 0 ? source.BuildSchemas.ToArray() : Array.Empty<string>(),
+            JsonIncludeNullValues = source.JsonIncludeNullValues
         };
     }
 
@@ -510,6 +527,23 @@ internal static class TrackableConfigManager
         }
 
         return null;
+    }
+
+    private static bool? TryReadNullableBoolean(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var element))
+        {
+            return null;
+        }
+
+        return element.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => ParseBoolean(element.GetString()),
+            JsonValueKind.Number => element.TryGetInt32(out var number) ? number != 0 : null,
+            _ => null
+        };
     }
 
     private static IReadOnlyList<string> ReadSchemaArray(JsonElement root, string propertyName)
@@ -558,6 +592,41 @@ internal static class TrackableConfigManager
         if (values.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(raw))
         {
             return raw.Trim();
+        }
+
+        return null;
+    }
+
+    private static bool? ParseBoolean(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var value = raw.Trim();
+        if (value.Length == 1)
+        {
+            return value switch
+            {
+                "1" => true,
+                "0" => false,
+                _ => null
+            };
+        }
+
+        if (value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("on", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (value.Equals("false", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("no", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
         }
 
         return null;
@@ -623,6 +692,11 @@ internal static class TrackableConfigManager
             defaults["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', payload.BuildSchemas);
         }
 
+        if (payload.JsonIncludeNullValues.HasValue)
+        {
+            defaults["XTRAQ_JSON_INCLUDE_NULL_VALUES"] = payload.JsonIncludeNullValues.Value ? "1" : "0";
+        }
+
         return defaults;
     }
 
@@ -666,6 +740,7 @@ internal static class TrackableConfigManager
         public string? Namespace { get; init; }
         public string? OutputDir { get; init; }
         public string? TargetFramework { get; init; }
+        public bool? JsonIncludeNullValues { get; init; }
         public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
     }
 }
