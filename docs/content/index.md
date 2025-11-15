@@ -1,11 +1,11 @@
 ---
 title: xtraq
-description: Generate strongly typed .NET clients from SQL Server stored procedures with deterministic snapshots and modern tooling.
+description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
 layout: landing
 navigation: false
 seo:
   title: SQL to C# without manual plumbing
-  description: Generate strongly typed .NET clients from SQL Server stored procedures with deterministic snapshots and modern tooling.
+  description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
 ---
 
 ::u-page-hero
@@ -41,7 +41,7 @@ Star on GitHub
 :::
 
 #image
-::u-color-mode-image
+:::u-color-mode-image
 ---
 light: /xtraq-logo.svg
 dark: /xtraq-logo.svg
@@ -49,131 +49,101 @@ alt: xtraq logomark
 class: w-40 mx-auto
 ---
 
-::
+:::
 ::
 
-::u-page-section{align="center" class="py-8 md:py-16"}
-#title
-Why teams choose xtraq
+::u-container{align="center"}
 
-#description
+## Why teams choose xtraq
 Focus on SQL-first architecture while shipping .NET clients that stay in sync with every schema change.
 
-:::u-page-grid
-::::u-page-card
----
-icon: i-heroicons-shield-check
----
+:::card-group{align="left"}
 
-#title
-Stored procedure first
+  ::card
+  ---
+  title: Stored procedure first
+  icon: i-heroicons-shield-check
+  ---
+  Respect existing database boundaries, permissions, and auditing while exposing a clean client surface.
+  ::
 
-#description
-Respect existing database boundaries, permissions, and auditing while exposing a clean client surface.
-::::
+  ::card
+  ---
+  title: Strongly typed artefacts
+  icon: i-heroicons-cube-transparent
+  ---
+  Generate inputs, outputs, and helpers that match SQL signatures across .NET 8 and .NET 10.
+  ::
 
-::::u-page-card
----
-icon: i-heroicons-cube-transparent
----
+  ::card
+  ---
+  title: JSON aware by design
+  icon: i-heroicons-code-bracket
+  ---
+  Capture nested JSON payloads, table-valued parameters, and multi-result sets without manual parsing.
+  ::
 
-#title
-Strongly typed artefacts
-
-#description
-Generate inputs, outputs, and helpers that match SQL signatures across .NET 8 and .NET 10.
-::::
-
-::::u-page-card
----
-icon: i-heroicons-code-bracket
----
-
-#title
-JSON aware by design
-
-#description
-Capture nested JSON payloads, table-valued parameters, and multi-result sets without manual parsing.
-::::
 :::
-::
 
-::u-page-section{align="center" class="py-8 md:py-16"}
-#title
-Get productive in minutes
-
-#description
+## Get productive in minutes
 Follow the guided flow to scaffold your generator project, warm the metadata cache, and ship typed clients.
 
-:::u-page-grid
-::::u-page-card{to="/getting-started/what-is-xtraq"}
----
-icon: i-heroicons-question-mark-circle
----
+:::card-group{align="left"}
 
-#title
-Understand the workflow
+  ::card
+  ---
+  title: Understand the workflow
+  icon: i-heroicons-question-mark-circle
+  to: /getting-started/what-is-xtraq
+  ---
+  Learn how snapshots, configuration, and generation combine to keep your client code deterministic.
+  ::
 
-#description
-Learn how snapshots, configuration, and generation combine to keep your client code deterministic.
-::::
+  ::card
+  ---
+  title: Run the quickstart
+  icon: i-heroicons-rocket-launch
+  to: /getting-started/quickstart
+  ---
+  Scaffold a project, capture metadata, and generate artefacts ready to drop into your solution.
+  ::
 
-::::u-page-card{to="/getting-started/quickstart"}
----
-icon: i-heroicons-rocket-launch
----
+  ::card
+  ---
+  title: Explore the CLI
+  icon: i-heroicons-command-line
+  to: /cli
+  ---
+  Dive into every command, flag, and workflow for local development and CI/CD automation.
+  ::
 
-#title
-Run the quickstart
-
-#description
-Scaffold a project, capture metadata, and generate artefacts ready to drop into your solution.
-::::
-
-::::u-page-card{to="/cli"}
----
-icon: i-heroicons-command-line
----
-
-#title
-Explore the CLI
-
-#description
-Dive into every command, flag, and workflow for local development and CI/CD automation.
-::::
 :::
-::
 
-::u-page-section{align="center" class="py-8 md:py-16"}
-#title
-Stay connected
-
-#description
+## Stay connected
 Join the community, track releases, and deploy the global tool from the platforms you already use.
 
-:::u-page-grid{cols=2}
-::::u-page-card{target="\_blank" to="https://github.com/nuetzliches/xtraq"}
----
-icon: i-simple-icons-github
----
+:::card-group{align="left"}
 
-#title
-Star the project
+  ::card
+  ---
+  title: Star the project
+  icon: i-simple-icons-github
+  to: https://github.com/nuetzliches/xtraq
+  target: _blank
+  ---
+  Follow development, open issues, and discuss roadmap ideas with the maintainers.
+  ::
 
-#description
-Follow development, open issues, and discuss roadmap ideas with the maintainers.
-::::
+  ::card
+  ---
+  title: Install from NuGet
+  icon: i-simple-icons-nuget
+  to: https://www.nuget.org/packages/xtraq
+  target: _blank
+  ---
+  Pull the latest global tool release directly into your tooling pipeline.
+  ::
 
-::::u-page-card{target="\_blank" to="https://www.nuget.org/packages/xtraq"}
----
-icon: i-simple-icons-nuget
----
-
-#title
-Install from NuGet
-
-#description
-Pull the latest global tool release directly into your tooling pipeline.
-::::
 :::
+
 ::
