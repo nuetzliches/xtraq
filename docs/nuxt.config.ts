@@ -1,62 +1,109 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  modules: [
-    '@nuxt/eslint',
-    '@nuxt/image',
-    '@nuxt/ui',
-    '@nuxt/content',
-    'nuxt-og-image',
-    'nuxt-llms'
-  ],
-  devtools: { enabled: true },
+  extends: ['docus'],
   app: {
     // Set via env NUXT_APP_BASE_URL="/xtraq/" for GitHub Pages; '/' for root hosting.
     baseURL: process.env.NUXT_APP_BASE_URL || '/'
   },
-
-  css: ['~/assets/css/main.css'],
-
+  appConfig: {
+    docus: {
+      title: 'xtraq Documentation',
+      description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.',
+      url: 'https://xtraq.dev',
+      socials: {
+        github: 'nuetzliches/xtraq',
+        nuget: {
+          label: 'NuGet',
+          icon: 'i-lucide-package',
+          href: 'https://www.nuget.org/packages/xtraq'
+        }
+      },
+      github: {
+        repo: 'nuetzliches/xtraq',
+        branch: 'master',
+        dir: 'docs/content',
+        edit: true,
+        releases: true
+      },
+      header: {
+        title: 'xtraq',
+        logo: {
+          light: '/xtraq-logo.svg',
+          dark: '/xtraq-logo.svg'
+        },
+        showLinkIcon: true,
+        actions: [
+          {
+            label: 'GitHub',
+            to: 'https://github.com/nuetzliches/xtraq',
+            icon: 'i-simple-icons-github',
+            target: '_blank'
+          }
+        ]
+      },
+      aside: {
+        level: 1,
+        collapsed: false
+      },
+      main: {
+        fluid: false,
+        padded: true
+      },
+      footer: {
+        credits: {
+          text: `© ${new Date().getFullYear()} xtraq`
+        },
+        navigation: true,
+        textLinks: [
+          {
+            icon: 'i-lucide-star',
+            text: 'Star on GitHub',
+            href: 'https://github.com/nuetzliches/xtraq'
+          },
+          {
+            icon: 'i-lucide-package',
+            text: 'NuGet Package',
+            href: 'https://www.nuget.org/packages/xtraq'
+          }
+        ]
+      },
+      toc: {
+        title: 'On this page'
+      }
+    },
+    header: {
+      title: 'xtraq',
+      logo: {
+        light: '/xtraq-logo.svg',
+        dark: '/xtraq-logo.svg'
+      },
+      showLinkIcon: true
+    },
+    seo: {
+      title: 'xtraq',
+      titleTemplate: '%s · xtraq',
+      description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.'
+    }
+  },
   content: {
     build: {
       markdown: {
-        toc: {
-          searchDepth: 1
+        highlight: {
+          theme: {
+            default: 'github-dark-default',
+            light: 'github-light-default'
+          },
+          langs: ['bash', 'csharp', 'json', 'jsonc', 'powershell', 'sql']
         }
       }
     }
   },
-
-  compatibilityDate: '2024-07-11',
-
+  compatibilityDate: '2024-10-18',
   nitro: {
     prerender: {
       routes: ['/'],
       crawlLinks: true,
       autoSubfolderIndex: false
     }
-  },
-
-  eslint: {
-    config: {
-      stylistic: {
-        commaDangle: 'never',
-        braceStyle: '1tbs'
-      }
-    }
-  },
-
-  icon: {
-    provider: 'iconify'
-  },
-
-  llms: {
-    domain: 'https://xtraq.dev/',
-    title: 'xtraq Documentation',
-    description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.',
-    full: {
-      title: 'xtraq Documentation - Complete Reference',
-      description: 'Complete documentation for xtraq, the SQL Server stored procedure code generator for .NET applications.'
-    },
-    sections: []
   }
 })
