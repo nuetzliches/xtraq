@@ -89,6 +89,8 @@ public sealed class XtraqConfiguration
         var searchBase = DetermineSearchBase(projectRoot, explicitConfigPath);
         var configDirectory = TrackableConfigManager.LocateConfigDirectory(searchBase);
         var configFilePath = Path.Combine(configDirectory, ".xtraqconfig");
+        var localConfigFilePath = Path.Combine(configDirectory, ".xtraqconfig.local");
+        var effectiveConfigPath = File.Exists(localConfigFilePath) ? localConfigFilePath : configFilePath;
 
         if (!File.Exists(configFilePath))
         {
@@ -140,7 +142,7 @@ public sealed class XtraqConfiguration
             DefaultConnection = fullConn,
             NamespaceRoot = NullIfEmpty(Get("XTRAQ_NAMESPACE")),
             OutputDir = outputDirResolved,
-            ConfigPath = File.Exists(configFilePath) ? configFilePath : null,
+            ConfigPath = File.Exists(effectiveConfigPath) ? effectiveConfigPath : null,
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
             EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues

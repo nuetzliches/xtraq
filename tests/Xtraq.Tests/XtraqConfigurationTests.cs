@@ -64,6 +64,59 @@ public sealed class XtraqConfigurationTests
     }
 
     /// <summary>
+    /// Ensures that a colocated .xtraqconfig.local overrides tracked defaults from .xtraqconfig.
+    /// </summary>
+    [Xunit.Fact]
+    public void Load_WhenLocalConfigPresent_UsesLocalOverrides()
+    {
+        var cleanupKeys = new[]
+        {
+            "XTRAQ_PROJECT_ROOT",
+            "XTRAQ_NAMESPACE",
+            "XTRAQ_OUTPUT_DIR",
+            "XTRAQ_BUILD_SCHEMAS",
+            "XTRAQ_GENERATOR_DB"
+        };
+
+        var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in cleanupKeys)
+        {
+            snapshot[key] = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, null);
+        }
+
+        var projectRoot = Directory.CreateTempSubdirectory("xtraq-localcfg-").FullName;
+
+        try
+        {
+            File.WriteAllText(Path.Combine(projectRoot, ".env"),
+                "XTRAQ_GENERATOR_DB=Server=(local);Database=App;TrustServerCertificate=True;\n");
+
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
+                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\"\n}\n");
+
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig.local"),
+                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"]\n}\n");
+
+            var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
+
+            Xunit.Assert.Equal("Local.Namespace", configuration.NamespaceRoot);
+            Xunit.Assert.Equal("LocalOutput", configuration.OutputDir);
+            Xunit.Assert.Equal(new[] { "LocalOne", "LocalTwo" }, configuration.BuildSchemas);
+            Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig.local"), configuration.ConfigPath);
+        }
+        finally
+        {
+            foreach (var kvp in snapshot)
+            {
+                Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
+            }
+
+            TryDeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// Ensures the loader fails when no tracked configuration is present alongside the .env.
     /// </summary>
     [Xunit.Fact]

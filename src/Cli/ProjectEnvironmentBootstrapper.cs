@@ -96,16 +96,66 @@ internal static class ProjectEnvironmentBootstrapper
         Directory.CreateDirectory(projectRoot);
         var gitignorePath = Path.Combine(projectRoot, ".gitignore");
         var lines = File.Exists(gitignorePath) ? File.ReadAllLines(gitignorePath).ToList() : new List<string>();
-        var seen = new HashSet<string>(lines, StringComparer.Ordinal);
-        var required = new[] { ".xtraq/cache/", ".xtraq/telemetry/" };
+        var header = "# Xtraq";
+        var entries = new[] { ".xtraq/cache/", ".xtraq/telemetry/", ".xtraqconfig.local" };
         var updated = false;
 
-        foreach (var entry in required)
+        var headerIndex = lines.FindIndex(line => string.Equals(line.Trim(), header, StringComparison.Ordinal));
+
+        if (headerIndex < 0)
         {
-            if (seen.Add(entry))
+            if (lines.Count > 0 && lines[^1].Length != 0)
             {
-                lines.Add(entry);
+                lines.Add(string.Empty);
+            }
+
+            lines.Add(header);
+            lines.AddRange(entries);
+            updated = true;
+        }
+        else
+        {
+            if (headerIndex > 0 && lines[headerIndex - 1].Length != 0)
+            {
+                lines.Insert(headerIndex, string.Empty);
+                headerIndex++;
                 updated = true;
+            }
+
+            var blockStart = headerIndex + 1;
+            var blockEnd = blockStart;
+            while (blockEnd < lines.Count && lines[blockEnd].Length != 0 && !lines[blockEnd].StartsWith("#", StringComparison.Ordinal))
+            {
+                blockEnd++;
+            }
+
+            var currentBlock = lines.GetRange(blockStart, blockEnd - blockStart);
+            if (currentBlock.Count != entries.Length || !currentBlock.SequenceEqual(entries))
+            {
+                lines.RemoveRange(blockStart, blockEnd - blockStart);
+                lines.InsertRange(blockStart, entries);
+                updated = true;
+                blockEnd = blockStart + entries.Length;
+            }
+
+            var entrySet = new HashSet<string>(entries, StringComparer.Ordinal);
+            for (var index = lines.Count - 1; index >= 0; index--)
+            {
+                var withinBlock = index >= blockStart && index < blockStart + entries.Length;
+                if (withinBlock)
+                {
+                    continue;
+                }
+
+                if (entrySet.Contains(lines[index]))
+                {
+                    lines.RemoveAt(index);
+                    if (index < blockStart)
+                    {
+                        blockStart--;
+                    }
+                    updated = true;
+                }
             }
         }
 

@@ -8,6 +8,7 @@ namespace Xtraq.Configuration;
 internal static class TrackableConfigManager
 {
     private const string ConfigFileName = ".xtraqconfig";
+    private const string LocalConfigFileName = ".xtraqconfig.local";
     private const int MaxRedirectDepth = 10;
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -377,7 +378,7 @@ internal static class TrackableConfigManager
 
     private static TrackableConfigPayload BuildPayload(string projectRoot, IReadOnlyDictionary<string, string?>? envValues)
     {
-        var existing = ReadExistingPayload(projectRoot);
+        var existing = ReadConfigPayload(projectRoot, ConfigFileName);
         var ns = ResolveValue(envValues, "XTRAQ_NAMESPACE") ?? existing?.Namespace;
         var outputDir = ResolveValue(envValues, "XTRAQ_OUTPUT_DIR") ?? existing?.OutputDir ?? "Xtraq";
         var targetFramework = ResolveValue(envValues, "XTRAQ_TARGET_FRAMEWORK") ?? existing?.TargetFramework ?? Constants.DefaultTargetFramework.ToFrameworkString();
@@ -395,9 +396,14 @@ internal static class TrackableConfigManager
         };
     }
 
-    private static TrackableConfigPayload? ReadExistingPayload(string projectRoot)
+    private static TrackableConfigPayload? ReadConfigPayload(string baseDirectory, string fileName)
     {
-        var configPath = Path.Combine(projectRoot, ConfigFileName);
+        if (string.IsNullOrWhiteSpace(baseDirectory) || string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var configPath = Path.Combine(baseDirectory, fileName);
         if (!File.Exists(configPath))
         {
             return null;
@@ -422,21 +428,10 @@ internal static class TrackableConfigManager
                 }
             }
 
-            var ns = root.TryGetProperty("Namespace", out var nsElement) && nsElement.ValueKind == JsonValueKind.String ? nsElement.GetString() : null;
-            var outputDir = root.TryGetProperty("OutputDir", out var outputElement) && outputElement.ValueKind == JsonValueKind.String ? outputElement.GetString() : null;
-            var targetFramework = root.TryGetProperty("TargetFramework", out var targetElement) && targetElement.ValueKind == JsonValueKind.String ? targetElement.GetString() : null;
-            var schemas = Array.Empty<string>();
-            if (root.TryGetProperty("BuildSchemas", out var schemaElement) && schemaElement.ValueKind == JsonValueKind.Array)
-            {
-                schemas = schemaElement.EnumerateArray()
-                    .Where(static item => item.ValueKind == JsonValueKind.String)
-                    .Select(static item => item.GetString())
-                    .Where(static value => !string.IsNullOrWhiteSpace(value))
-                    .Select(static value => value!.Trim())
-                    .Where(static value => value.Length > 0)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            }
+            var ns = TryReadTrimmedString(root, "Namespace");
+            var outputDir = TryReadTrimmedString(root, "OutputDir");
+            var targetFramework = TryReadTrimmedString(root, "TargetFramework");
+            var schemas = ReadSchemaArray(root, "BuildSchemas");
 
             return new TrackableConfigPayload
             {
@@ -450,6 +445,107 @@ internal static class TrackableConfigManager
         {
             return null;
         }
+    }
+
+    private static TrackableConfigPayload? MergePayloads(TrackableConfigPayload? baseline, TrackableConfigPayload? overrides)
+    {
+        if (baseline is null && overrides is null)
+        {
+            return null;
+        }
+
+        if (baseline is null)
+        {
+            return overrides is null ? null : ClonePayload(overrides);
+        }
+
+        if (overrides is null)
+        {
+            return ClonePayload(baseline);
+        }
+
+        var namespaceValue = SelectString(overrides.Namespace, baseline.Namespace);
+        var outputDirValue = SelectString(overrides.OutputDir, baseline.OutputDir);
+        var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
+        var schemas = overrides.BuildSchemas.Count > 0
+            ? overrides.BuildSchemas
+            : baseline.BuildSchemas;
+
+        return new TrackableConfigPayload
+        {
+            Namespace = namespaceValue,
+            OutputDir = outputDirValue,
+            TargetFramework = targetFrameworkValue,
+            BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>()
+        };
+    }
+
+    private static string? SelectString(string? primary, string? fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            return primary.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim();
+    }
+
+    private static TrackableConfigPayload ClonePayload(TrackableConfigPayload source)
+    {
+        return new TrackableConfigPayload
+        {
+            Namespace = string.IsNullOrWhiteSpace(source.Namespace) ? null : source.Namespace.Trim(),
+            OutputDir = string.IsNullOrWhiteSpace(source.OutputDir) ? null : source.OutputDir.Trim(),
+            TargetFramework = string.IsNullOrWhiteSpace(source.TargetFramework) ? null : source.TargetFramework.Trim(),
+            BuildSchemas = source.BuildSchemas.Count > 0 ? source.BuildSchemas.ToArray() : Array.Empty<string>()
+        };
+    }
+
+    private static string? TryReadTrimmedString(JsonElement root, string propertyName)
+    {
+        if (root.TryGetProperty(propertyName, out var element) && element.ValueKind == JsonValueKind.String)
+        {
+            var raw = element.GetString();
+            return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ReadSchemaArray(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var arrayElement) || arrayElement.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var buffer = new List<string>();
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var raw = item.GetString();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            var value = raw.Trim();
+            if (value.Length == 0)
+            {
+                continue;
+            }
+
+            if (!buffer.Any(existing => string.Equals(existing, value, StringComparison.OrdinalIgnoreCase)))
+            {
+                buffer.Add(value);
+            }
+        }
+
+        return buffer.Count == 0 ? Array.Empty<string>() : buffer.ToArray();
     }
 
     private static string? ResolveValue(IReadOnlyDictionary<string, string?>? values, string key)
@@ -498,7 +594,10 @@ internal static class TrackableConfigManager
         }
 
         var normalizedRoot = SafeGetFullPath(projectRoot);
-        var payload = ReadExistingPayload(normalizedRoot);
+        var trackedPayload = ReadConfigPayload(normalizedRoot, ConfigFileName);
+        var localPayload = ReadConfigPayload(normalizedRoot, LocalConfigFileName);
+        var payload = MergePayloads(trackedPayload, localPayload);
+
         if (payload is null)
         {
             return defaults;

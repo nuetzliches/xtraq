@@ -60,6 +60,11 @@ internal interface ISchemaObjectCacheManager
     Task RecordDependencyAsync(SchemaObjectRef dependent, SchemaObjectRef dependency);
 
     /// <summary>
+    /// Replace the dependency relationships tracked for a schema object.
+    /// </summary>
+    Task SetDependenciesAsync(SchemaObjectRef dependent, IReadOnlyList<SchemaObjectRef> dependencies);
+
+    /// <summary>
     /// Flush all pending changes to disk.
     /// </summary>
     Task FlushAsync(CancellationToken cancellationToken = default);
@@ -175,6 +180,8 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
+    private static readonly SchemaObjectRefEqualityComparer ObjectComparer = SchemaObjectRefEqualityComparer.Instance;
+
     public SchemaObjectCacheManager(IConsoleService console)
     {
         _console = console ?? throw new ArgumentNullException(nameof(console));
@@ -257,31 +264,27 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
 
     public Task InvalidateDependentsAsync(SchemaObjectRef changedObject)
     {
+        if (changedObject is null)
+        {
+            throw new ArgumentNullException(nameof(changedObject));
+        }
+
         var changedKey = BuildKey(changedObject);
-        List<string> dependentKeys;
+        List<string> invalidatedKeys;
 
         lock (_sync)
         {
-            if (!_dependencyGraph.TryGetValue(changedKey, out var dependents))
+            if (!_dependencyGraph.TryGetValue(changedKey, out var directDependents) || directDependents.Count == 0)
             {
                 return Task.CompletedTask;
             }
-            dependentKeys = dependents.ToList();
+
+            invalidatedKeys = TraverseAndMarkDependentsLocked(directDependents);
         }
 
-        _console.Verbose($"[schema-cache] Invalidating {dependentKeys.Count} objects dependent on {changedObject}");
-
-        lock (_sync)
+        if (invalidatedKeys.Count > 0)
         {
-            foreach (var dependentKey in dependentKeys)
-            {
-                if (_cache.TryGetValue(dependentKey, out var entry))
-                {
-                    // Mark as needing refresh by setting last modified to minimum
-                    entry.LastModifiedUtc = DateTime.MinValue;
-                    _dirty = true;
-                }
-            }
+            _console.Verbose($"[schema-cache] Invalidating {invalidatedKeys.Count} objects dependent on {changedObject}");
         }
 
         return Task.CompletedTask;
@@ -301,29 +304,95 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
         }
     }
 
-    public Task RecordDependencyAsync(SchemaObjectRef dependent, SchemaObjectRef dependency)
+    public Task SetDependenciesAsync(SchemaObjectRef dependent, IReadOnlyList<SchemaObjectRef> dependencies)
     {
-        var dependentKey = BuildKey(dependent);
-        var dependencyKey = BuildKey(dependency);
+        if (dependent is null)
+        {
+            throw new ArgumentNullException(nameof(dependent));
+        }
 
         lock (_sync)
         {
-            // Record in cache entry
-            if (_cache.TryGetValue(dependentKey, out var entry))
+            var dependentKey = BuildKey(dependent);
+            var entry = EnsureCacheEntry(dependentKey, dependent);
+
+            var targetSet = dependencies is null
+                ? new HashSet<SchemaObjectRef>(ObjectComparer)
+                : new HashSet<SchemaObjectRef>(dependencies.Where(static d => d is not null), ObjectComparer);
+
+            var existingSet = new HashSet<SchemaObjectRef>(entry.Dependencies, ObjectComparer);
+            var duplicatesDetected = existingSet.Count != entry.Dependencies.Count;
+
+            if (!duplicatesDetected && existingSet.SetEquals(targetSet))
             {
-                if (!entry.Dependencies.Contains(dependency))
+                return Task.CompletedTask;
+            }
+
+            foreach (var dependencyKey in existingSet.Select(static dep => BuildKey(dep)))
+            {
+                if (_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
                 {
-                    entry.Dependencies.Add(dependency);
-                    _dirty = true;
+                    dependents.Remove(dependentKey);
+                    if (dependents.Count == 0)
+                    {
+                        _dependencyGraph.Remove(dependencyKey);
+                    }
                 }
             }
 
-            // Record in reverse dependency graph for fast invalidation
+            foreach (var dependencyRef in targetSet)
+            {
+                var dependencyKey = BuildKey(dependencyRef);
+                if (!_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
+                {
+                    dependents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    _dependencyGraph[dependencyKey] = dependents;
+                }
+
+                dependents.Add(dependentKey);
+            }
+
+            entry.Dependencies = targetSet
+                .OrderBy(static dep => dep.Type)
+                .ThenBy(static dep => dep.Schema, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(static dep => dep.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            _dirty = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RecordDependencyAsync(SchemaObjectRef dependent, SchemaObjectRef dependency)
+    {
+        if (dependent is null)
+        {
+            throw new ArgumentNullException(nameof(dependent));
+        }
+
+        if (dependency is null)
+        {
+            throw new ArgumentNullException(nameof(dependency));
+        }
+
+        lock (_sync)
+        {
+            var dependentKey = BuildKey(dependent);
+            var dependencyKey = BuildKey(dependency);
+            var entry = EnsureCacheEntry(dependentKey, dependent);
+
+            if (!entry.Dependencies.Any(dep => ObjectComparer.Equals(dep, dependency)))
+            {
+                entry.Dependencies.Add(dependency);
+                _dirty = true;
+            }
+
             if (!_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
             {
                 dependents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 _dependencyGraph[dependencyKey] = dependents;
             }
+
             dependents.Add(dependentKey);
         }
 
@@ -446,6 +515,71 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
         return Task.CompletedTask;
     }
 
+    private SchemaObjectCacheEntry EnsureCacheEntry(string key, SchemaObjectRef reference)
+    {
+        if (!_cache.TryGetValue(key, out var entry))
+        {
+            entry = new SchemaObjectCacheEntry
+            {
+                Type = reference.Type,
+                Schema = reference.Schema,
+                Name = reference.Name,
+                LastModifiedUtc = DateTime.MinValue,
+                CachedUtc = DateTime.UtcNow
+            };
+            _cache[key] = entry;
+        }
+        else
+        {
+            entry.Type = reference.Type;
+            entry.Schema = reference.Schema;
+            entry.Name = reference.Name;
+        }
+
+        return entry;
+    }
+
+    private List<string> TraverseAndMarkDependentsLocked(IEnumerable<string> startingKeys)
+    {
+        // Called from within _sync lock to walk dependency graph breadth-first
+        var queue = new Queue<string>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var invalidated = new List<string>();
+
+        foreach (var key in startingKeys)
+        {
+            if (visited.Add(key))
+            {
+                queue.Enqueue(key);
+            }
+        }
+
+        while (queue.Count > 0)
+        {
+            var currentKey = queue.Dequeue();
+            invalidated.Add(currentKey);
+
+            if (_cache.TryGetValue(currentKey, out var entry) && entry.LastModifiedUtc != DateTime.MinValue)
+            {
+                entry.LastModifiedUtc = DateTime.MinValue;
+                _dirty = true;
+            }
+
+            if (_dependencyGraph.TryGetValue(currentKey, out var dependents) && dependents.Count > 0)
+            {
+                foreach (var dependentKey in dependents)
+                {
+                    if (visited.Add(dependentKey))
+                    {
+                        queue.Enqueue(dependentKey);
+                    }
+                }
+            }
+        }
+
+        return invalidated;
+    }
+
     private async Task LoadCacheAsync(CancellationToken cancellationToken)
     {
         try
@@ -527,6 +661,39 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
         var schema = identifier[..nameSeparator];
         var name = identifier[(nameSeparator + 1)..];
         return new SchemaObjectRef(type, schema, name);
+    }
+
+    private sealed class SchemaObjectRefEqualityComparer : IEqualityComparer<SchemaObjectRef>
+    {
+        internal static SchemaObjectRefEqualityComparer Instance { get; } = new();
+
+        public bool Equals(SchemaObjectRef? x, SchemaObjectRef? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return x.Type == y.Type
+                && string.Equals(x.Schema, y.Schema, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int GetHashCode(SchemaObjectRef obj)
+        {
+            unchecked
+            {
+                var hash = (int)obj.Type;
+                hash = (hash * 397) ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Schema);
+                hash = (hash * 397) ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name);
+                return hash;
+            }
+        }
     }
 
     private sealed class SchemaCacheDocument

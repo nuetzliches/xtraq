@@ -18,6 +18,11 @@ old-tests/
 .env.*.local
 !.xtraqconfig
 
+# Xtraq
+.xtraq/cache/
+.xtraq/telemetry/
+.xtraqconfig.local
+
 # Build results
 [Dd]ebugPublic/
 [Rr]elease/

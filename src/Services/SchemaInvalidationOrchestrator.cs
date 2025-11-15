@@ -296,12 +296,9 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         try
         {
             var dependencies = await _changeDetection.GetDependenciesAsync(objectRef, cancellationToken)
-                .ConfigureAwait(false);
+                .ConfigureAwait(false) ?? Array.Empty<SchemaObjectRef>();
 
-            foreach (var dependency in dependencies)
-            {
-                await _cacheManager.RecordDependencyAsync(objectRef, dependency).ConfigureAwait(false);
-            }
+            await _cacheManager.SetDependenciesAsync(objectRef, dependencies).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -315,15 +312,32 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         CancellationToken cancellationToken)
     {
         _ = cancellationToken;
-        var dependents = _cacheManager.GetDependents(changedObject);
-        if (dependents.Count == 0)
+
+        var comparer = SchemaInvalidationExtensions.SchemaObjectRefComparer.Instance;
+        var visited = new HashSet<SchemaObjectRef>(comparer);
+        var queue = new Queue<SchemaObjectRef>();
+
+        foreach (var dependent in _cacheManager.GetDependents(changedObject))
         {
-            return Task.CompletedTask;
+            if (visited.Add(dependent))
+            {
+                invalidatedObjects.Add(dependent);
+                queue.Enqueue(dependent);
+            }
         }
 
-        foreach (var dependent in dependents)
+        // Breadth-first traversal covers transitive dependents without revisiting nodes.
+        while (queue.Count > 0)
         {
-            invalidatedObjects.Add(dependent);
+            var current = queue.Dequeue();
+            foreach (var next in _cacheManager.GetDependents(current))
+            {
+                if (visited.Add(next))
+                {
+                    invalidatedObjects.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
         }
 
         return Task.CompletedTask;
