@@ -24,6 +24,13 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] Provide streaming-aware builder overloads so fluent composition can opt into `StreamResult…Async` pipes instead of buffering by default. _(Includes `ProcedureStreamBuilder` with aggregation helpers.)_
 - [x] Document recommended layering (application partials vs. external builders) alongside guidance for DI scoping and XML comments, based on the evaluation in `docs/content/3.reference/1.api-integration.md`.
 
+## Transaction API
+
+- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request while exposing explicit `Begin/Commit/RollbackAsync` helpers for nested flows. _(Blocked on design review.)_
+- [ ] Expose transaction-aware execution policies so global defaults or per-procedure overrides (e.g., ambient participation, isolation level) can be configured declaratively. _(Design follows orchestrator prototype.)_
+- [ ] Ensure the pipeline execution context resolves the orchestrator via dependency injection, enabling policies to coordinate with logging and telemetry components.
+- [ ] Align the design with the planned Entity Framework integration by supporting ambient `DbContext` transactions and connection reuse when both stacks operate side by side. _(Joint review with Framework Integrations track.)_
+
 ## Fluent Pipeline Iteration
 
 - [x] Reshape the fluent surface into dedicated configuration and execution types (`ProcedureCallPipeline`, `ProcedureCallExecution`) so interceptors, validation, and telemetry wrap the pipeline without deep delegate nesting. _(Implemented via the new `ProcedurePipelineExtensions` template and updated unit tests.)_
@@ -69,3 +76,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Extend validation tests to cover allow-list filtering with `XTRAQ_BUILD_SCHEMAS`.
 - [x] Document binder customization hooks for UDTT execution.
 - [x] Evaluate an analyzer that verifies `ITableType` usage matches expected schema parameters.
+
+## Next Steps
+
+- Prototype the DI-scoped transaction orchestrator and corresponding execution policy integration to validate coexistence with the planned Entity Framework support and surface API gaps early.
