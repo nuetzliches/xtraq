@@ -1,6 +1,7 @@
 using Xtraq.Configuration;
 using Xtraq.Engine;
 using Xtraq.Metadata;
+using Xtraq.Services;
 
 namespace Xtraq.Generators;
 
@@ -34,7 +35,12 @@ internal sealed class TableTypesGenerator : GeneratorBase
         _projectRoot = projectRoot ?? Directory.GetCurrentDirectory();
     }
 
-    public TableTypeGenerationResult Generate()
+    /// <summary>
+    /// Generates table type artifacts, optionally restricting emission to the supplied dependencies.
+    /// </summary>
+    /// <param name="requiredTableTypeReferences">Normalized schema-qualified table type names that must be emitted.</param>
+    /// <returns>Aggregated artifact counts per schema.</returns>
+    public TableTypeGenerationResult Generate(IReadOnlyCollection<string>? requiredTableTypeReferences = null)
     {
         var types = _provider.GetAll();
         var resolver = new NamespaceResolver(_cfg);
@@ -82,8 +88,23 @@ internal sealed class TableTypesGenerator : GeneratorBase
             File.WriteAllText(interfacePath, ifaceCode, Encoding.UTF8);
             written++;
         }
-        // Central BuildSchemas allow-list now applies to Procedures AND TableTypes (CHECKLIST 2025-10-15).
-        if (_cfg.BuildSchemas is { Count: > 0 })
+
+        var normalizedDependencies = NormalizeDependencies(requiredTableTypeReferences);
+        if (normalizedDependencies is { Count: > 0 })
+        {
+            var beforeFilter = types.Count;
+            types = types.Where(t => normalizedDependencies.Contains(NormalizeTypeIdentity(t.Catalog, t.Schema, t.Name))).ToList();
+            var removed = beforeFilter - types.Count;
+            try
+            {
+                Console.Out.WriteLine($"[xtraq] Info: TableTypes dependency filter applied -> {types.Count}/{beforeFilter} retained (removed {removed}).");
+            }
+            catch
+            {
+                // logging best-effort only
+            }
+        }
+        else if (_cfg.BuildSchemas is { Count: > 0 })
         {
             var beforeT = types.Count;
             types = types.Where(t => _cfg.BuildSchemas.Contains(t.Schema)).ToList();
@@ -153,6 +174,42 @@ internal sealed class TableTypesGenerator : GeneratorBase
         return new TableTypeGenerationResult(
             written,
             new Dictionary<string, int>(artifactsPerSchema, StringComparer.OrdinalIgnoreCase)); // includes interface (even if 0 types)
+    }
+
+    private static HashSet<string>? NormalizeDependencies(IReadOnlyCollection<string>? required)
+    {
+        if (required is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var normalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in required)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+            {
+                continue;
+            }
+
+            var normalizedEntry = TableTypeRefFormatter.Normalize(entry) ?? entry;
+            if (!string.IsNullOrWhiteSpace(normalizedEntry))
+            {
+                normalized.Add(normalizedEntry);
+                var parts = normalizedEntry.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length == 3)
+                {
+                    normalized.Add(string.Join('.', parts[1], parts[2]));
+                }
+            }
+        }
+
+        return normalized.Count == 0 ? null : normalized;
+    }
+
+    private static string NormalizeTypeIdentity(string? catalog, string schema, string name)
+    {
+        var combined = TableTypeRefFormatter.Combine(catalog, schema, name) ?? TableTypeRefFormatter.Combine(schema, name) ?? name;
+        return TableTypeRefFormatter.Normalize(combined) ?? combined;
     }
 
     private static string ToPascalCase(string input)

@@ -1,197 +1,89 @@
-# xtraq Documentation Concept (xtraq-docs)
-
-## 1. Documentation Goals
-
-- Provide a clearly structured, versioned, extensible product & developer documentation set
-- Reduce onboarding time for new users & contributors
-- Enable automated evolution via AI agents (code & knowledge extraction)
-- Single Source of Truth for:
-  - Feature scope & architecture
-  - Naming & conventions
-  - CLI commands & options
-  - Configuration schema
-  - Extensibility / plugin scenarios
-
-## 2. Technology Stack
-
-- Framework: [Docus 5.2.1](https://docus.dev/en) on top of [Nuxt 4.2.1](https://nuxt.com/).
-- Structure: fully bootstrapped Nuxt workspace under `docs/` (content lives in `docs/content/`).
-- Build options:
-  - Static export via `npm run generate` for GitHub Pages deployments.
-  - Optional container image (Node 20) for reproducible builds in CI.
-- SEO & DX: Docus theme provides sidebar, ToC, search, and page contributors by default.
-- LLM support: Docus `llms` integration configured in `docs/nuxt.config.ts` (see `docs/content/4.meta/2.documentation-stack.md`).
-- UI guidelines: leverage [Nuxt UI](https://ui.nuxt.com/) components as needed (document patterns in dedicated component stories).
-
-## 3. Planned Content Structure
-
-```
-/docs
-  |-- README.md (dieses Konzept)
-  |-- nuxt.config.ts (später)
-  |-- content/
-        |-- index.md (Landing / Übersicht)
-        |-- getting-started/
-        |     |-- installation.md
-        |     |-- quickstart.md
-        |-- concepts/
-        |     |-- architecture-overview.md
-        |     |-- naming-conventions.md
-        |     |-- configuration-model.md
-        |     |-- generator-pipeline.md
-        |     |-- deployment-models.md (Default / Library / Extension)
-        |-- cli/
-        |     |-- index.md (Übersicht & Globale Optionen)
-  |     |-- commands/
-  |            |-- init.md
-  |            |-- snapshot.md
-  |            |-- build.md
-  |            |-- update.md
-  |            |-- version.md
-        |-- guides/
-        |     |-- integrating-into-ci.md
-        |     |-- customizing-generation.md
-        |     |-- working-with-json-procedures.md
-        |     |-- troubleshooting.md
-        |     |-- performance-tuning.md
-        |-- reference/
-        |     |-- configuration-schema.md (Machine-readable JSON schema + Erläuterungen)
-        |     |-- enums.md
-        |     |-- attributes.md
-        |     |-- extension-points.md
-        |-- roadmap/
-        |     |-- index.md
-        |-- meta/
-              |-- contributing.md
-              |-- security.md
-              |-- release-process.md
-              |-- glossary.md
-
-```
-
-## 4. Documentation Versioning Concept
-
-- Directory per major version: `content/v1/`, `content/v2/`, etc.
-- `content/latest` as symlink or copy of highest stable version
-- Shared, versioned JSON schema files under `content/shared/schemas/`
-- Automated sync script (Node) for:
-  - Diff between versions (changelog generation)
-  - Marking deprecated content via frontmatter (`deprecated: true` + notice block)
-- Mark experimental features with frontmatter flag `experimental: true`
-- Set up https://docus.dev/integrations/llms
-
-### Frontmatter Standards
-
-```yaml
----
-title: Build Command
-description: Führt Code-Generierung basierend auf konfigurativem Schema aus.
-versionIntroduced: 1.0.0-alpha
-versionDeprecated: null
-experimental: false
 authoritative: true # Quelle gilt als maßgeblich
 aiTags: [cli, build, generation, pipeline]
----
-```
 
-## 5. AI-Agent Readiness
+# xtraq Documentation Workspace
 
-Goal: Make documentation machine-consumable to:
+This directory hosts the Docus- and Nuxt-based documentation site that accompanies the Xtraq CLI and generator. The original concept draft has been replaced with the working details below.
 
-- Auto-generate tests / validation scripts
-- Validate API/CLI behavior against implementation
-- Improve chatbot prompts (error analysis, suggestion quality)
+## Documentation Goals
 
-### Measures
+- Keep product and contributor guidance in a single, versionable repository.
+- Reduce onboarding time through task-focused guides and reference material.
+- Expose authoritative information for automation (CLI help, configuration schema, generator behaviour).
+- Stay AI-friendly: docs are structured so tooling can extract behaviour contracts and cross-link code.
 
-1. Structured frontmatter with domain-specific fields
-2. JSON/YAML artifacts per command & config schema (easy to parse)
-3. Consistent terminology definitions in `glossary.md`
-4. Embeddings preparation: chunk segmentation (<= 1.5k tokens)
-5. Tagging system (`aiTags`) for clustering
-6. Machine-readable mapping: Stored procedure name -> generated classes -> file paths
-7. "Behavior Contracts" section per command including:
+## Technology Stack
 
-- Inputs (parameters + type + required)
-- Error cases & exit codes
+- **Framework**: [Docus 5.2.1](https://docus.dev/en) on [Nuxt 4.2.1](https://nuxt.com/).
+- **Language tooling**: TypeScript-enabled Nuxt workspace, linted via `eslint.config.mjs`.
+- **Hosting**: Static export with `npm run generate`; deployed via GitHub Pages workflow.
+- **LLM support**: Docus `llms` block configured in `docs/nuxt.config.ts` (see `docs/content/4.meta/2.documentation-stack.md`).
+- **Formatting**: Markdown content lives in `docs/content/` using frontmatter metadata and Docus MDC features.
 
-### Beispiel Behavior Contract (Build Command)
-
-```json
-{
-  "command": "build",
-  "inputs": {
-    "--project-path": { "type": "string", "required": false },
-    "--refresh-snapshot": { "type": "boolean", "required": false },
-    "--procedure": { "type": "string", "required": false },
-    "--no-cache": { "type": "boolean", "required": false },
-    "--telemetry": { "type": "boolean", "required": false },
-    "--json-include-null-values": { "type": "boolean", "required": false },
-    "--ci": { "type": "boolean", "required": false },
-    "--verbose": { "type": "boolean", "required": false }
-  },
-  "outputs": {
-    "files": ["/Output/**.cs"],
-    "console": ["SummaryTable", "Warnings", "Errors"],
-    "exitCodes": {
-      "0": "Success",
-      "1": "ValidationError",
-      "2": "GenerationError"
-    }
-  }
-}
-```
-
-## 6. Planned Content Roadmap
-
-1. Concept (this document) + maintainer validation
-2. Nuxt Content scaffold + landing + getting started + CLI overview
-3. Complete CLI reference + configuration reference (incl. machine-readable JSON schema)
-4. Architecture & extensibility + behavior contracts
-5. Versioning (initial 1.0 snapshot) + release notes templates
-6. AI enrichment (tags, JSON artifacts, embeddings strategy doc)
-7. Automated tests (docs linter, frontmatter validator, broken link check)
-8. Publication (GitHub Pages / deployment pipeline)
-
-## 7. Quality Assurance & Tooling
-
-- Pre-commit checks: markdown lint, link checker, schema validator
-- CI pipeline jobs:
-  - Build + lint
-  - Frontmatter scan (required fields)
-  - Consistency check: CLI commands vs. reflection of `Program.cs`
-  - Optional: dead file detector
-- Automatic changelog generator based on git tags + conventional commits
-
-## 8. Extensibility & Future Ideas
-
-- Interactive playground (parameters -> generated code preview)
-- Live diff viewer across versions of a procedure generation
-- Plugin registry page (community extensions)
-- "AI Query" endpoint: Q/A across docs + code
-
-### Local Development
-
-Prerequisite: Node.js (>= 18 LTS)
+## Current Content Layout
 
 ```
+docs/
+  README.md               # This file
+  nuxt.config.ts          # Docus + Nuxt configuration (LLM, theme, navigation)
+  content.config.ts       # Content pipeline settings
+  content/
+    index.md              # Landing page
+    1.getting-started/    # Installation and quick start guides
+    2.cli/                # Command reference & behaviour contracts
+    3.reference/          # Configuration schema, table types, JSON handling
+    4.meta/               # Documentation stack, formatting rules
+    5.roadmap/            # Roadmap and decision records
+    app/ components/      # Custom MDC components
+  public/                 # Static assets served verbatim
+  scripts/                # Content validation helpers
+```
+
+Numbered directories keep navigation stable and make version bumps explicit. Additional versioned trees (e.g., `content/v1/`) can be introduced later; for now the live docs describe the current toolchain.
+
+## Authoring Guidelines
+
+1. **Frontmatter**: Include `title`, `description`, and where relevant `versionIntroduced`, `experimental`, and `aiTags`. See examples under `docs/content/3.reference/`.
+2. **Links**: Prefer relative links (`../path/file.md`) so the static build and GitHub view stay in sync.
+3. **Code fences**: Specify language (` ```csharp `, ` ```bash `) for proper highlighting and linting.
+4. **LLM tags**: When a page feeds automation (CLI contracts, configuration schema) add `aiTags` to support targeted embeddings.
+5. **Decision records**: Capture scope decisions under `docs/content/5.roadmap/` (see `udtt-analyzer-evaluation.md`).
+
+## Local Development Workflow
+
+Prerequisites: Node.js 20 LTS (or newer).
+
+```bash
 cd docs
 npm install
 npm run dev
 ```
 
-Then open in browser: http://localhost:3000 (set `NUXT_APP_BASE_URL="/xtraq/"` to mirror GitHub Pages).
+Open <http://localhost:3000>. To mirror GitHub Pages paths, set `NUXT_APP_BASE_URL="/xtraq/"` in your shell or `.env`.
 
-## 10. Open Questions
+### Quality Gates
 
-- Which major version as first snapshot baseline? `content/v1/`
-- Finalize exit codes set?
-- Behavior contracts coverage: only commands (current plan)?
+- `npm run lint` – ESLint, Markdown lint, and Docus validation.
+- `npm run generate` – produces the static site (`.output/public`). Run this before publishing.
+- `scripts/validate-frontmatter.mjs` – checks required frontmatter fields and reports duplicates.
+
+CI mirrors these steps during pull requests. Keep generated artifacts out of git; only commit source Markdown, configuration, and assets.
+
+## AI & Automation Readiness
+
+- Behaviour contracts for CLI commands live in `docs/content/2.cli/` with accompanying JSON snippets.
+- Shared terminology is tracked in `docs/content/4.meta/` (glossary and stack overview).
+- Table-type changes and snapshot behaviour are documented under `docs/content/3.reference/4.table-types.md`, including hooks for custom binders.
+- Roadmap checklists are canonical in `docs/content/5.roadmap/index.md` with supporting decision notes in adjacent files.
+
+When adding new automation surfaces (e.g., error code matrices), keep them machine-readable by supplying JSON/YAML blocks alongside narrative explanations.
+
+## Future Enhancements
+
+- Introduce versioned content folders once the CLI ships a stable major release.
+- Add automated link checking and broken-image detection to the docs pipeline.
+- Evaluate interactive playgrounds for generator output previews after the core roadmap items land.
 
 ---
 
----
-
-Note: This document was translated from German on 2025-10-02 to comply with the English-only language policy.
-
-Status: 2025-09-30 (original conceptual date)
+Last updated: 2025-11-16

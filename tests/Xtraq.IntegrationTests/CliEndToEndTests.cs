@@ -23,7 +23,8 @@ public sealed class CliEndToEndTests : IAsyncLifetime
         ["tables/Users.sql"] = 0,
         ["tables/UserContacts.sql"] = 1,
         ["tables/Orders.sql"] = 2,
-        ["tables/Payments.sql"] = 3
+        ["tables/Payments.sql"] = 3,
+        ["tables/AuditLog.sql"] = 4
     };
 
     private SqlServerContainer? _container;
@@ -84,6 +85,18 @@ public sealed class CliEndToEndTests : IAsyncLifetime
 
             var generatedArtifacts = Directory.EnumerateFiles(outputDirectory, "*.cs", SearchOption.AllDirectories).ToArray();
             Assert.NotEmpty(generatedArtifacts);
+
+            var tableTypeArtifacts = Directory.EnumerateFiles(outputDirectory, "*TableType.cs", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(outputDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            Assert.Equal(new[]
+            {
+                "Sample/OrderImportTableType.cs",
+                "Sample/UserContactTableType.cs",
+                "Shared/AuditLogEntryTableType.cs"
+            }, tableTypeArtifacts);
         }
         finally
         {

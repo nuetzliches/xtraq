@@ -20,6 +20,10 @@ public interface ITableTypeMetadataProvider
 public sealed class TableTypeInfo
 {
     /// <summary>
+    /// Gets or sets the optional catalog that owns the table type.
+    /// </summary>
+    public string? Catalog { get; init; }
+    /// <summary>
     /// Gets or sets the schema that owns the table type.
     /// </summary>
     public string Schema { get; init; } = string.Empty;
@@ -151,6 +155,8 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                         using var tfs = File.OpenRead(tf);
                         using var tdoc = JsonDocument.Parse(tfs);
                         var root = tdoc.RootElement;
+                        var catalogRaw = root.GetPropertyOrDefault("Catalog") ?? root.GetPropertyOrDefault("Database");
+                        var catalog = string.IsNullOrWhiteSpace(catalogRaw) ? null : catalogRaw;
                         var schema = root.GetPropertyOrDefault("Schema") ?? "dbo";
                         var name = root.GetPropertyOrDefault("Name") ?? string.Empty;
                         if (string.IsNullOrWhiteSpace(name)) continue;
@@ -178,7 +184,7 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                                 });
                             }
                         }
-                        listT.Add(new TableTypeInfo { Schema = schema, Name = name, Columns = cols });
+                        listT.Add(new TableTypeInfo { Catalog = catalog, Schema = schema, Name = name, Columns = cols });
                     }
                     catch { /* skip file */ }
                 }
@@ -208,6 +214,8 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                         {
                             var typeRef = ip.GetPropertyOrDefault("TypeRef");
                             bool isTt = ip.GetPropertyOrDefaultBool("IsTableType");
+                            var ttCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
+                            var ttCatalog = string.IsNullOrWhiteSpace(ttCatalogRaw) ? null : ttCatalogRaw;
                             var ttSchema = ip.GetPropertyOrDefault("TableTypeSchema");
                             var ttName = ip.GetPropertyOrDefault("TableTypeName") ?? ip.GetPropertyOrDefault("Name")?.TrimStart('@') ?? string.Empty;
 
@@ -218,10 +226,11 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
 
                             if (!isTt && !string.IsNullOrWhiteSpace(typeRef))
                             {
-                                var (schemaFromRef, nameFromRef) = SplitTypeRef(typeRef);
+                                var (catalogFromRef, schemaFromRef, nameFromRef) = SplitTypeRef(typeRef);
                                 if (!string.IsNullOrWhiteSpace(schemaFromRef) && !string.Equals(schemaFromRef, "sys", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(nameFromRef))
                                 {
                                     isTt = true;
+                                    ttCatalog ??= catalogFromRef;
                                     ttSchema ??= schemaFromRef;
                                     if (string.IsNullOrWhiteSpace(ttName))
                                     {
@@ -233,10 +242,10 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                             if (!isTt) continue;
                             ttSchema ??= procSchema;
                             if (string.IsNullOrWhiteSpace(ttName)) continue;
-                            var key = ttSchema + "." + ttName;
+                            var key = (ttCatalog is { Length: > 0 } ? ttCatalog + "." : string.Empty) + ttSchema + "." + ttName;
                             if (!inferred.ContainsKey(key))
                             {
-                                inferred[key] = new TableTypeInfo { Schema = ttSchema, Name = ttName, Columns = Array.Empty<ColumnInfo>() };
+                                inferred[key] = new TableTypeInfo { Catalog = ttCatalog, Schema = ttSchema, Name = ttName, Columns = Array.Empty<ColumnInfo>() };
                             }
                         }
                     }
@@ -255,6 +264,8 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
         var list = new List<TableTypeInfo>();
         foreach (var tt in udtts.EnumerateArray())
         {
+            var catalogRaw = tt.GetPropertyOrDefault("Catalog") ?? tt.GetPropertyOrDefault("Database");
+            var catalog = string.IsNullOrWhiteSpace(catalogRaw) ? null : catalogRaw;
             var schema = tt.GetPropertyOrDefault("Schema") ?? "dbo";
             var name = tt.GetPropertyOrDefault("Name") ?? "";
             var cols = new List<ColumnInfo>();
@@ -285,6 +296,7 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
             {
                 list.Add(new TableTypeInfo
                 {
+                    Catalog = catalog,
                     Schema = schema,
                     Name = name,
                     Columns = cols
@@ -297,15 +309,24 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
         return _cache;
     }
 
-    private static (string? Schema, string? Name) SplitTypeRef(string? typeRef)
+    private static (string? Catalog, string? Schema, string? Name) SplitTypeRef(string? typeRef)
     {
-        if (string.IsNullOrWhiteSpace(typeRef)) return (null, null);
+        if (string.IsNullOrWhiteSpace(typeRef)) return (null, null, null);
         var parts = typeRef.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0) return (null, null);
+        if (parts.Length == 0) return (null, null, null);
 
         var name = string.IsNullOrWhiteSpace(parts[^1]) ? null : parts[^1];
-        var schema = parts.Length >= 2 ? (string.IsNullOrWhiteSpace(parts[^2]) ? null : parts[^2]) : null;
-        return (schema, name);
+        string? schema = null;
+        string? catalog = null;
+        if (parts.Length >= 2)
+        {
+            schema = string.IsNullOrWhiteSpace(parts[^2]) ? null : parts[^2];
+        }
+        if (parts.Length >= 3)
+        {
+            catalog = string.IsNullOrWhiteSpace(parts[^3]) ? null : parts[^3];
+        }
+        return (catalog, schema, name);
     }
 }
 

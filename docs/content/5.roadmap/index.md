@@ -26,8 +26,14 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Table Types
 
-- [ ] Scope snapshotting and generation to table types referenced by allow-listed procedures (parameter usage or AST-detected consumption).
-- [ ] Enable cross-schema table type emission based on dependency analysis so schema allow-lists no longer gate referenced types.
-- [ ] Extend validation tests to cover allow-list filtering with `XTRAQ_BUILD_SCHEMAS`.
-- [ ] Document binder customization hooks for UDTT execution.
-- [ ] Evaluate an analyzer that verifies `ITableType` usage matches expected schema parameters.
+First milestone: slim the table-type surface so `dotnet build` only emits UDTT wrappers actually used by the procedures we keep. That means teaching the metadata layer to map **procedure → table type** dependencies, then trimming both snapshotting and generator phases to that set.
+
+- [x] Scope snapshotting and generation to table types referenced by allow-listed procedures (parameter usage or AST-detected consumption).
+  - [x] Extend the metadata snapshot so each `ProcedureDescriptor` carries the names of referenced UDTT parameters (source: `ProcedureParameter.TableTypeName`).
+  - [x] When `BuildSchemas` or `XTRAQ_BUILD_SCHEMAS` filters are active, build a `HashSet` of required table types before invoking `TableTypesGenerator`.
+  - [x] Update `TableTypesGenerator.Generate` to accept (or compute) that filtered set so we stop writing unused UDTT artifacts.
+  - [x] Regression tests: run the sample generator with a one-schema allow list and assert only referenced table types land in `samples/restapi/Xtraq`.
+- [x] Enable cross-schema table type emission based on dependency analysis so schema allow-lists no longer gate referenced types.
+- [x] Extend validation tests to cover allow-list filtering with `XTRAQ_BUILD_SCHEMAS`.
+- [x] Document binder customization hooks for UDTT execution.
+- [x] Evaluate an analyzer that verifies `ITableType` usage matches expected schema parameters.

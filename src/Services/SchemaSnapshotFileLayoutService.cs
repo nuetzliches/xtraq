@@ -246,7 +246,10 @@ internal sealed class SchemaSnapshotFileLayoutService
                     if (!string.IsNullOrWhiteSpace(normalizedTableTypeRef))
                     {
                         prm.TableTypeRef = normalizedTableTypeRef;
-                        var (_, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                        var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                        var normalizedCatalog = NormalizeOrNull(prm.TableTypeCatalog);
+                        var normalizedCatalogSegment = NormalizeOrNull(catalogSegment);
+                        prm.TableTypeCatalog = normalizedCatalog ?? normalizedCatalogSegment;
                         prm.TableTypeSchema ??= schemaSegment;
                         prm.TableTypeName ??= nameSegment;
                     }
@@ -739,9 +742,10 @@ internal sealed class SchemaSnapshotFileLayoutService
                         if (kind == ParameterTypeRefKind.TableType || !string.IsNullOrWhiteSpace(snapshotInput.TableTypeRef))
                         {
                             snapshotInput.TableTypeRef ??= resolvedTypeRef;
-                            var (_, ttSchema, ttName) = tableTypeSegments;
+                            var (ttCatalog, ttSchema, ttName) = tableTypeSegments;
                             snapshotInput.TableTypeSchema = parameter.TableTypeSchema ?? ttSchema ?? schema;
                             snapshotInput.TableTypeName = parameter.TableTypeName ?? ttName ?? name;
+                            snapshotInput.TableTypeCatalog = NormalizeOrNull(parameter.TableTypeCatalog) ?? NormalizeOrNull(ttCatalog);
                         }
                         else if (!string.IsNullOrWhiteSpace(schema) || !string.IsNullOrWhiteSpace(name))
                         {
@@ -777,7 +781,10 @@ internal sealed class SchemaSnapshotFileLayoutService
                     }
 
                     pi.TableTypeRef = normalized;
-                    var (_, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalized);
+                    var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalized);
+                    var normalizedCatalog = NormalizeOrNull(pi.TableTypeCatalog);
+                    var normalizedCatalogSegment = NormalizeOrNull(catalogSegment);
+                    pi.TableTypeCatalog = normalizedCatalog ?? normalizedCatalogSegment;
                     if (schemaSegment != null && string.IsNullOrWhiteSpace(pi.TableTypeSchema))
                     {
                         pi.TableTypeSchema = schemaSegment;
@@ -963,6 +970,7 @@ internal sealed class SchemaSnapshotFileLayoutService
             Name = input.Name ?? string.Empty,
             IsOutput = input.IsOutput == true ? true : null,
             HasDefaultValue = input.HasDefaultValue == true ? true : null,
+            TableTypeCatalog = NormalizeOrNull(input.TableTypeCatalog),
             TableTypeSchema = input.TableTypeSchema,
             TableTypeName = input.TableTypeName,
             TypeSchema = input.TypeSchema,
@@ -978,7 +986,10 @@ internal sealed class SchemaSnapshotFileLayoutService
         if (!string.IsNullOrWhiteSpace(normalizedTableTypeRef))
         {
             parameter.TableTypeRef = normalizedTableTypeRef;
-            var (_, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+            var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+            var normalizedCatalog = NormalizeOrNull(parameter.TableTypeCatalog);
+            var normalizedCatalogSegment = NormalizeOrNull(catalogSegment);
+            parameter.TableTypeCatalog = normalizedCatalog ?? normalizedCatalogSegment;
             parameter.TableTypeSchema ??= schemaSegment;
             parameter.TableTypeName ??= nameSegment;
         }
@@ -1028,6 +1039,12 @@ internal sealed class SchemaSnapshotFileLayoutService
         }
 
         return parameter;
+    }
+
+    private static string? NormalizeOrNull(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return value.Trim();
     }
 
     private static string? CombineTypeRef(string? schema, string? name)
@@ -1107,6 +1124,7 @@ internal sealed class SchemaSnapshotFileLayoutService
         public int? Precision { get; set; }
         public int? Scale { get; set; }
         public string? TableTypeRef { get; set; }
+        public string? TableTypeCatalog { get; set; }
         public string? TableTypeSchema { get; set; }
         public string? TableTypeName { get; set; }
         public string? TypeSchema { get; set; }

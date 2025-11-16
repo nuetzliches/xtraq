@@ -32,3 +32,18 @@ BEGIN
     ';
 END;
 GO
+
+IF TYPE_ID(N'shared.AuditLogEntryTableType') IS NULL
+BEGIN
+    EXEC sys.sp_executesql N'
+        CREATE TYPE shared.AuditLogEntryTableType AS TABLE
+        (
+            Source NVARCHAR(120) NOT NULL,
+            Message NVARCHAR(4000) NOT NULL,
+            Severity TINYINT NOT NULL,
+            CorrelationId UNIQUEIDENTIFIER NULL,
+            Details NVARCHAR(MAX) NULL
+        );
+    ';
+END;
+GO

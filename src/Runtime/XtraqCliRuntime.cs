@@ -404,13 +404,45 @@ internal sealed class XtraqCliRuntime(
             ITemplateLoader loader = Directory.Exists(templatesDir)
                 ? new FileSystemTemplateLoader(templatesDir)
                 : new EmbeddedResourceTemplateLoader(typeof(XtraqCliRuntime).Assembly, "Xtraq.Templates.");
+
+            Xtraq.Metadata.ISchemaMetadataProvider? schemaProvider = null;
+            IReadOnlyList<Xtraq.Metadata.ProcedureDescriptor> procedures = Array.Empty<Xtraq.Metadata.ProcedureDescriptor>();
+            try
+            {
+                schemaProvider = new SnapshotSchemaMetadataProvider(workingDirectory, consoleService);
+                procedures = schemaProvider.GetProcedures();
+                if (options.Verbose)
+                {
+                    consoleService.Verbose($"[build] Procedures available: {procedures.Count}");
+                }
+            }
+            catch (Exception ex)
+            {
+                consoleService.Warn($"Failed to load procedure metadata: {ex.Message}");
+                procedures = Array.Empty<Xtraq.Metadata.ProcedureDescriptor>();
+            }
+
+            HashSet<string>? requiredTableTypeReferences = null;
+            if (procedures.Count > 0 && cfg.BuildSchemas is { Count: > 0 })
+            {
+                requiredTableTypeReferences = CollectRequiredTableTypeReferences(procedures, cfg.BuildSchemas);
+                if (requiredTableTypeReferences.Count == 0)
+                {
+                    requiredTableTypeReferences = null;
+                }
+                else if (options.Verbose)
+                {
+                    consoleService.Verbose($"[build] Table type dependencies after schema filter: {requiredTableTypeReferences.Count}");
+                }
+            }
+
             var metadata = new TableTypeMetadataProvider(workingDirectory);
             var generator = new TableTypesGenerator(cfg, metadata, renderer, loader, workingDirectory);
             var tableTypesStopwatch = Stopwatch.StartNew();
             using var tableTypesProgress = consoleService.BeginProgressScope("Generating table type artifacts");
             try
             {
-                tableTypeDetails = generator.Generate();
+                tableTypeDetails = generator.Generate(requiredTableTypeReferences);
                 tableTypeArtifacts = tableTypeDetails.TotalArtifacts;
                 tableTypesProgress.Complete(message: $"artifacts={tableTypeArtifacts}");
             }
@@ -452,24 +484,6 @@ internal sealed class XtraqCliRuntime(
                     RenderBreakdownChart(options, "► Table type generation", tableTypeSegments, "files");
                 }
             }
-
-            Xtraq.Metadata.ISchemaMetadataProvider? schemaProvider = null;
-            IReadOnlyList<Xtraq.Metadata.ProcedureDescriptor> procedures;
-            try
-            {
-                schemaProvider = new SnapshotSchemaMetadataProvider(workingDirectory, consoleService);
-                procedures = schemaProvider.GetProcedures();
-                if (options.Verbose)
-                {
-                    consoleService.Verbose($"[build] Procedures available: {procedures.Count}");
-                }
-            }
-            catch (Exception ex)
-            {
-                consoleService.Warn($"Failed to load procedure metadata: {ex.Message}");
-                procedures = Array.Empty<Xtraq.Metadata.ProcedureDescriptor>();
-            }
-
             if (procedures.Count == 0)
             {
                 consoleService.Warn("No stored procedures found in snapshot metadata – skipping procedure generation.");
@@ -953,6 +967,63 @@ internal sealed class XtraqCliRuntime(
                 .Select(static pair => $"{pair.Key}={pair.Value:F0}ms"));
             consoleService.Verbose($"telemetry/categories: {categorySummary}");
         }
+    }
+
+    private static HashSet<string> CollectRequiredTableTypeReferences(
+        IEnumerable<ProcedureDescriptor> procedures,
+        IReadOnlyList<string> allowedSchemas)
+    {
+        HashSet<string>? schemaFilter = allowedSchemas.Count > 0
+            ? new HashSet<string>(allowedSchemas, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var procedure in procedures)
+        {
+            if (schemaFilter is { Count: > 0 } && !schemaFilter.Contains(procedure.Schema))
+            {
+                continue;
+            }
+
+            if (procedure.TableTypeParameters.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var parameter in procedure.TableTypeParameters)
+            {
+                if (string.IsNullOrWhiteSpace(parameter.TableTypeName))
+                {
+                    continue;
+                }
+
+                var normalized = parameter.NormalizedTypeReference;
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    var effectiveSchema = string.IsNullOrWhiteSpace(parameter.TableTypeSchema)
+                        ? procedure.Schema
+                        : parameter.TableTypeSchema;
+                    var effectiveCatalog = string.IsNullOrWhiteSpace(parameter.TableTypeCatalog) ? null : parameter.TableTypeCatalog;
+                    normalized = TableTypeRefFormatter.Normalize(
+                                    TableTypeRefFormatter.Combine(effectiveCatalog, effectiveSchema, parameter.TableTypeName))
+                                 ?? TableTypeRefFormatter.Normalize(
+                                    TableTypeRefFormatter.Combine(effectiveSchema, parameter.TableTypeName));
+                }
+
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    required.Add(normalized);
+                    var parts = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 3)
+                    {
+                        required.Add(string.Join('.', parts[1], parts[2]));
+                    }
+                }
+            }
+        }
+
+        return required;
     }
 
     private static IDictionary<string, string?>? BuildCliOverrides(ICommandOptions options)

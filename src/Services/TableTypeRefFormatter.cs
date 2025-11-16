@@ -3,18 +3,27 @@ namespace Xtraq.Services;
 internal static class TableTypeRefFormatter
 {
     public static string? Combine(string? schema, string? name)
+        => Combine(null, schema, name);
+
+    public static string? Combine(string? catalog, string? schema, string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(schema))
+        var segments = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(catalog))
         {
-            return name.Trim();
+            segments.Add(catalog.Trim());
         }
+        if (!string.IsNullOrWhiteSpace(schema))
+        {
+            segments.Add(schema.Trim());
+        }
+        segments.Add(name.Trim());
 
-        return string.Concat(schema.Trim(), ".", name.Trim());
+        return string.Join('.', segments);
     }
 
     public static string? Normalize(string? value)

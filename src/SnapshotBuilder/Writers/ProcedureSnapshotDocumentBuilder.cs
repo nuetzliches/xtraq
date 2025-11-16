@@ -50,33 +50,69 @@ internal static class ProcedureSnapshotDocumentBuilder
                     writer.WriteString("Name", name);
                 }
 
-                var typeRef = SnapshotWriterUtilities.BuildTypeRef(input);
-                if (!string.IsNullOrWhiteSpace(typeRef))
+                var rawTypeRef = SnapshotWriterUtilities.BuildTypeRef(input);
+                var normalizedTypeRef = TableTypeRefFormatter.Normalize(rawTypeRef);
+                var typeRefToPersist = !string.IsNullOrWhiteSpace(normalizedTypeRef) ? normalizedTypeRef : rawTypeRef;
+                if (!string.IsNullOrWhiteSpace(typeRefToPersist))
                 {
-                    writer.WriteString("TypeRef", typeRef);
-                    SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, typeRef);
+                    writer.WriteString("TypeRef", typeRefToPersist);
+                    SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, typeRefToPersist);
+                }
+
+                if (input.IsTableType)
+                {
+                    var candidateRef = string.IsNullOrWhiteSpace(normalizedTypeRef)
+                        ? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(input.UserTypeSchemaName, input.UserTypeName))
+                        : normalizedTypeRef;
+
+                    if (!string.IsNullOrWhiteSpace(candidateRef))
+                    {
+                        var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(candidateRef);
+                        writer.WriteString("TableTypeRef", candidateRef);
+                        if (!string.IsNullOrWhiteSpace(catalogSegment))
+                        {
+                            writer.WriteString("TableTypeCatalog", catalogSegment);
+                        }
+                        if (!string.IsNullOrWhiteSpace(schemaSegment))
+                        {
+                            writer.WriteString("TableTypeSchema", schemaSegment);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(input.UserTypeSchemaName))
+                        {
+                            writer.WriteString("TableTypeSchema", input.UserTypeSchemaName);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(nameSegment))
+                        {
+                            writer.WriteString("TableTypeName", nameSegment);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(input.UserTypeName))
+                        {
+                            writer.WriteString("TableTypeName", input.UserTypeName);
+                        }
+                    }
                 }
 
                 if (!input.IsTableType)
                 {
-                    if (SnapshotWriterUtilities.ShouldEmitIsNullable(input.IsNullable, typeRef))
+                    if (SnapshotWriterUtilities.ShouldEmitIsNullable(input.IsNullable, typeRefToPersist))
                     {
                         writer.WriteBoolean("IsNullable", true);
                     }
 
-                    if (SnapshotWriterUtilities.ShouldEmitMaxLength(input.MaxLength, typeRef))
+                    if (SnapshotWriterUtilities.ShouldEmitMaxLength(input.MaxLength, typeRefToPersist))
                     {
                         writer.WriteNumber("MaxLength", input.MaxLength);
                     }
 
                     var precision = input.Precision;
-                    if (SnapshotWriterUtilities.ShouldEmitPrecision(precision, typeRef))
+                    if (SnapshotWriterUtilities.ShouldEmitPrecision(precision, typeRefToPersist))
                     {
                         writer.WriteNumber("Precision", precision.GetValueOrDefault());
                     }
 
                     var scale = input.Scale;
-                    if (SnapshotWriterUtilities.ShouldEmitScale(scale, typeRef))
+                    if (SnapshotWriterUtilities.ShouldEmitScale(scale, typeRefToPersist))
                     {
                         writer.WriteNumber("Scale", scale.GetValueOrDefault());
                     }

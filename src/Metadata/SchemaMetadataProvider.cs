@@ -282,6 +282,11 @@ namespace Xtraq.Metadata
             foreach (var tt in tableTypeInfos)
             {
                 if (tt == null || string.IsNullOrWhiteSpace(tt.Schema) || string.IsNullOrWhiteSpace(tt.Name)) continue;
+                var catalogQualified = TableTypeRefFormatter.Combine(tt.Catalog, tt.Schema, tt.Name);
+                if (!string.IsNullOrWhiteSpace(catalogQualified))
+                {
+                    tableTypeRefs.Add(catalogQualified);
+                }
                 tableTypeRefs.Add(tt.Schema + "." + tt.Name);
             }
             var typeResolver = new TypeMetadataResolver(_projectRoot);
@@ -301,6 +306,7 @@ namespace Xtraq.Metadata
                 // Inputs & outputs (output params marked IsOutput or separate array)
                 var inputParams = new List<FieldDescriptor>();
                 var outputParams = new List<FieldDescriptor>();
+                var tableTypeParameters = new List<TableTypeParameterDescriptor>();
                 if ((p.TryGetProperty("Parameters", out var inputsEl) && inputsEl.ValueKind == JsonValueKind.Array) ||
                     (p.TryGetProperty("Inputs", out inputsEl) && inputsEl.ValueKind == JsonValueKind.Array))
                 {
@@ -318,10 +324,13 @@ namespace Xtraq.Metadata
                         var explicitTableType = ip.GetPropertyOrDefaultBool("IsTableType");
                         var tableTypeRefRaw = ip.GetPropertyOrDefault("TableTypeRef");
                         var normalizedTableTypeRef = TableTypeRefFormatter.Normalize(tableTypeRefRaw);
-                        var (_, tableTypeSchemaFromRef, tableTypeNameFromRef) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                        var (tableTypeCatalogFromRef, tableTypeSchemaFromRef, tableTypeNameFromRef) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                        var legacyTtCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
+                        var legacyTtCatalog = string.IsNullOrWhiteSpace(legacyTtCatalogRaw) ? null : legacyTtCatalogRaw;
                         var legacyTtSchema = ip.GetPropertyOrDefault("TableTypeSchema");
                         var legacyTtName = ip.GetPropertyOrDefault("TableTypeName");
 
+                        var tableTypeCatalog = legacyTtCatalog ?? (string.IsNullOrWhiteSpace(tableTypeCatalogFromRef) ? null : tableTypeCatalogFromRef);
                         var tableTypeSchema = legacyTtSchema ?? tableTypeSchemaFromRef;
                         var tableTypeName = legacyTtName ?? tableTypeNameFromRef;
 
@@ -333,7 +342,8 @@ namespace Xtraq.Metadata
                             }
                             else if (!string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
                             {
-                                typeRef = tableTypeSchema + "." + tableTypeName;
+                                typeRef = TableTypeRefFormatter.Combine(tableTypeCatalog, tableTypeSchema, tableTypeName)
+                                    ?? TableTypeRefFormatter.Combine(tableTypeSchema, tableTypeName);
                             }
                         }
 
@@ -364,6 +374,10 @@ namespace Xtraq.Metadata
                                     && resolved == null)
                                 {
                                     isTableType = true;
+                                    if (string.IsNullOrWhiteSpace(tableTypeCatalog))
+                                    {
+                                        tableTypeCatalog = null; // TypeMetadataResolver omits catalog; retain previous if any
+                                    }
                                     legacyTtSchema ??= schemaFromRef;
                                     legacyTtName ??= nameFromRef;
                                     tableTypeSchema ??= schemaFromRef;
@@ -374,9 +388,14 @@ namespace Xtraq.Metadata
 
                         string? ttSchema = tableTypeSchema;
                         string? ttName = tableTypeName;
+                        string? ttCatalog = tableTypeCatalog;
                         if (isTableType)
                         {
                             var split = TypeMetadataResolver.SplitTypeRef(typeRef);
+                            if (string.IsNullOrWhiteSpace(ttCatalog) && !string.IsNullOrWhiteSpace(tableTypeCatalog))
+                            {
+                                ttCatalog = tableTypeCatalog;
+                            }
                             if (string.IsNullOrWhiteSpace(ttSchema)) ttSchema = split.Schema ?? schema;
                             if (string.IsNullOrWhiteSpace(ttName)) ttName = split.Name ?? clean;
                         }
@@ -394,6 +413,24 @@ namespace Xtraq.Metadata
                             var sqlIdentifier = string.IsNullOrWhiteSpace(typeRef) ? ttName! : typeRef!;
                             var clrType = $"IReadOnlyList<{pascal}>?";
                             fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs);
+
+                            var referenceSplit = TableTypeRefFormatter.Split(typeRef ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName));
+                            var referenceSchema = string.IsNullOrWhiteSpace(ttSchema)
+                                ? (referenceSplit.Schema ?? schema)
+                                : ttSchema;
+                            var referenceCatalog = string.IsNullOrWhiteSpace(referenceSplit.Catalog) ? null : referenceSplit.Catalog;
+                            var normalizedReference = TableTypeRefFormatter.Normalize(typeRef)
+                                ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(referenceCatalog, referenceSchema, ttName));
+                            if (string.IsNullOrWhiteSpace(normalizedReference))
+                            {
+                                normalizedReference = TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(referenceSchema, ttName));
+                            }
+                            tableTypeParameters.Add(new TableTypeParameterDescriptor(
+                                ParameterName: clean,
+                                TableTypeSchema: referenceSchema ?? schema,
+                                TableTypeName: ttName!,
+                                NormalizedTypeReference: normalizedReference,
+                                TableTypeCatalog: referenceCatalog ?? (string.IsNullOrWhiteSpace(ttCatalog) ? null : ttCatalog)));
                         }
                         else
                         {
@@ -769,7 +806,10 @@ namespace Xtraq.Metadata
                     OperationName: operationName,
                     InputParameters: inputParams,
                     OutputFields: outputParams,
-                    ResultSets: resultSetDescriptors
+                    ResultSets: resultSetDescriptors,
+                    TableTypeParameters: tableTypeParameters.Count == 0
+                        ? Array.Empty<TableTypeParameterDescriptor>()
+                        : tableTypeParameters
                 );
                 procList.Add(procDescriptor);
                 if (resultSetDescriptors.Count > 0)

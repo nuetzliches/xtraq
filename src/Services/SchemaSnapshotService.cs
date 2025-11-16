@@ -418,13 +418,14 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
             normalizedTableTypeRef = TableTypeRefFormatter.Normalize(legacyRef);
         }
 
-        var (_, inferredSchema, inferredName) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+        var (inferredCatalog, inferredSchema, inferredName) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
 
         return new SnapshotInput
         {
             Name = source.Name ?? string.Empty,
             TypeRef = normalizedTypeRef,
             TableTypeRef = normalizedTableTypeRef,
+            TableTypeCatalog = NormalizeOrNull(source.TableTypeCatalog) ?? NormalizeOrNull(inferredCatalog),
             TableTypeSchema = NormalizeOrNull(inferredSchema),
             TableTypeName = NormalizeOrNull(inferredName),
             IsOutput = source.IsOutput == true ? true : null,
@@ -658,6 +659,7 @@ internal sealed class SnapshotInput
     public string Name { get; set; } = string.Empty;
     public string? TypeRef { get; set; }
     public string? TableTypeRef { get; set; }
+    public string? TableTypeCatalog { get; set; }
     public string? TableTypeSchema { get; set; }
     public string? TableTypeName { get; set; }
     public bool? IsOutput { get; set; }
@@ -758,6 +760,7 @@ internal sealed class SnapshotFunctionParameter
 {
     public string Name { get; set; } = string.Empty;
     public string? TableTypeRef { get; set; }
+    public string? TableTypeCatalog { get; set; }
     public string? TableTypeSchema { get; set; }
     public string? TableTypeName { get; set; }
     public string? TypeRef { get; set; }

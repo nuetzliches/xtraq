@@ -10,6 +10,7 @@ namespace Xtraq.Metadata;
 /// <param name="InputParameters">The input parameters accepted by the procedure.</param>
 /// <param name="OutputFields">The output fields exposed through output parameters.</param>
 /// <param name="ResultSets">The result set descriptors produced by the procedure.</param>
+/// <param name="TableTypeParameters">Table type parameter descriptors referenced by the procedure.</param>
 /// <param name="Summary">Optional summary documentation.</param>
 /// <param name="Remarks">Optional extended remarks.</param>
 public sealed record ProcedureDescriptor(
@@ -19,6 +20,7 @@ public sealed record ProcedureDescriptor(
     IReadOnlyList<FieldDescriptor> InputParameters,
     IReadOnlyList<FieldDescriptor> OutputFields,
     IReadOnlyList<ResultSetDescriptor> ResultSets,
+    IReadOnlyList<TableTypeParameterDescriptor> TableTypeParameters,
     string? Summary = null,
     string? Remarks = null
 );
