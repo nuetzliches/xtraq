@@ -24,7 +24,7 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
   - Various subdirectories for CLI, Configuration, Data access, Generators, etc.
 - `.vscode/tasks.json`: VS Code build and run tasks
 - `README.md`: Project documentation
-- `docs/`: Documentation site (Nuxt.js-based)
+- `docs/`: Documentation site powered by Docus 5 on Nuxt 4 (see `docs/content/4.meta/2.documentation-stack.md` for versioning & maintenance)
 
 ## Development Guidelines
 
@@ -47,6 +47,8 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
 - **Nullable Context**: Enabled throughout the project, but warnings temporarily suppressed
 - Test changes against both .NET 8 and .NET 10 target frameworks
 - Use VS Code tasks for building and running the application
+- When updating the documentation, follow the Docus maintenance guide in `docs/content/4.meta/2.documentation-stack.md` (includes LLM integration details)
+- Treat generated artifacts as read-only. Do not edit files under `samples/restapi/Xtraq`, `debug/Xtraq`, or any other `Xtraq` artifact folders—rerun the generator instead.
 - Follow .NET coding conventions and best practices
 
 ## Build and Run Instructions

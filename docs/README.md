@@ -14,14 +14,14 @@
 
 ## 2. Technology Stack
 
-- Framework: [Nuxt Content](https://content.nuxt.com/docs/getting-started) (static export possible; Markdown + MDC)
-- Structure: `docs/` root as future Nuxt project (currently concept only)
+- Framework: [Docus 5.2.1](https://docus.dev/en) on top of [Nuxt 4.2.1](https://nuxt.com/).
+- Structure: fully bootstrapped Nuxt workspace under `docs/` (content lives in `docs/content/`).
 - Build options:
-  - Static export for GitHub Pages (e.g. `/docs-site` branch or `gh-pages`)
-  - Optional containerization (Node 20 Alpine) for reproducible builds
-- SEO & DX: auto-generated sidebar, table of contents, full‑text search (Nuxt Content Search / Algolia optional)
-- Using Nuxt UI documentation from https://ui.nuxt.com/llms.txt
-- Follow complete Nuxt UI guidelines from https://ui.nuxt.com/llms-full.txt
+  - Static export via `npm run generate` for GitHub Pages deployments.
+  - Optional container image (Node 20) for reproducible builds in CI.
+- SEO & DX: Docus theme provides sidebar, ToC, search, and page contributors by default.
+- LLM support: Docus `llms` integration configured in `docs/nuxt.config.ts` (see `docs/content/4.meta/2.documentation-stack.md`).
+- UI guidelines: leverage [Nuxt UI](https://ui.nuxt.com/) components as needed (document patterns in dedicated component stories).
 
 ## 3. Planned Content Structure
 
@@ -78,7 +78,7 @@
   - Diff between versions (changelog generation)
   - Marking deprecated content via frontmatter (`deprecated: true` + notice block)
 - Mark experimental features with frontmatter flag `experimental: true`
-- Set up https://content.nuxt.com/docs/integrations/llms
+- Set up https://docus.dev/integrations/llms
 
 ### Frontmatter Standards
 
@@ -176,11 +176,11 @@ Prerequisite: Node.js (>= 18 LTS)
 
 ```
 cd docs
-bun install
-bun run dev
+npm install
+npm run dev
 ```
 
-Then open in browser: http://localhost:3000
+Then open in browser: http://localhost:3000 (set `NUXT_APP_BASE_URL="/xtraq/"` to mirror GitHub Pages).
 
 ## 10. Open Questions
 

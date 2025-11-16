@@ -4,3 +4,4 @@ description: Operational policies and shared guidelines for the xtraq project. P
 ---
 
 - [Branch Protection & PR Validation](./branch-protection.md)
+- [Documentation Stack & Nuxt Upgrade](./documentation-stack.md)
