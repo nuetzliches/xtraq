@@ -47,6 +47,15 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [ ] Add an adapter layer (`ProcedureResultEntityAdapter`) that maps procedure rows into tracked EF entities or keyless query types to enable hybrid read patterns without manual mapping.
 - [ ] Support EF interceptors so procedure executions can join ambient transactions and leverage EF's logging providers, keeping configuration consistent across direct EF queries and Xtraq procedure calls.
 
+## Telemetry
+
+- [ ] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision.
+
+## Documentation Alignment
+
+- [ ] Highlight .NET 10.0 as the primary/default target framework across documentation and samples.
+- [ ] Remove the remaining .NET 8.0 examples from `docs/content/3.reference/1.api-integration.md` once replacement guidance is ready.
+
 ## Table Types
 
 First milestone: slim the table-type surface so `dotnet build` only emits UDTT wrappers actually used by the procedures we keep. That means teaching the metadata layer to map **procedure → table type** dependencies, then trimming both snapshotting and generator phases to that set.
