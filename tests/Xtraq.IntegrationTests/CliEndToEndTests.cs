@@ -88,6 +88,7 @@ public sealed class CliEndToEndTests : IAsyncLifetime
 
             var tableTypeArtifacts = Directory.EnumerateFiles(outputDirectory, "*TableType.cs", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(outputDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
+                .Where(name => !string.Equals(name, "ITableType.cs", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 

@@ -94,14 +94,18 @@ internal sealed class SchemaArtifactWriter
             summary.Tables.AddRange(tableSummary.Tables);
         }
 
+        var tableTypeSchemas = BuildTableTypeSchemaSet(schemaSet, requiredTypeRefs);
         IReadOnlyList<TableTypeMetadata> tableTypes = Array.Empty<TableTypeMetadata>();
-        try
+        if (tableTypeSchemas.Count > 0)
         {
-            tableTypes = await _tableTypeMetadataProvider.GetTableTypesAsync(schemaSet, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _console.Verbose($"[snapshot-tabletype] metadata provider failed: {ex.Message}");
+            try
+            {
+                tableTypes = await _tableTypeMetadataProvider.GetTableTypesAsync(tableTypeSchemas, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _console.Verbose($"[snapshot-tabletype] metadata provider failed: {ex.Message}");
+            }
         }
 
         var tableTypeRoot = Path.Combine(schemaRoot, "tabletypes");
@@ -239,6 +243,34 @@ internal sealed class SchemaArtifactWriter
         });
 
         return summary;
+    }
+
+    private static HashSet<string> BuildTableTypeSchemaSet(ISet<string>? schemaSet, ISet<string>? requiredTypeRefs)
+    {
+        var result = schemaSet != null
+            ? new HashSet<string>(schemaSet, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (requiredTypeRefs == null || requiredTypeRefs.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var typeRef in requiredTypeRefs)
+        {
+            if (string.IsNullOrWhiteSpace(typeRef))
+            {
+                continue;
+            }
+
+            var (_, schemaSegment, _) = TableTypeRefFormatter.Split(typeRef);
+            if (!string.IsNullOrWhiteSpace(schemaSegment))
+            {
+                result.Add(schemaSegment);
+            }
+        }
+
+        return result;
     }
 
     private async Task<TableArtifactSummary> WriteTableArtifactsAsync(
