@@ -24,6 +24,29 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] Provide streaming-aware builder overloads so fluent composition can opt into `StreamResult…Async` pipes instead of buffering by default. _(Includes `ProcedureStreamBuilder` with aggregation helpers.)_
 - [x] Document recommended layering (application partials vs. external builders) alongside guidance for DI scoping and XML comments, based on the evaluation in `docs/content/3.reference/1.api-integration.md`.
 
+## Fluent Pipeline Iteration
+
+- [x] Reshape the fluent surface into dedicated configuration and execution types (`ProcedureCallPipeline`, `ProcedureCallExecution`) so interceptors, validation, and telemetry wrap the pipeline without deep delegate nesting. _(Implemented via the new `ProcedurePipelineExtensions` template and updated unit tests.)_
+- [x] Introduce composable execution policies (`IProcedureExecutionPolicy`) with `WithPolicy(...)` wiring for retry, timeout, and circuit-breaking concerns. _(Policies now wrap execution through `ProcedureCallPipeline.ApplyPolicies`.)_
+- [x] Add optional pipeline labels (for example `WithLabel("post-map")`) that emit structured diagnostics and metric scopes for downstream observability tooling. _(Labels flow through `ProcedureExecutionContext` and policy capture tests.)_
+- [x] Retire the initial `ProcedureCallBuilder`/`ProcedureStreamBuilder` shapes and align namespaces/method signatures with the refined design while we are still in alpha. _(Legacy builders removed from `ProcedureBuilders.spt`; docs & tests updated.)_
+
+## Minimal API Integration
+
+- [ ] Ship `RouteHandlerBuilder` extensions (for example `.WithProcedurePipeline(...)`) that bind the fluent pipeline to standard `MapGet`/`MapPost` delegates without replacing the Minimal API entry points.
+- [ ] Provide streaming helpers that expose `IAsyncEnumerable` and NDJSON writer adapters while returning `RouteHandlerBuilder`, reusing the existing fluent streaming semantics.
+- [ ] Deliver optional scaffolding (template, analyzer, or source generator) that emits the `.WithProcedure...` calls beside generated procedures to standardise adoption.
+
+## Template Conventions
+
+- [ ] Document the rationale for the `.spt` template extension (Xtraq Template) and capture whether we keep the naming or migrate to a more conventional suffix as part of the templating guide.
+
+## Framework Integrations
+
+- [ ] Offer `UseXtraqProcedures` extensions for EF `DbContext` that register the generated `IXtraqDbContext` within the same DI scope, reusing EF's connection pooling and transaction management via `DbContext.Database.GetDbConnection()`.
+- [ ] Add an adapter layer (`ProcedureResultEntityAdapter`) that maps procedure rows into tracked EF entities or keyless query types to enable hybrid read patterns without manual mapping.
+- [ ] Support EF interceptors so procedure executions can join ambient transactions and leverage EF's logging providers, keeping configuration consistent across direct EF queries and Xtraq procedure calls.
+
 ## Table Types
 
 First milestone: slim the table-type surface so `dotnet build` only emits UDTT wrappers actually used by the procedures we keep. That means teaching the metadata layer to map **procedure → table type** dependencies, then trimming both snapshotting and generator phases to that set.

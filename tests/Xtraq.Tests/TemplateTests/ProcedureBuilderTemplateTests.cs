@@ -22,6 +22,9 @@ public sealed class ProcedureBuilderTemplateTests
         Assert.True(File.Exists(templatePath), $"Template not found: {templatePath}");
 
         var template = File.ReadAllText(templatePath);
+        var globalUsingsPath = Path.Combine(root, "src", "GlobalUsings.cs");
+        Assert.True(File.Exists(globalUsingsPath), $"Global usings not found: {globalUsingsPath}");
+        var globalUsingsSource = File.ReadAllText(globalUsingsPath);
         var builderSource = template
             .Replace("{{ HEADER }}", "// generated for tests")
             .Replace("{{ Namespace }}", "TestNamespace");
@@ -38,15 +41,33 @@ public interface IXtraqDbContext { }
 
 public sealed class FakeContext : IXtraqDbContext { }
 
+public sealed class CapturePolicy : IProcedureExecutionPolicy
+{
+    public int Invocations { get; private set; }
+    public string? Label { get; private set; }
+
+    public ValueTask<TResult> ExecuteAsync<TInput, TResult>(
+        ProcedureExecutionContext<TInput> context,
+        ProcedureCallDelegate<TInput, TResult> next,
+        CancellationToken cancellationToken)
+    {
+        Invocations++;
+        Label = context.Label;
+        return next(context, cancellationToken);
+    }
+}
+
 public static class BuilderHarness
 {
-    public static async Task<int> RunCallBuilderAsync()
+    public static async Task<(int Total, string? Label, int PolicyInvocations)> RunCallPipelineAsync()
     {
         var ctx = new FakeContext();
-        var builder = ProcedureBuilderExtensions.BuildProcedure(
-            ctx,
-            3,
-            static async (db, value, ct) =>
+        var policy = new CapturePolicy();
+
+        var execution = ctx.ConfigureProcedure(3)
+            .WithLabel(""call-pipeline"")
+            .WithPolicy(policy)
+            .WithExecutor(static async (db, value, ct) =>
             {
                 await Task.Delay(1, ct).ConfigureAwait(false);
                 return value + 1;
@@ -55,7 +76,7 @@ public static class BuilderHarness
         var observed = 0;
         var asyncObserved = 0;
 
-        var result = await builder
+        var result = await execution
             .Select(value => value * 2)
             .Tap(value => observed = value)
             .TapAsync(async (value, ct) =>
@@ -66,29 +87,31 @@ public static class BuilderHarness
             .ExecuteAsync()
             .ConfigureAwait(false);
 
-        return result + observed + asyncObserved;
+        return (result + observed + asyncObserved, policy.Label, policy.Invocations);
     }
 
-    public static async Task<(int RowCount, int Sum, int Output, int ObservedOutput)> RunStreamBuilderAsync()
+    public static async Task<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)> RunStreamPipelineAsync()
     {
         var ctx = new FakeContext();
-        var builder = ProcedureBuilderExtensions.BuildProcedureStream(
-            ctx,
-            0,
-            static async (db, value, onRow, ct) =>
-            {
-                await onRow(1, ct).ConfigureAwait(false);
-                await onRow(2, ct).ConfigureAwait(false);
-                await onRow(3, ct).ConfigureAwait(false);
-                await Task.Delay(1, ct).ConfigureAwait(false);
-                return 42;
-            });
+        var policy = new CapturePolicy();
+
+        var execution = ctx.ConfigureProcedureStream<int, int>(0)
+            .WithLabel(""stream-pipeline"")
+            .WithPolicy(policy)
+            .WithExecutor(static async (db, value, onRow, ct) =>
+        {
+            await onRow(1, ct).ConfigureAwait(false);
+            await onRow(2, ct).ConfigureAwait(false);
+            await onRow(3, ct).ConfigureAwait(false);
+            await Task.Delay(1, ct).ConfigureAwait(false);
+            return 42;
+        });
 
         var sum = 0;
         var count = 0;
         var observedOutput = 0;
 
-        var outcome = await builder
+        var outcome = await execution
             .ForEach((row, ct) =>
             {
                 sum += row;
@@ -100,16 +123,15 @@ public static class BuilderHarness
             .ExecuteAsync()
             .ConfigureAwait(false);
 
-        return (outcome.RowCount, outcome.Sum, outcome.Output, observedOutput);
+        return (outcome.RowCount, outcome.Sum, outcome.Output, observedOutput, policy.Label, policy.Invocations);
     }
 
     public static async Task<(int BufferCount, int AggregatedCount, int Output)> RunBufferAndAggregateAsync()
     {
         var ctx = new FakeContext();
-        var builder = ProcedureBuilderExtensions.BuildProcedureStream(
-            ctx,
-            0,
-            static async (db, value, onRow, ct) =>
+
+        var execution = ctx.ConfigureProcedureStream<int, int>(0)
+            .WithExecutor(static async (db, value, onRow, ct) =>
             {
                 await onRow(5, ct).ConfigureAwait(false);
                 await onRow(6, ct).ConfigureAwait(false);
@@ -117,8 +139,8 @@ public static class BuilderHarness
                 return 11;
             });
 
-        var buffered = await builder.BufferAsync().ConfigureAwait(false);
-        var aggregated = await builder.AggregateAsync((rows, output) => (rows.Count, output)).ConfigureAwait(false);
+        var buffered = await execution.BufferAsync().ConfigureAwait(false);
+        var aggregated = await execution.AggregateAsync((rows, output) => (rows.Count, output)).ConfigureAwait(false);
         return (buffered.Count, aggregated.Item1, aggregated.Item2);
     }
 }
@@ -126,6 +148,7 @@ public static class BuilderHarness
 
         var syntaxTrees = new[]
         {
+            CSharpSyntaxTree.ParseText(globalUsingsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(builderSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(harnessSource, new CSharpParseOptions(LanguageVersion.CSharp12))
         };
@@ -156,11 +179,11 @@ public static class BuilderHarness
             return await task.ConfigureAwait(false);
         }
 
-        var callResult = await InvokeAsync<int>(harnessType, "RunCallBuilderAsync").ConfigureAwait(false);
-        Assert.Equal(34, callResult);
+        var callResult = await InvokeAsync<(int Total, string? Label, int PolicyInvocations)>(harnessType, "RunCallPipelineAsync").ConfigureAwait(false);
+        Assert.Equal((34, "call-pipeline", 1), callResult);
 
-        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput)>(harnessType, "RunStreamBuilderAsync").ConfigureAwait(false);
-        Assert.Equal((3, 6, 42, 42), streamResult);
+        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)>(harnessType, "RunStreamPipelineAsync").ConfigureAwait(false);
+        Assert.Equal((3, 6, 42, 42, "stream-pipeline", 1), streamResult);
 
         var aggregateResult = await InvokeAsync<(int BufferCount, int AggregatedCount, int Output)>(harnessType, "RunBufferAndAggregateAsync").ConfigureAwait(false);
         Assert.Equal((3, 3, 11), aggregateResult);
@@ -174,7 +197,10 @@ public static class BuilderHarness
             typeof(ValueTask).Assembly,
             typeof(Enumerable).Assembly,
             typeof(List<>).Assembly,
-            typeof(CancellationToken).Assembly
+            typeof(CancellationToken).Assembly,
+            typeof(System.Text.Json.JsonSerializer).Assembly,
+            typeof(System.Text.RegularExpressions.Regex).Assembly,
+            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly
         };
 
         return assemblies
