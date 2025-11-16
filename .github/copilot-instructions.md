@@ -49,6 +49,7 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
 - Use VS Code tasks for building and running the application
 - When updating the documentation, follow the Docus maintenance guide in `docs/content/4.meta/2.documentation-stack.md` (includes LLM integration details)
 - Treat generated artifacts as read-only. Do not edit files under `samples/restapi/Xtraq`, `debug/Xtraq`, or any other `Xtraq` artifact folders—rerun the generator instead.
+- After generation, run `dotnet format` as documented in `docs/content/4.meta/3.formatting-generated-artifacts.md` to keep emitted code aligned with the repository style rules.
 - Follow .NET coding conventions and best practices
 
 ## Build and Run Instructions
