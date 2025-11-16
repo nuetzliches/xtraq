@@ -40,15 +40,15 @@ internal sealed class ProcedureExecutionPlan
 {
     public ProcedureExecutionPlan(string name, ProcedureParameter[] parameters, ResultSetMapping[] resultSets,
         Func<IReadOnlyDictionary<string, object?>, object?> outputFactory,
-        Func<bool, string?, object?, IReadOnlyDictionary<string, object?>, object[], object> aggregateFactory,
-        Action<DbCommand, object?> binder)
+        Func<bool,string?,object?,IReadOnlyDictionary<string,object?>,object[],object> aggregateFactory,
+        Action<DbCommand,object?> binder)
     { Name = name; Parameters = parameters; ResultSets = resultSets; OutputFactory = outputFactory; AggregateFactory = aggregateFactory; Binder = binder; }
     public string Name { get; }
     public ProcedureParameter[] Parameters { get; }
     public ResultSetMapping[] ResultSets { get; }
     public Func<IReadOnlyDictionary<string, object?>, object?> OutputFactory { get; }
-    public Func<bool, string?, object?, IReadOnlyDictionary<string, object?>, object[], object> AggregateFactory { get; }
-    public Action<DbCommand, object?> Binder { get; }
+    public Func<bool,string?,object?,IReadOnlyDictionary<string,object?>,object[],object> AggregateFactory { get; }
+    public Action<DbCommand,object?> Binder { get; }
 }
 
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
@@ -244,6 +244,72 @@ internal static class ProcedureExecutor
             rsArrays[i] = ((List<object>)rsResults[i]).ToArray();
         var aggregate = (T)plan.AggregateFactory(true, null, outputObj, outputs, rsArrays);
         return aggregate;
+    }
+
+    public static async Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+    {
+        if (connection == null) throw new ArgumentNullException(nameof(connection));
+        if (plan == null) throw new ArgumentNullException(nameof(plan));
+        if (streamAction == null) throw new ArgumentNullException(nameof(streamAction));
+        if (resultSetIndex < 0 || resultSetIndex >= plan.ResultSets.Length) throw new ArgumentOutOfRangeException(nameof(resultSetIndex));
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = plan.Name;
+        cmd.CommandType = System.Data.CommandType.StoredProcedure;
+        foreach (var p in plan.Parameters)
+        {
+            var prm = cmd.CreateParameter();
+            prm.ParameterName = p.Name;
+            prm.DbType = p.DbType;
+            if (p.Size is int s && s > 0) prm.Size = s;
+            prm.Direction = p.IsOutput ? System.Data.ParameterDirection.InputOutput : System.Data.ParameterDirection.Input;
+            prm.Value = DBNull.Value;
+            cmd.Parameters.Add(prm);
+        }
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(ct).ConfigureAwait(false);
+        }
+
+        plan.Binder(cmd, input);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
+        for (int i = 0; i < plan.ResultSets.Length; i++)
+        {
+            if (i == resultSetIndex)
+            {
+                await streamAction(reader, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                {
+                    // discard non-target rows
+                }
+            }
+
+            if (i < plan.ResultSets.Length - 1)
+            {
+                if (!await reader.NextResultAsync(ct).ConfigureAwait(false))
+                {
+                    break;
+                }
+            }
+        }
+
+        var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (DbParameter dbp in cmd.Parameters)
+        {
+            if (dbp.Direction.HasFlag(System.Data.ParameterDirection.Output) || dbp.Direction.HasFlag(System.Data.ParameterDirection.InputOutput))
+            {
+                var key = dbp.ParameterName.TrimStart('@');
+                outputs[key] = dbp.Value == DBNull.Value ? null : dbp.Value;
+            }
+        }
+
+        return plan.OutputFactory(outputs);
     }
 }
 

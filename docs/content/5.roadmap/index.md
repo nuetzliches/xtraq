@@ -18,6 +18,12 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] `FOR JSON PATH` root alias extraction so JSON-only result sets can reuse the declared root name. _(Handled via `ResultSetNameResolver.TryResolve` and `TryResolve_WithForJsonRootAlias_UsesRootName` test.)_
 - [x] Finalise and document the streaming naming convention once helper APIs ship. _(Helpers emit `StreamResult{Suffix}Async`; documented in `docs/content/3.reference/5.result-set-naming.md`.)_
 
+## Procedure Extensibility
+
+- [ ] Prototype an opt-in fluent builder that wraps generated `IXtraqDbContext` extensions without leaking into the artifact surface.
+- [ ] Provide streaming-aware builder overloads so fluent composition can opt into `StreamResult…Async` pipes instead of buffering by default.
+- [ ] Document recommended layering (application partials vs. external builders) alongside guidance for DI scoping and XML comments, based on the evaluation in `docs/content/3.reference/1.api-integration.md`.
+
 ## Table Types
 
 - [ ] Scope snapshotting and generation to table types referenced by allow-listed procedures (parameter usage or AST-detected consumption).

@@ -183,7 +183,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 {
                     var existing = File.ReadAllText(execPath);
                     // Rewrite when namespace mismatches or TvpHelper/ReaderUtil are missing (template updated)
-                    if (!existing.Contains($"namespace {ns};") || !existing.Contains("TvpHelper") || !existing.Contains("ReaderUtil")) write = true;
+                    if (!existing.Contains($"namespace {ns};") || !existing.Contains("TvpHelper") || !existing.Contains("ReaderUtil") || !existing.Contains("StreamResultSetAsync")) write = true;
                 }
                 catch { write = true; }
             }
@@ -629,13 +629,15 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     string ordinalDeclBlock = ordinalAssignments.Count == 0
                         ? string.Empty
                         : string.Join("\n", ordinalAssignments.Select(line => "            " + line));
+                    string streamOrdinalDeclBlock = ConvertReaderVariable(ordinalDeclBlock);
                     if (isJson)
                     {
                         ordinalDeclInline = string.Empty;
                         ordinalDeclBlock = string.Empty;
+                        streamOrdinalDeclBlock = string.Empty;
                     }
                     var fieldExprs = string.Join(", ", effectiveFields.Select((f, idx) => MaterializeFieldExpressionCached(f, idx)));
-                    var streamFieldExprs = fieldExprs;
+                    var streamFieldExprs = isJson ? string.Empty : ConvertReaderVariable(fieldExprs);
                     // Preserve property naming pattern Result, Result1, Result2 ... so existing tests stay unchanged
                     string propName = rsIdx == 0 ? "Result" : "Result" + rsIdx.ToString();
                     var initializerExpr = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] rows{rsIdx} ? Array.ConvertAll(rows{rsIdx}, o => ({rsType})o).ToList() : (rs.Length > {rsIdx} && rs[{rsIdx}] is System.Collections.Generic.List<object> list{rsIdx} ? Array.ConvertAll(list{rsIdx}.ToArray(), o => ({rsType})o).ToList() : Array.Empty<{rsType}>())";
@@ -1093,7 +1095,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             bodyBlock = $"var list = new System.Collections.Generic.List<object>(); {ordinalDeclNested} {whileLoopNested} return list;";
                         }
                         nestedRecordsBlock = string.Join("\n", builtTypes.Select(t => t.Code));
-                        streamFieldExprs = constructorArgs;
+                        streamFieldExprs = ConvertReaderVariable(constructorArgs);
                         var hasFieldExprs = !string.IsNullOrWhiteSpace(streamFieldExprs);
                         var hasOrdinalDecls = ordinalAssignments.Count > 0;
                         rsMeta.Add(new
@@ -1120,10 +1122,16 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             StreamSuffix = streamSuffix,
                             StreamMethodName = streamMethodName,
                             StreamIndex = rsIdx,
-                            StreamOrdinalDecls = ordinalDeclBlock,
+                            StreamOrdinalDecls = streamOrdinalDeclBlock,
                             HasStreamOrdinals = hasOrdinalDecls,
                             StreamFieldExprs = streamFieldExprs,
-                            HasFieldExpressions = hasFieldExprs
+                            HasFieldExpressions = hasFieldExprs,
+                            HasInput = proc.InputParameters.Count > 0,
+                            HasOutput = proc.OutputFields.Count > 0,
+                            InputTypeName = inputTypeName,
+                            OutputTypeName = outputTypeName,
+                            ProcedureTypeName = procedureTypeName,
+                            PlanTypeName = procedureTypeName + "Plan"
                         });
                         rsIdx++;
                     }
@@ -1161,10 +1169,16 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             StreamSuffix = streamSuffix,
                             StreamMethodName = streamMethodName,
                             StreamIndex = rsIdx,
-                            StreamOrdinalDecls = ordinalDeclBlock,
+                            StreamOrdinalDecls = streamOrdinalDeclBlock,
                             HasStreamOrdinals = hasOrdinalDecls,
                             StreamFieldExprs = streamFieldExprs,
-                            HasFieldExpressions = hasFieldExprs
+                            HasFieldExpressions = hasFieldExprs,
+                            HasInput = proc.InputParameters.Count > 0,
+                            HasOutput = proc.OutputFields.Count > 0,
+                            InputTypeName = inputTypeName,
+                            OutputTypeName = outputTypeName,
+                            ProcedureTypeName = procedureTypeName,
+                            PlanTypeName = procedureTypeName + "Plan"
                         });
                         rsIdx++;
                     }
@@ -1215,6 +1229,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     HasMultipleResultSets = rsMeta.Count > 1,
                     InputParameters = proc.InputParameters.Select((p, i) => new { p.ClrType, p.PropertyName, Comma = i == proc.InputParameters.Count - 1 ? string.Empty : "," }).ToList(),
                     OutputFields = proc.OutputFields.Select((f, i) => new { f.ClrType, f.PropertyName, Comma = i == proc.OutputFields.Count - 1 ? string.Empty : "," }).ToList(),
+                    Schema = proc.Schema ?? string.Empty,
+                    Name = proc.ProcedureName ?? procPart,
                     // Pre-bracket (and escape) schema & procedure name so runtime does not need to normalize.
                     ProcedureFullName = "[" + (proc.Schema ?? string.Empty).Replace("]", "]]", StringComparison.Ordinal) + "].[" + (proc.ProcedureName ?? string.Empty).Replace("]", "]]", StringComparison.Ordinal) + "]",
                     ProcedureTypeName = procedureTypeName,
@@ -1565,6 +1581,18 @@ internal sealed class ProceduresGenerator : GeneratorBase
         if (nullable)
             return $"o{ordinalIndex} < 0 ? {defaultExpr} : (r.IsDBNull(o{ordinalIndex}) ? null : ({f.ClrType})r.{accessor}(o{ordinalIndex}))";
         return $"o{ordinalIndex} < 0 ? {defaultExpr} : r.{accessor}(o{ordinalIndex})";
+    }
+
+    private static string ConvertReaderVariable(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return raw;
+        }
+
+        var converted = raw.Replace("ReaderUtil.TryGetOrdinal(r", "ReaderUtil.TryGetOrdinal(reader", StringComparison.Ordinal);
+        converted = Regex.Replace(converted, @"\br\.", "reader.");
+        return converted;
     }
 
     private static System.Text.Json.Nodes.JsonNode? ReadJsonNode(System.Data.Common.DbDataReader reader, int ordinal)
