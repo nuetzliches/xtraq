@@ -1,0 +1,262 @@
+{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+public static class ProcedureBuilderExtensions
+{
+    public static ProcedureCallBuilder<TInput, TResult> BuildProcedure<TInput, TResult>(
+        this IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, CancellationToken, ValueTask<TResult>> executor)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(executor);
+        return ProcedureCallBuilder<TInput, TResult>.Create(dbContext, input, executor);
+    }
+
+    public static ProcedureStreamBuilder<TInput, TRow, TUpstream, TUpstream> BuildProcedureStream<TInput, TRow, TUpstream>(
+        this IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, Func<TRow, CancellationToken, ValueTask>, CancellationToken, ValueTask<TUpstream>> streamExecutor)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(streamExecutor);
+        return ProcedureStreamBuilder<TInput, TRow, TUpstream, TUpstream>.Create(
+            dbContext,
+            input,
+            streamExecutor,
+            static (state, ct) => new ValueTask<TUpstream>(state));
+    }
+}
+
+public sealed class ProcedureCallBuilder<TInput, TCurrent>
+{
+    private readonly IXtraqDbContext _dbContext;
+    private readonly TInput _input;
+    private readonly Func<IXtraqDbContext, TInput, CancellationToken, ValueTask<TCurrent>> _invoker;
+
+    private ProcedureCallBuilder(
+        IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, CancellationToken, ValueTask<TCurrent>> invoker)
+    {
+        _dbContext = dbContext;
+        _input = input;
+        _invoker = invoker;
+    }
+
+    internal static ProcedureCallBuilder<TInput, TCurrent> Create(
+        IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, CancellationToken, ValueTask<TCurrent>> invoker)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(invoker);
+        return new ProcedureCallBuilder<TInput, TCurrent>(dbContext, input, invoker);
+    }
+
+    public ProcedureCallBuilder<TInput, TNext> Select<TNext>(Func<TCurrent, TNext> projector)
+    {
+        ArgumentNullException.ThrowIfNull(projector);
+        return new ProcedureCallBuilder<TInput, TNext>(
+            _dbContext,
+            _input,
+            async (dbContext, payload, ct) =>
+            {
+                var value = await _invoker(dbContext, payload, ct).ConfigureAwait(false);
+                return projector(value);
+            });
+    }
+
+    public ProcedureCallBuilder<TInput, TNext> SelectAsync<TNext>(Func<TCurrent, CancellationToken, ValueTask<TNext>> projector)
+    {
+        ArgumentNullException.ThrowIfNull(projector);
+        return new ProcedureCallBuilder<TInput, TNext>(
+            _dbContext,
+            _input,
+            async (dbContext, payload, ct) =>
+            {
+                var value = await _invoker(dbContext, payload, ct).ConfigureAwait(false);
+                return await projector(value, ct).ConfigureAwait(false);
+            });
+    }
+
+    public ProcedureCallBuilder<TInput, TCurrent> Tap(Action<TCurrent> observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        return new ProcedureCallBuilder<TInput, TCurrent>(
+            _dbContext,
+            _input,
+            async (dbContext, payload, ct) =>
+            {
+                var value = await _invoker(dbContext, payload, ct).ConfigureAwait(false);
+                observer(value);
+                return value;
+            });
+    }
+
+    public ProcedureCallBuilder<TInput, TCurrent> TapAsync(Func<TCurrent, CancellationToken, ValueTask> observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        return new ProcedureCallBuilder<TInput, TCurrent>(
+            _dbContext,
+            _input,
+            async (dbContext, payload, ct) =>
+            {
+                var value = await _invoker(dbContext, payload, ct).ConfigureAwait(false);
+                await observer(value, ct).ConfigureAwait(false);
+                return value;
+            });
+    }
+
+    public ValueTask<TCurrent> ExecuteAsync(CancellationToken cancellationToken = default)
+        => _invoker(_dbContext, _input, cancellationToken);
+}
+
+public sealed class ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent>
+{
+    private readonly IXtraqDbContext _dbContext;
+    private readonly TInput _input;
+    private readonly Func<IXtraqDbContext, TInput, Func<TRow, CancellationToken, ValueTask>, CancellationToken, ValueTask<TUpstream>> _streamExecutor;
+    private readonly Func<TRow, CancellationToken, ValueTask>? _rowHandler;
+    private readonly Func<TUpstream, CancellationToken, ValueTask<TCurrent>> _completion;
+
+    private ProcedureStreamBuilder(
+        IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, Func<TRow, CancellationToken, ValueTask>, CancellationToken, ValueTask<TUpstream>> streamExecutor,
+        Func<TRow, CancellationToken, ValueTask>? rowHandler,
+        Func<TUpstream, CancellationToken, ValueTask<TCurrent>> completion)
+    {
+        _dbContext = dbContext;
+        _input = input;
+        _streamExecutor = streamExecutor;
+        _rowHandler = rowHandler;
+        _completion = completion;
+    }
+
+    internal static ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent> Create(
+        IXtraqDbContext dbContext,
+        TInput input,
+        Func<IXtraqDbContext, TInput, Func<TRow, CancellationToken, ValueTask>, CancellationToken, ValueTask<TUpstream>> streamExecutor,
+        Func<TUpstream, CancellationToken, ValueTask<TCurrent>> completion)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(streamExecutor);
+        ArgumentNullException.ThrowIfNull(completion);
+        return new ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent>(dbContext, input, streamExecutor, null, completion);
+    }
+
+    public ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent> ForEach(Func<TRow, CancellationToken, ValueTask> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        var composed = _rowHandler is null ? handler : Compose(_rowHandler, handler);
+        return new ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent>(
+            _dbContext,
+            _input,
+            _streamExecutor,
+            composed,
+            _completion);
+    }
+
+    public ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent> ForEach(Action<TRow> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        return ForEach((row, _) =>
+        {
+            handler(row);
+            return ValueTask.CompletedTask;
+        });
+    }
+
+    public ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent> TapCompletion(Action<TCurrent> observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        return TapCompletionAsync((value, _) =>
+        {
+            observer(value);
+            return ValueTask.CompletedTask;
+        });
+    }
+
+    public ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent> TapCompletionAsync(Func<TCurrent, CancellationToken, ValueTask> observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        async ValueTask<TCurrent> Wrapper(TUpstream upstream, CancellationToken ct)
+        {
+            var current = await _completion(upstream, ct).ConfigureAwait(false);
+            await observer(current, ct).ConfigureAwait(false);
+            return current;
+        }
+
+        return new ProcedureStreamBuilder<TInput, TRow, TUpstream, TCurrent>(
+            _dbContext,
+            _input,
+            _streamExecutor,
+            _rowHandler,
+            Wrapper);
+    }
+
+    public ProcedureStreamBuilder<TInput, TRow, TUpstream, TNext> CompleteWith<TNext>(Func<TCurrent, CancellationToken, ValueTask<TNext>> projector)
+    {
+        ArgumentNullException.ThrowIfNull(projector);
+        async ValueTask<TNext> Completion(TUpstream upstream, CancellationToken ct)
+        {
+            var current = await _completion(upstream, ct).ConfigureAwait(false);
+            return await projector(current, ct).ConfigureAwait(false);
+        }
+
+        return new ProcedureStreamBuilder<TInput, TRow, TUpstream, TNext>(
+            _dbContext,
+            _input,
+            _streamExecutor,
+            _rowHandler,
+            Completion);
+    }
+
+    public async ValueTask<TCurrent> ExecuteAsync(CancellationToken cancellationToken = default)
+    {
+        var handler = _rowHandler ?? ((_, _) => ValueTask.CompletedTask);
+        var upstream = await _streamExecutor(_dbContext, _input, handler, cancellationToken).ConfigureAwait(false);
+        return await _completion(upstream, cancellationToken).ConfigureAwait(false);
+    }
+
+    public ValueTask<IReadOnlyList<TRow>> BufferAsync(CancellationToken cancellationToken = default)
+    {
+        var buffer = new List<TRow>();
+        return ForEach((row, _) =>
+        {
+            buffer.Add(row);
+            return ValueTask.CompletedTask;
+        }).CompleteWith((_, _) => new ValueTask<IReadOnlyList<TRow>>(buffer))
+          .ExecuteAsync(cancellationToken);
+    }
+
+    public ValueTask<TResult> AggregateAsync<TResult>(Func<IReadOnlyList<TRow>, TUpstream, TResult> aggregator, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(aggregator);
+        var buffer = new List<TRow>();
+        return ForEach((row, _) =>
+        {
+            buffer.Add(row);
+            return ValueTask.CompletedTask;
+        }).CompleteWith((output, _) => new ValueTask<TResult>(aggregator(buffer, output)))
+          .ExecuteAsync(cancellationToken);
+    }
+
+    private static Func<TRow, CancellationToken, ValueTask> Compose(
+        Func<TRow, CancellationToken, ValueTask> first,
+        Func<TRow, CancellationToken, ValueTask> second)
+    {
+        return async (row, ct) =>
+        {
+            await first(row, ct).ConfigureAwait(false);
+            await second(row, ct).ConfigureAwait(false);
+        };
+    }
+}

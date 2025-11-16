@@ -194,6 +194,35 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(execPath, code);
             }
         }
+        if (Templates.TryLoad("ProcedureBuilders", out var builderTpl))
+        {
+            var builderPath = Path.Combine(baseOutputDir, "ProcedureBuilders.cs");
+            bool writeBuilder = !File.Exists(builderPath);
+            if (!writeBuilder)
+            {
+                try
+                {
+                    var existing = File.ReadAllText(builderPath);
+                    if (!existing.Contains("ProcedureCallBuilder", StringComparison.Ordinal) ||
+                        !existing.Contains("ProcedureStreamBuilder", StringComparison.Ordinal) ||
+                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
+                    {
+                        writeBuilder = true;
+                    }
+                }
+                catch
+                {
+                    writeBuilder = true;
+                }
+            }
+
+            if (writeBuilder)
+            {
+                var builderModel = new { Namespace = ns, HEADER = headerBlock };
+                var builderCode = Templates.RenderRawTemplate(builderTpl, builderModel);
+                File.WriteAllText(builderPath, builderCode);
+            }
+        }
         // StoredProcedure template no longer used after consolidation
         string? unifiedTemplateRaw = null;
         bool hasUnifiedTemplate = Templates.TryLoad("UnifiedProcedure", out unifiedTemplateRaw);
