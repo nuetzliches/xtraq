@@ -10,11 +10,13 @@ description: Tracking upcoming work and temporary deferrals.
 
 ## ResultSet Naming
 
-- [ ] Infer final SELECT base table for CTE-backed procedures to enable renames.
+Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and the streaming helper surface (`ProcedureExecutor.StreamResultSetAsync` plus generated `StreamResult…Async` wrappers). The checklist below captures what landed during the naming work and helps track any follow-up tasks.
+
+- [x] Infer final SELECT base table for CTE-backed procedures to enable renames. _(Handled via CTE-aware `ResultSetNameResolver` and `TryResolve_WithCteReference_UsesBaseTable` test.)_
 - [x] Add explicit regression tests that dynamic SQL (`EXEC(@sql)`) keeps generic result-set names. _(Covered via `ResultSetNameResolverTests`.)_
-- [ ] Add negative tests covering deliberately invalid SQL to verify generic fallback behavior.
-- [ ] Finalise and document the streaming naming convention once helper APIs ship.
-- [ ] `FOR JSON PATH` root alias extraction so JSON-only result sets can reuse the declared root name.
+- [x] Add negative tests covering deliberately invalid SQL to verify generic fallback behavior. _(Result set naming falls back in `TryResolve_WithInvalidSql_ReturnsNull`.)_
+- [x] `FOR JSON PATH` root alias extraction so JSON-only result sets can reuse the declared root name. _(Handled via `ResultSetNameResolver.TryResolve` and `TryResolve_WithForJsonRootAlias_UsesRootName` test.)_
+- [x] Finalise and document the streaming naming convention once helper APIs ship. _(Helpers emit `StreamResult{Suffix}Async`; documented in `docs/content/3.reference/5.result-set-naming.md`.)_
 
 ## Table Types
 

@@ -9,6 +9,15 @@ const withBase = (path: string): string => {
 export default defineNuxtConfig({
   extends: ['docus'],
   modules: ['@nuxt/eslint'],
+  llms: {
+    domain: 'https://nuetzliches.github.io/xtraq/',
+    title: 'xtraq Documentation',
+    description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.',
+    full: {
+      title: 'xtraq Documentation',
+      description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.'
+    }
+  },
   eslint: {
     checker: false
   },

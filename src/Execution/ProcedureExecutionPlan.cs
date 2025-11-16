@@ -165,4 +165,110 @@ public static class ProcedureExecutor
             return (TAggregate)aggregateObj;
         }
     }
+
+    /// <summary>
+    /// Streams a single result set without materialising the aggregate payload.
+    /// The specified <paramref name="streamAction"/> receives the active <see cref="DbDataReader"/> positioned on the desired result set and is responsible for consuming the rows.
+    /// </summary>
+    /// <param name="connection">The open or closed database connection used to execute the stored procedure.</param>
+    /// <param name="plan">The execution plan describing parameters and materialisers for the stored procedure.</param>
+    /// <param name="resultSetIndex">Zero-based index of the result set to stream.</param>
+    /// <param name="streamAction">Delegate that processes the requested result set by consuming rows from the provided reader.</param>
+    /// <param name="state">Optional state propagated to the input binder and interceptor pipeline.</param>
+    /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
+    /// <returns>The typed output payload produced by the plan's <see cref="ProcedureExecutionPlan.OutputFactory"/>, or <c>null</c> when the procedure does not emit output parameters.</returns>
+    public static async Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? state = null, CancellationToken cancellationToken = default)
+    {
+        if (connection == null) throw new ArgumentNullException(nameof(connection));
+        if (plan == null) throw new ArgumentNullException(nameof(plan));
+        if (streamAction == null) throw new ArgumentNullException(nameof(streamAction));
+        if (resultSetIndex < 0 || resultSetIndex >= plan.ResultSets.Count) throw new ArgumentOutOfRangeException(nameof(resultSetIndex));
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = plan.ProcedureName;
+        cmd.CommandType = CommandType.StoredProcedure;
+        foreach (var p in plan.Parameters)
+        {
+            var param = cmd.CreateParameter();
+            param.ParameterName = p.Name;
+            if (p.DbType.HasValue) param.DbType = p.DbType.Value;
+            if (p.Size.HasValue) param.Size = p.Size.Value;
+            param.Direction = p.IsOutput ? ParameterDirection.InputOutput : ParameterDirection.Input;
+            if (!p.IsOutput)
+            {
+                param.Value = DBNull.Value;
+            }
+            cmd.Parameters.Add(param);
+        }
+
+        object? beforeState = null;
+        var start = DateTime.UtcNow;
+        try
+        {
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            plan.InputBinder?.Invoke(cmd, state);
+
+            beforeState = await _interceptor.OnBeforeExecuteAsync(plan.ProcedureName, cmd, state, cancellationToken).ConfigureAwait(false);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
+            for (int i = 0; i < plan.ResultSets.Count; i++)
+            {
+                if (i == resultSetIndex)
+                {
+                    await streamAction(reader, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        // Intentionally discard rows for non-target result sets.
+                    }
+                }
+
+                if (i < plan.ResultSets.Count - 1)
+                {
+                    if (!await reader.NextResultAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var outputValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in plan.Parameters)
+            {
+                if (!p.IsOutput)
+                {
+                    continue;
+                }
+
+                var value = cmd.Parameters[p.Name].Value;
+                outputValues[p.Name.TrimStart('@')] = value == DBNull.Value ? null : value;
+            }
+
+            var outputObj = plan.OutputFactory?.Invoke(outputValues);
+            var duration = DateTime.UtcNow - start;
+            await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, true, null, duration, beforeState, outputObj, cancellationToken).ConfigureAwait(false);
+            return outputObj;
+        }
+        catch (Exception ex)
+        {
+            var duration = DateTime.UtcNow - start;
+            try
+            {
+                await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, false, ex.Message, duration, beforeState, null, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore interceptor failures during exception propagation.
+            }
+
+            throw;
+        }
+    }
 }

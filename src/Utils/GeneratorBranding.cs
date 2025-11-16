@@ -10,8 +10,15 @@ public static class GeneratorBranding
     /// <summary>Normalized generator version derived from assembly metadata.</summary>
     public static string GeneratorVersion => VersionValue.Value;
 
-    /// <summary>Human-readable generator label displayed in generated artifacts.</summary>
-    public static string Label => $"Xtraq Code Generator v{GeneratorVersion}";
+    /// <summary>
+    /// Human-readable generator label displayed in generated artifacts.
+    /// The label omits the version to avoid churn across generated files while keeping
+    /// <see cref="GeneratorVersion"/> available for cache invalidation and diagnostics.
+    /// </summary>
+    public static string Label => "Xtraq Code Generator";
+
+    /// <summary>Generator label with version, preserved for logging and telemetry scenarios.</summary>
+    public static string LabelWithVersion => $"{Label} v{GeneratorVersion}";
 
     private static string GetVersion()
     {

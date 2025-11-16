@@ -145,7 +145,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
         private static readonly Lazy<Dictionary<string, TableTypeInfo>> TableTypeMetadataCache = new(LoadTableTypeMetadata, LazyThreadSafetyMode.ExecutionAndPublication);
         private static readonly Lazy<IReadOnlyList<TypeMetadataResolver>> TypeMetadataResolvers = new(LoadTypeMetadataResolvers, LazyThreadSafetyMode.ExecutionAndPublication);
-        private static readonly Lazy<IReadOnlyDictionary<string, TableInfo>> TableMetadataLookup = new(LoadTableMetadata, LazyThreadSafetyMode.ExecutionAndPublication);
         private static readonly Lazy<IReadOnlyDictionary<string, FunctionInfo>> FunctionMetadataLookup = new(LoadFunctionMetadata, LazyThreadSafetyMode.ExecutionAndPublication);
 
         private static readonly IReadOnlyDictionary<string, int> SqlTypePrecedence = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
@@ -5720,38 +5719,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             return resolvers;
         }
 
-        private static IReadOnlyDictionary<string, TableInfo> LoadTableMetadata()
-        {
-            var map = new Dictionary<string, TableInfo>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var root in EnumerateTableTypeRoots())
-            {
-                try
-                {
-                    var provider = new TableMetadataProvider(root);
-                    foreach (var table in provider.GetAll())
-                    {
-                        if (table == null || string.IsNullOrWhiteSpace(table.Name))
-                        {
-                            continue;
-                        }
-
-                        var key = BuildTableTypeKey(table.Schema, table.Name);
-                        if (!map.ContainsKey(key))
-                        {
-                            map[key] = table;
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore metadata load issues for individual roots.
-                }
-            }
-
-            return map;
-        }
-
         private static IReadOnlyDictionary<string, FunctionInfo> LoadFunctionMetadata()
         {
             var map = new Dictionary<string, FunctionInfo>(StringComparer.OrdinalIgnoreCase);
@@ -5966,6 +5933,25 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT")
             };
 
+            try
+            {
+                var resolvedWorkingDirectory = DirectoryUtils.GetWorkingDirectory();
+                if (!string.IsNullOrWhiteSpace(resolvedWorkingDirectory))
+                {
+                    candidates.Add(resolvedWorkingDirectory);
+                }
+            }
+            catch
+            {
+                // Ignore failures resolving the working directory; remaining candidates still apply.
+            }
+
+            var projectRootEnv = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+            if (!string.IsNullOrWhiteSpace(projectRootEnv))
+            {
+                candidates.Add(projectRootEnv);
+            }
+
             return candidates
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(path =>
@@ -5999,8 +5985,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 return null;
             }
 
-            var key = BuildTableTypeKey(schema, name);
-            if (!TableMetadataLookup.Value.TryGetValue(key, out var table) || table == null || table.Columns == null || table.Columns.Count == 0)
+            var table = TryLookupTable(schema, name);
+            if (table == null || table.Columns == null || table.Columns.Count == 0)
             {
                 return null;
             }
@@ -6152,6 +6138,29 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             return map;
+        }
+
+        private static TableInfo? TryLookupTable(string? schema, string name)
+        {
+            var effectiveSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
+            foreach (var root in EnumerateTableTypeRoots())
+            {
+                try
+                {
+                    var provider = new TableMetadataProvider(root);
+                    var table = provider.TryGet(effectiveSchema, name);
+                    if (table != null)
+                    {
+                        return table;
+                    }
+                }
+                catch
+                {
+                    // Ignore provider initialization issues for individual roots and continue probing remaining roots.
+                }
+            }
+
+            return null;
         }
 
         private static string? NormalizeResolvedSqlType(string? sqlType, string? userTypeSchema, string? userTypeName)

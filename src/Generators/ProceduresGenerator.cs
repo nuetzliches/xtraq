@@ -296,6 +296,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 // Structured metadata for template-driven record generation
                 var rsMeta = new List<object>();
                 int rsIdx = 0;
+                var streamSuffixTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 // jsonTypeCorrections already prepared above
                 // Generation-time expansion: if a result set is just an ExecSource placeholder (no fields),
                 // expand its target result sets virtually (inline) without mutating the original descriptor list.
@@ -624,12 +625,17 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var jsonInfo = rs.JsonPayload;
                     var isJson = jsonInfo != null;
                     var isJsonArray = jsonInfo?.IsArray ?? false;
-                    string ordinalDecls = string.Join(" ", ordinalAssignments); // classic mapping with cached ordinals (debug dump removed)
+                    string ordinalDeclInline = string.Join(" ", ordinalAssignments); // classic mapping with cached ordinals (debug dump removed)
+                    string ordinalDeclBlock = ordinalAssignments.Count == 0
+                        ? string.Empty
+                        : string.Join("\n", ordinalAssignments.Select(line => "            " + line));
                     if (isJson)
                     {
-                        ordinalDecls = string.Empty;
+                        ordinalDeclInline = string.Empty;
+                        ordinalDeclBlock = string.Empty;
                     }
                     var fieldExprs = string.Join(", ", effectiveFields.Select((f, idx) => MaterializeFieldExpressionCached(f, idx)));
+                    var streamFieldExprs = fieldExprs;
                     // Preserve property naming pattern Result, Result1, Result2 ... so existing tests stay unchanged
                     string propName = rsIdx == 0 ? "Result" : "Result" + rsIdx.ToString();
                     var initializerExpr = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] rows{rsIdx} ? Array.ConvertAll(rows{rsIdx}, o => ({rsType})o).ToList() : (rs.Length > {rsIdx} && rs[{rsIdx}] is System.Collections.Generic.List<object> list{rsIdx} ? Array.ConvertAll(list{rsIdx}.ToArray(), o => ({rsType})o).ToList() : Array.Empty<{rsType}>())";
@@ -671,6 +677,31 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         propType = $"IReadOnlyList<{rsType}>";
                         propDefault = $"Array.Empty<{rsType}>()";
                     }
+                    var supportsStreaming = !isJson;
+                    string? streamSuffix = null;
+                    string? streamMethodName = null;
+                    if (supportsStreaming)
+                    {
+                        var baseSuffix = NamePolicy.Sanitize(rs.Name).TrimStart('@');
+                        if (string.IsNullOrWhiteSpace(baseSuffix))
+                        {
+                            baseSuffix = $"Set{rsIdx + 1}";
+                        }
+
+                        if (streamSuffixTracker.TryGetValue(baseSuffix, out var existingCount))
+                        {
+                            existingCount++;
+                            streamSuffixTracker[baseSuffix] = existingCount;
+                            baseSuffix += existingCount.ToString(CultureInfo.InvariantCulture);
+                        }
+                        else
+                        {
+                            streamSuffixTracker[baseSuffix] = 0;
+                        }
+
+                        streamSuffix = baseSuffix;
+                        streamMethodName = $"StreamResult{streamSuffix}Async";
+                    }
                     // BodyBlock replaces the old template-if usage and contains the full lambda contents.
                     string bodyBlock;
                     if (isJson)
@@ -687,7 +718,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     else
                     {
                         var whileLoop = $"while (await r.ReadAsync(ct).ConfigureAwait(false)) {{ list.Add(new {rsType}({fieldExprs})); }}";
-                        bodyBlock = $"var list = new System.Collections.Generic.List<object>(); {ordinalDecls} {whileLoop} return list;";
+                        bodyBlock = $"var list = new System.Collections.Generic.List<object>(); {ordinalDeclInline} {whileLoop} return list;";
                     }
                     // Nested JSON sub-struct generation (JSON sets): only '.' splits hierarchy - underscores remain literal
                     string nestedRecordsBlock = string.Empty;
@@ -920,7 +951,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             RawPropName = rawPropName,
                             RawPropDefault = rawPropDefault,
                             RawAggregateAssignment = rawAggregateAssignment,
-                            OrdinalDecls = ordinalDecls,
+                            OrdinalDecls = ordinalDeclInline,
                             FieldExprs = fieldExprs,
                             Index = rsIdx,
                             AggregateAssignment = aggregateAssignment,
@@ -1057,11 +1088,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         // Adjust BodyBlock for the streaming variant to instantiate new rsType(constructorArgs)
                         if (!isJson)
                         {
-                            var ordinalDeclNested = ordinalDecls; // identisch nutzen
+                            var ordinalDeclNested = ordinalDeclInline;
                             var whileLoopNested = $"while (await r.ReadAsync(ct).ConfigureAwait(false)) {{ list.Add(new {rsType}({constructorArgs})); }}";
                             bodyBlock = $"var list = new System.Collections.Generic.List<object>(); {ordinalDeclNested} {whileLoopNested} return list;";
                         }
                         nestedRecordsBlock = string.Join("\n", builtTypes.Select(t => t.Code));
+                        streamFieldExprs = constructorArgs;
+                        var hasFieldExprs = !string.IsNullOrWhiteSpace(streamFieldExprs);
+                        var hasOrdinalDecls = ordinalAssignments.Count > 0;
                         rsMeta.Add(new
                         {
                             Name = rs.Name,
@@ -1073,7 +1107,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             RawPropName = rawPropName,
                             RawPropDefault = rawPropDefault,
                             RawAggregateAssignment = rawAggregateAssignment,
-                            OrdinalDecls = ordinalDecls,
+                            OrdinalDecls = ordinalDeclInline,
                             FieldExprs = constructorArgs,
                             Index = rsIdx,
                             AggregateAssignment = aggregateAssignment,
@@ -1081,12 +1115,22 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             ReturnsJson = isJson,
                             ReturnsJsonArray = isJsonArray,
                             BodyBlock = IndentBlock(bodyBlock, "                "),
-                            NestedRecordsBlock = nestedRecordsBlock
+                            NestedRecordsBlock = nestedRecordsBlock,
+                            SupportsStreaming = supportsStreaming,
+                            StreamSuffix = streamSuffix,
+                            StreamMethodName = streamMethodName,
+                            StreamIndex = rsIdx,
+                            StreamOrdinalDecls = ordinalDeclBlock,
+                            HasStreamOrdinals = hasOrdinalDecls,
+                            StreamFieldExprs = streamFieldExprs,
+                            HasFieldExpressions = hasFieldExprs
                         });
                         rsIdx++;
                     }
                     else
                     {
+                        var hasFieldExprs = !string.IsNullOrWhiteSpace(streamFieldExprs);
+                        var hasOrdinalDecls = ordinalAssignments.Count > 0;
                         var fieldsBlock = string.Join(Environment.NewLine, effectiveFields.Select((f, i) =>
                         {
                             var typeLiteral = ApplyNullability(f.ClrType, f.IsNullable);
@@ -1104,7 +1148,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             RawPropName = rawPropName,
                             RawPropDefault = rawPropDefault,
                             RawAggregateAssignment = rawAggregateAssignment,
-                            OrdinalDecls = ordinalDecls,
+                            OrdinalDecls = ordinalDeclInline,
                             FieldExprs = fieldExprs,
                             Index = rsIdx,
                             AggregateAssignment = aggregateAssignment,
@@ -1112,7 +1156,15 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             ReturnsJson = isJson,
                             ReturnsJsonArray = isJsonArray,
                             BodyBlock = IndentBlock(bodyBlock, "                "),
-                            NestedRecordsBlock = nestedRecordsBlock
+                            NestedRecordsBlock = nestedRecordsBlock,
+                            SupportsStreaming = supportsStreaming,
+                            StreamSuffix = streamSuffix,
+                            StreamMethodName = streamMethodName,
+                            StreamIndex = rsIdx,
+                            StreamOrdinalDecls = ordinalDeclBlock,
+                            HasStreamOrdinals = hasOrdinalDecls,
+                            StreamFieldExprs = streamFieldExprs,
+                            HasFieldExpressions = hasFieldExprs
                         });
                         rsIdx++;
                     }

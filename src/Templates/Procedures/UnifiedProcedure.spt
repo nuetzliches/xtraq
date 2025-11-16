@@ -131,6 +131,25 @@ public static class {{ ProcedureTypeName }}Extensions
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 		return await {{ ProcedureTypeName }}Procedure.ExecuteAsync(conn{{#if HasInput}}, input{{/if}}, cancellationToken).ConfigureAwait(false);
 	}
+
+{{#each ResultSets as resultSet}}{{#if resultSet.SupportsStreaming}}
+	/// <summary>Streams result set <c>{{ resultSet.Name }}</c> without buffering it into the aggregate payload.</summary>
+	public static async Task{{#if ../../HasOutput}}<{{ ../../OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(this IXtraqDbContext db{{#if ../../HasInput}}, {{ ../../InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(db);
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+		{{#if ../../HasOutput}}var output = {{/if}}await {{ ../../ProcedureTypeName }}Procedure.{{ resultSet.StreamMethodName }}(connection{{#if ../../HasInput}}, input{{/if}}, onRowAsync, cancellationToken).ConfigureAwait(false);
+		{{#if ../../HasOutput}}return output;{{/if}}
+	}
+
+	public static Task{{#if ../../HasOutput}}<{{ ../../OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(this IXtraqDbContext db{{#if ../../HasInput}}, {{ ../../InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		return {{ resultSet.StreamMethodName }}(db{{#if ../../HasInput}}, input{{/if}}, (row, ct) => onRowAsync(row), cancellationToken);
+	}
+
+{{/if}}{{/each}}
 }
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
@@ -141,4 +160,34 @@ public static class {{ ProcedureTypeName }}Procedure
 	{
 		return ProcedureExecutor.ExecuteAsync<{{ UnifiedResultTypeName }}>(connection, {{ PlanTypeName }}.Instance, {{#if HasInput}}input{{else}}null{{/if}}, cancellationToken);
 	}
+
+{{#each ResultSets as resultSet}}{{#if resultSet.SupportsStreaming}}
+	/// <summary>Streams result set <c>{{ resultSet.Name }}</c> using the supplied row callback.</summary>
+	public static async Task{{#if ../../HasOutput}}<{{ ../../OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(DbConnection connection{{#if ../../HasInput}}, {{ ../../InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(connection);
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+
+		async Task StreamCoreAsync(DbDataReader reader, CancellationToken ct)
+		{
+{{#if resultSet.HasStreamOrdinals}}{{ resultSet.StreamOrdinalDecls }}
+{{/if}}			while (await reader.ReadAsync(ct).ConfigureAwait(false))
+			{
+				var row = {{#if resultSet.HasFieldExpressions}}new {{ resultSet.TypeName }}({{ resultSet.StreamFieldExprs }}){{else}}new {{ resultSet.TypeName }}(){{/if}};
+				await onRowAsync(row, ct).ConfigureAwait(false);
+			}
+		}
+
+{{#if ../../HasOutput}}		var output = await ProcedureExecutor.StreamResultSetAsync(connection, {{ ../../PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if ../../HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
+		return ({{ ../../OutputTypeName }}?)output;
+{{else}}		await ProcedureExecutor.StreamResultSetAsync(connection, {{ ../../PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if ../../HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
+{{/if}}	}
+
+	public static Task{{#if ../../HasOutput}}<{{ ../../OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(DbConnection connection{{#if ../../HasInput}}, {{ ../../InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		return {{ resultSet.StreamMethodName }}(connection{{#if ../../HasInput}}, input{{/if}}, (row, ct) => onRowAsync(row), cancellationToken);
+	}
+
+{{/if}}{{/each}}
 }
