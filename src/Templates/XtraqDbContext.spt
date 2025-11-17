@@ -11,13 +11,16 @@ using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 
 /// <summary>Generated database context providing ADO.NET connection helpers and health probe.</summary>
-public sealed partial class XtraqDbContext : IXtraqDbContext
+public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor
 {
     private readonly XtraqDbContextOptions _options;
+    private readonly IServiceProvider? _serviceProvider;
+    private IXtraqTransactionOrchestrator? _transactionOrchestrator;
 
-    public XtraqDbContext(XtraqDbContextOptions options)
+    public XtraqDbContext(XtraqDbContextOptions options, IServiceProvider? serviceProvider = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _serviceProvider = serviceProvider;
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
             throw new InvalidOperationException("XtraqDbContextOptions.ConnectionString must be set.");
         if (_options.CommandTimeout == null || _options.CommandTimeout < 1)
@@ -55,6 +58,32 @@ public sealed partial class XtraqDbContext : IXtraqDbContext
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>Resolves the scoped transaction orchestrator associated with this context.</summary>
+    public IXtraqTransactionOrchestrator TransactionOrchestrator
+    {
+        get
+        {
+            if (_transactionOrchestrator is not null)
+            {
+                return _transactionOrchestrator;
+            }
+
+            if (_serviceProvider is not null)
+            {
+                var resolved = _serviceProvider.GetService<IXtraqTransactionOrchestrator>();
+                if (resolved is not null)
+                {
+                    _transactionOrchestrator = resolved;
+                    return resolved;
+                }
+            }
+
+            var fallback = new XtraqTransactionOrchestrator(this);
+            _transactionOrchestrator = fallback;
+            return fallback;
         }
     }
 }

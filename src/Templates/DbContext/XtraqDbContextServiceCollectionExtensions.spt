@@ -43,7 +43,17 @@ public static class XtraqDbContextServiceCollectionExtensions
             return explicitOptions;
         });
 
-        services.AddScoped<IXtraqDbContext>(sp => new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>()));
+        services.AddScoped<IXtraqDbContext>(sp => new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp));
+        services.AddScoped<IXtraqTransactionOrchestrator>(sp =>
+        {
+            var factory = sp.GetRequiredService<XtraqDbContextOptions>().TransactionOrchestratorFactory;
+            if (factory is not null)
+            {
+                return factory(sp);
+            }
+
+            return new XtraqTransactionOrchestrator(sp.GetRequiredService<IXtraqDbContext>());
+        });
         return services;
     }
 }

@@ -15,5 +15,7 @@ public sealed class XtraqDbContextOptions
     public int? RetryDelayMs { get; set; }
     public JsonSerializerOptions? JsonSerializerOptions { get; set; }
     public bool EnableDiagnostics { get; set; } = true;
+    /// <summary>Optional factory used to create the scoped transaction orchestrator instance.</summary>
+    public Func<IServiceProvider, IXtraqTransactionOrchestrator>? TransactionOrchestratorFactory { get; set; }
 }
 

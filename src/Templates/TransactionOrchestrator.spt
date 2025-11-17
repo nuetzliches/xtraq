@@ -17,6 +17,11 @@ public interface IXtraqTransactionOrchestrator
     ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
+public interface IXtraqTransactionOrchestratorAccessor
+{
+    IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
+}
+
 public sealed record class XtraqTransactionOptions
 {
     public IsolationLevel? IsolationLevel { get; init; }

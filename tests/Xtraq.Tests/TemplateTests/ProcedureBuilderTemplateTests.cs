@@ -39,7 +39,19 @@ namespace TestNamespace;
 
 public interface IXtraqDbContext { }
 
-public sealed class FakeContext : IXtraqDbContext { }
+public interface IXtraqTransactionOrchestrator { }
+
+public interface IXtraqTransactionOrchestratorAccessor
+{
+    IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
+}
+
+public sealed class FakeOrchestrator : IXtraqTransactionOrchestrator { }
+
+public sealed class FakeContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor
+{
+    public IXtraqTransactionOrchestrator TransactionOrchestrator { get; } = new FakeOrchestrator();
+}
 
 public sealed class CapturePolicy : IProcedureExecutionPolicy
 {

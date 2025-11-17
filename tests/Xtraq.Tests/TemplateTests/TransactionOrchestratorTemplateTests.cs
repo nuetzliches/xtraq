@@ -32,6 +32,23 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ HEADER }}", "// generated for tests")
             .Replace("{{ Namespace }}", "TestNamespace");
 
+        var optionsTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextOptions.spt");
+        Assert.True(File.Exists(optionsTemplatePath), $"Options template not found: {optionsTemplatePath}");
+        var optionsTemplate = File.ReadAllText(optionsTemplatePath);
+        Assert.Contains("TransactionOrchestratorFactory", optionsTemplate, StringComparison.Ordinal);
+        var optionsSource = optionsTemplate
+            .Replace("{{ HEADER }}", "// generated for tests")
+            .Replace("{{ Namespace }}", "TestNamespace");
+
+        var serviceTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextServiceCollectionExtensions.spt");
+        Assert.True(File.Exists(serviceTemplatePath), $"Service extensions template not found: {serviceTemplatePath}");
+        var serviceTemplate = File.ReadAllText(serviceTemplatePath);
+        Assert.Contains("AddScoped<IXtraqTransactionOrchestrator>", serviceTemplate, StringComparison.Ordinal);
+        var serviceSource = serviceTemplate
+            .Replace("{{ HEADER }}", "// generated for tests")
+            .Replace("{{ Namespace }}", "TestNamespace");
+        var serviceSourceForHarness = serviceSource.Replace("new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp)", "new FakeDbContext(sp.GetRequiredService<XtraqDbContextOptions>())");
+
         var harnessSource = """
 // harness
 using System;
@@ -40,6 +57,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace;
 
@@ -58,6 +76,12 @@ public sealed class FakeDbContext : IXtraqDbContext
     public FakeDbContext(FakeDbConnection connection)
     {
         _connection = connection;
+    }
+
+    public FakeDbContext(XtraqDbContextOptions options)
+        : this(new FakeDbConnection())
+    {
+        options.ConnectionString ??= "fake-connection";
     }
 
     public DbConnection OpenConnection()
@@ -191,6 +215,22 @@ public sealed class FakeDbTransaction : DbTransaction
     }
 }
 
+public sealed class DelegatingOrchestrator : IXtraqTransactionOrchestrator
+{
+    private readonly IXtraqTransactionOrchestrator _inner;
+
+    public DelegatingOrchestrator(IXtraqTransactionOrchestrator inner)
+    {
+        _inner = inner;
+    }
+
+    public bool HasActiveTransaction => _inner.HasActiveTransaction;
+    public DbConnection? CurrentConnection => _inner.CurrentConnection;
+    public DbTransaction? CurrentTransaction => _inner.CurrentTransaction;
+    public ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default)
+        => _inner.BeginAsync(options, cancellationToken);
+}
+
 public static class OrchestratorHarness
 {
     public static async Task<(bool RootCommitted, bool SavepointCreated, bool ConnectionDisposed, bool TransactionDisposed, bool HasActiveAfter)> RunCommitFlowAsync()
@@ -249,6 +289,42 @@ public static class OrchestratorHarness
             await root.RollbackAsync().ConfigureAwait(false);
         }
     }
+
+    public static async Task<(bool DefaultResolved, bool FactoryResolved)> RunServiceRegistrationAsync()
+    {
+        var defaultServices = new ServiceCollection();
+        defaultServices.AddXtraqDbContext(options =>
+        {
+            options.ConnectionString = "fake";
+        });
+
+        using var defaultProvider = defaultServices.BuildServiceProvider();
+        using var defaultScope = defaultProvider.CreateScope();
+        var defaultOrchestrator = defaultScope.ServiceProvider.GetRequiredService<IXtraqTransactionOrchestrator>();
+        var defaultResolved = defaultOrchestrator is XtraqTransactionOrchestrator;
+        await using (var scope = await defaultOrchestrator.BeginAsync().ConfigureAwait(false))
+        {
+            await scope.CommitAsync().ConfigureAwait(false);
+        }
+
+        var factoryServices = new ServiceCollection();
+        factoryServices.AddXtraqDbContext(options =>
+        {
+            options.ConnectionString = "fake";
+            options.TransactionOrchestratorFactory = sp => new DelegatingOrchestrator(new XtraqTransactionOrchestrator(sp.GetRequiredService<IXtraqDbContext>()));
+        });
+
+        using var factoryProvider = factoryServices.BuildServiceProvider();
+        using var factoryScope = factoryProvider.CreateScope();
+        var factoryOrchestrator = factoryScope.ServiceProvider.GetRequiredService<IXtraqTransactionOrchestrator>();
+        var factoryResolved = factoryOrchestrator is DelegatingOrchestrator;
+        await using (var scope = await factoryOrchestrator.BeginAsync().ConfigureAwait(false))
+        {
+            await scope.RollbackAsync().ConfigureAwait(false);
+        }
+
+        return (defaultResolved, factoryResolved);
+    }
 }
 """;
 
@@ -256,6 +332,8 @@ public static class OrchestratorHarness
         {
             CSharpSyntaxTree.ParseText(globalUsingsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(orchestratorSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
+            CSharpSyntaxTree.ParseText(optionsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
+            CSharpSyntaxTree.ParseText(serviceSourceForHarness, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(harnessSource, new CSharpParseOptions(LanguageVersion.CSharp12))
         };
 
@@ -294,6 +372,10 @@ public static class OrchestratorHarness
 
         var requiresNew = await InvokeAsync<bool>(harnessType, "RunRequiresNewThrowsAsync");
         Assert.True(requiresNew);
+
+        var diResult = await InvokeAsync<(bool DefaultResolved, bool FactoryResolved)>(harnessType, "RunServiceRegistrationAsync");
+        Assert.True(diResult.DefaultResolved);
+        Assert.True(diResult.FactoryResolved);
     }
 
     private static async Task<T> InvokeAsync<T>(Type harnessType, string method)
@@ -314,11 +396,14 @@ public static class OrchestratorHarness
             typeof(Stack<>).Assembly,
             typeof(CancellationToken).Assembly,
             typeof(DbConnection).Assembly,
+            typeof(IServiceProvider).Assembly,
+            typeof(Microsoft.Extensions.Configuration.IConfiguration).Assembly,
             typeof(MarshalByRefObject).Assembly,
             typeof(System.ComponentModel.Component).Assembly,
             typeof(System.Text.Json.JsonSerializer).Assembly,
             typeof(System.Text.RegularExpressions.Regex).Assembly,
-            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly
+            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly,
+            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions).Assembly
         };
 
         var runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
@@ -326,7 +411,8 @@ public static class OrchestratorHarness
         {
             Path.Combine(runtimeDirectory, "System.Runtime.dll"),
             Path.Combine(runtimeDirectory, "System.ComponentModel.Primitives.dll"),
-            Path.Combine(runtimeDirectory, "System.ComponentModel.TypeConverter.dll")
+            Path.Combine(runtimeDirectory, "System.ComponentModel.TypeConverter.dll"),
+            Path.Combine(runtimeDirectory, "System.ComponentModel.dll")
         };
 
         return assemblies

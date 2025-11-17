@@ -44,7 +44,8 @@ public static class ProcedurePipelineExtensions
 public readonly record struct ProcedureExecutionContext<TInput>(
     IXtraqDbContext DbContext,
     TInput Input,
-    string? Label);
+    string? Label,
+    IXtraqTransactionOrchestrator TransactionOrchestrator);
 
 public delegate ValueTask<TResult> ProcedureCallDelegate<TInput, TResult>(
     ProcedureExecutionContext<TInput> context,
@@ -115,7 +116,24 @@ public sealed class ProcedureCallPipeline<TInput>
     }
 
     internal ProcedureExecutionContext<TInput> CreateContext()
-        => new(_dbContext, _input, _label);
+    {
+        var orchestrator = ResolveTransactionOrchestrator(_dbContext);
+        return new ProcedureExecutionContext<TInput>(_dbContext, _input, _label, orchestrator);
+    }
+
+    private static IXtraqTransactionOrchestrator ResolveTransactionOrchestrator(IXtraqDbContext dbContext)
+    {
+        if (dbContext is IXtraqTransactionOrchestratorAccessor accessor)
+        {
+            var orchestrator = accessor.TransactionOrchestrator;
+            if (orchestrator is not null)
+            {
+                return orchestrator;
+            }
+        }
+
+        throw new InvalidOperationException("Procedure pipelines require an IXtraqDbContext that provides an IXtraqTransactionOrchestrator via IXtraqTransactionOrchestratorAccessor.");
+    }
 
     internal ProcedureCallDelegate<TInput, TResult> ApplyPolicies<TResult>(ProcedureCallDelegate<TInput, TResult> terminal)
     {
