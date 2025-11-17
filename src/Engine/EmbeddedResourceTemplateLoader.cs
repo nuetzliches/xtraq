@@ -1,7 +1,7 @@
 namespace Xtraq.Engine;
 
 /// <summary>
-/// Loads <c>.spt</c> templates embedded as manifest resources within the executing assembly.
+/// Loads <c>.xqt</c> templates embedded as manifest resources within the executing assembly.
 /// </summary>
 public sealed class EmbeddedResourceTemplateLoader : ITemplateLoader
 {
@@ -31,7 +31,7 @@ public sealed class EmbeddedResourceTemplateLoader : ITemplateLoader
 
         foreach (var resourceName in assembly.GetManifestResourceNames())
         {
-            if (!resourceName.StartsWith(resourcePrefix, StringComparison.Ordinal) || !resourceName.EndsWith(".spt", StringComparison.OrdinalIgnoreCase))
+            if (!resourceName.StartsWith(resourcePrefix, StringComparison.Ordinal) || !resourceName.EndsWith(".xqt", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -45,7 +45,7 @@ public sealed class EmbeddedResourceTemplateLoader : ITemplateLoader
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: false);
             var content = reader.ReadToEnd();
 
-            var logicalName = resourceName[resourcePrefix.Length..^4]; // strip prefix and .spt extension
+            var logicalName = resourceName[resourcePrefix.Length..^4]; // strip prefix and .xqt extension
 
             static bool IsVariantSegment(string segment)
             {

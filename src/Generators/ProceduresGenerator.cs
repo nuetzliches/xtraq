@@ -375,7 +375,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
         {
             try
             {
-                Console.Out.WriteLine("[xtraq] Warn: UnifiedProcedure.spt not found – generating fallback skeleton (check template path)");
+                Console.Out.WriteLine("[xtraq] Warn: UnifiedProcedure.xqt not found – generating fallback skeleton (check template path)");
                 var names = string.Join(",", Templates.ListNames());
                 Console.Out.WriteLine("[xtraq] Template loader names: " + (names.Length == 0 ? "<empty>" : names));
             }

@@ -1,9 +1,9 @@
 namespace Xtraq.Engine;
 
 /// <summary>
-/// Simple file system based template loader. Looks for *.spt (Xtraq Template) files in a root directory.
-/// Naming convention base: <c>LogicalName.spt</c> (e.g. <c>DbContext.spt</c>).
-/// Versioned override (TFM major) convention: <c>LogicalName.net10.spt</c>, <c>LogicalName.net9.spt</c>, and so on (higher preferred).
+/// Simple file system based template loader. Looks for *.xqt (Xtraq Template) files in a root directory.
+/// Naming convention base: <c>LogicalName.xqt</c> (e.g. <c>DbContext.xqt</c>).
+/// Versioned override (TFM major) convention: <c>LogicalName.net10.xqt</c>, <c>LogicalName.net9.xqt</c>, and so on (higher preferred).
 /// </summary>
 public sealed class FileSystemTemplateLoader : ITemplateLoader
 {
@@ -14,7 +14,7 @@ public sealed class FileSystemTemplateLoader : ITemplateLoader
     /// <summary>
     /// Initializes a new instance of the <see cref="FileSystemTemplateLoader"/> class using the specified template root directory.
     /// </summary>
-    /// <param name="rootDirectory">The root directory that contains <c>.spt</c> template files and optional variant folders.</param>
+    /// <param name="rootDirectory">The root directory that contains <c>.xqt</c> template files and optional variant folders.</param>
     /// <exception cref="ArgumentException">Thrown when the provided directory path is null or whitespace.</exception>
     /// <exception cref="DirectoryNotFoundException">Thrown when the directory cannot be located on disk.</exception>
     public FileSystemTemplateLoader(string rootDirectory)
@@ -29,7 +29,7 @@ public sealed class FileSystemTemplateLoader : ITemplateLoader
         _currentTfmMajor = TemplateLoaderSupport.ResolveCurrentTfmMajor();
         _byLogical = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in Directory.EnumerateFiles(_root, "*.spt", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(_root, "*.xqt", SearchOption.AllDirectories))
         {
             var logicalName = Path.GetFileNameWithoutExtension(file);
             TemplateLoaderSupport.AddTemplate(_byLogical, logicalName, File.ReadAllText(file));

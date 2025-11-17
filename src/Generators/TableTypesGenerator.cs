@@ -56,7 +56,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
         var artifactsPerSchema = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (!Templates.TryLoad("TableType", out var tableTypeTemplate))
         {
-            throw new InvalidOperationException("TableType template 'TableType.spt' not found – generation aborted.");
+            throw new InvalidOperationException("TableType template 'TableType.xqt' not found – generation aborted.");
         }
 
         // Load optional shared header template

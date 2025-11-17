@@ -82,7 +82,7 @@ public sealed class XtraqGenerator
     public int GenerateAll(XtraqConfiguration cfg, string? projectRoot = null)
     {
         projectRoot ??= Directory.GetCurrentDirectory();
-        // Template cache-state check (hash .spt templates). If changed, force metadata reload.
+        // Template cache-state check (hash .xqt templates). If changed, force metadata reload.
         TryApplyTemplateCacheState(projectRoot);
         // Derive namespace considering the configuration path (-p)
         var resolver = new NamespaceResolver(cfg, msg => Console.Out.WriteLine(msg));
@@ -197,7 +197,7 @@ public sealed class XtraqGenerator
             var solutionRoot = Xtraq.Utils.ProjectRootResolver.GetSolutionRootOrCwd();
             var templatesDir = Path.Combine(solutionRoot, "src", "Templates");
             if (!Directory.Exists(templatesDir)) return;
-            var manifest = Xtraq.Utils.DirectoryHasher.HashDirectory(templatesDir, p => p.EndsWith(".spt", StringComparison.OrdinalIgnoreCase));
+            var manifest = Xtraq.Utils.DirectoryHasher.HashDirectory(templatesDir, p => p.EndsWith(".xqt", StringComparison.OrdinalIgnoreCase));
             var templatesHash = manifest.AggregateSha256;
             var cacheDir = Path.Combine(projectRoot, ".xtraq", "cache");
             Directory.CreateDirectory(cacheDir);

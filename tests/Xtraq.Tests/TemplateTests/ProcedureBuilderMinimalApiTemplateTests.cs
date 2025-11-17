@@ -12,7 +12,7 @@ public sealed class ProcedureBuilderMinimalApiTemplateTests
     public void ProcedureBuildersTemplate_CompilesMinimalApiExtensions()
     {
         var root = GetSolutionRoot();
-        var templatePath = System.IO.Path.Combine(root, "src", "Templates", "ProcedureBuilders.spt");
+        var templatePath = System.IO.Path.Combine(root, "src", "Templates", "ProcedureBuilders.xqt");
         Assert.True(System.IO.File.Exists(templatePath), $"Template not found: {templatePath}");
 
         var template = System.IO.File.ReadAllText(templatePath);

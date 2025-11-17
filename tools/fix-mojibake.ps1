@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $srcPath = Join-Path -Path $PSScriptRoot -ChildPath '..\src'
 $allowedExtensions = @(
-    '.cs', '.csproj', '.md', '.json', '.spt', '.txt', '.props', '.targets', '.yml', '.yaml', '.config', '.ts', '.tsx', '.vue', '.sql', '.ini'
+    '.cs', '.csproj', '.md', '.json', '.xqt', '.txt', '.props', '.targets', '.yml', '.yaml', '.config', '.ts', '.tsx', '.vue', '.sql', '.ini'
 )
 $replacements = @{
     'â€“' = '-';

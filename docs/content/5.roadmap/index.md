@@ -43,7 +43,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] Reshape the fluent surface into dedicated configuration and execution types (`ProcedureCallPipeline`, `ProcedureCallExecution`) so interceptors, validation, and telemetry wrap the pipeline without deep delegate nesting. _(Implemented via the new `ProcedurePipelineExtensions` template and updated unit tests.)_
 - [x] Introduce composable execution policies (`IProcedureExecutionPolicy`) with `WithPolicy(...)` wiring for retry, timeout, and circuit-breaking concerns. _(Policies now wrap execution through `ProcedureCallPipeline.ApplyPolicies`.)_
 - [x] Add optional pipeline labels (for example `WithLabel("post-map")`) that emit structured diagnostics and metric scopes for downstream observability tooling. _(Labels flow through `ProcedureExecutionContext` and policy capture tests.)_
-- [x] Retire the initial `ProcedureCallBuilder`/`ProcedureStreamBuilder` shapes and align namespaces/method signatures with the refined design while we are still in alpha. _(Legacy builders removed from `ProcedureBuilders.spt`; docs & tests updated.)_
+- [x] Retire the initial `ProcedureCallBuilder`/`ProcedureStreamBuilder` shapes and align namespaces/method signatures with the refined design while we are still in alpha. _(Legacy builders removed from `ProcedureBuilders.xqt`; docs & tests updated.)_
 
 ## Minimal API Integration
 
@@ -53,7 +53,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Template Conventions
 
-- [ ] Document the rationale for the `.spt` template extension (Xtraq Template) and capture whether we keep the naming or migrate to a more conventional suffix as part of the templating guide.
+- [x] Rename generator templates from `.spt` to `.xqt` so IDEs treat them as Xtraq-specific artifacts while loaders and cache hashing stay in sync. _(Template loaders, tests, and embedded resources now target `.xqt`.)_
 
 ## Framework Integrations
 

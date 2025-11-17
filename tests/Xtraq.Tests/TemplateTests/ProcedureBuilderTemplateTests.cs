@@ -18,7 +18,7 @@ public sealed class ProcedureBuilderTemplateTests
     public async Task ProcedureBuildersTemplate_AllowsComposedExecution()
     {
         var root = GetSolutionRoot();
-        var templatePath = Path.Combine(root, "src", "Templates", "ProcedureBuilders.spt");
+        var templatePath = Path.Combine(root, "src", "Templates", "ProcedureBuilders.xqt");
         Assert.True(File.Exists(templatePath), $"Template not found: {templatePath}");
 
         var template = File.ReadAllText(templatePath);

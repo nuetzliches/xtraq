@@ -20,7 +20,7 @@ public sealed class TransactionOrchestratorTemplateTests
     public async Task TransactionOrchestratorTemplate_SupportsNestedCommitAndRollback()
     {
         var root = GetSolutionRoot();
-        var templatePath = Path.Combine(root, "src", "Templates", "TransactionOrchestrator.spt");
+        var templatePath = Path.Combine(root, "src", "Templates", "TransactionOrchestrator.xqt");
         Assert.True(File.Exists(templatePath), $"Template not found: {templatePath}");
 
         var template = File.ReadAllText(templatePath);
@@ -32,7 +32,7 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ HEADER }}", "// generated for tests")
             .Replace("{{ Namespace }}", "TestNamespace");
 
-        var optionsTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextOptions.spt");
+        var optionsTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextOptions.xqt");
         Assert.True(File.Exists(optionsTemplatePath), $"Options template not found: {optionsTemplatePath}");
         var optionsTemplate = File.ReadAllText(optionsTemplatePath);
         Assert.Contains("TransactionOrchestratorFactory", optionsTemplate, StringComparison.Ordinal);
@@ -40,7 +40,7 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ HEADER }}", "// generated for tests")
             .Replace("{{ Namespace }}", "TestNamespace");
 
-        var serviceTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextServiceCollectionExtensions.spt");
+        var serviceTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextServiceCollectionExtensions.xqt");
         Assert.True(File.Exists(serviceTemplatePath), $"Service extensions template not found: {serviceTemplatePath}");
         var serviceTemplate = File.ReadAllText(serviceTemplatePath);
         Assert.Contains("AddScoped<IXtraqTransactionOrchestrator>", serviceTemplate, StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ Namespace }}", "TestNamespace");
         var serviceSourceForHarness = serviceSource.Replace("new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp)", "new FakeDbContext(sp.GetRequiredService<XtraqDbContextOptions>())");
 
-        var policyTemplatePath = Path.Combine(root, "src", "Templates", "Policies", "TransactionExecutionPolicy.spt");
+        var policyTemplatePath = Path.Combine(root, "src", "Templates", "Policies", "TransactionExecutionPolicy.xqt");
         Assert.True(File.Exists(policyTemplatePath), $"Transaction policy template not found: {policyTemplatePath}");
         var policyTemplate = File.ReadAllText(policyTemplatePath);
         var policySource = policyTemplate
