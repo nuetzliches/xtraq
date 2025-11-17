@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
@@ -64,6 +66,8 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+        using Microsoft.EntityFrameworkCore;
+        using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace;
@@ -103,6 +107,14 @@ public interface IXtraqDbContext
     Task<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default);
     Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default);
     int CommandTimeout { get; }
+}
+
+public sealed class EfHarnessDbContext : DbContext
+{
+    public EfHarnessDbContext(DbContextOptions<EfHarnessDbContext> options)
+        : base(options)
+    {
+    }
 }
 
 public sealed class FakeDbContext : IXtraqDbContext
@@ -490,6 +502,45 @@ public static class OrchestratorHarness
         return (defaultResolved, factoryResolved);
     }
 
+    public static async Task<(bool UsesAdapter, bool AmbientReused, bool DedicatedCreated)> RunUseXtraqProceduresAsync()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<EfHarnessDbContext>(options =>
+        {
+            options.UseSqlite("Data Source=:memory:");
+        });
+
+        services.AddXtraqDbContext(options =>
+        {
+            options.ConnectionString = "Data Source=:memory:";
+        });
+
+        services.UseXtraqProcedures<EfHarnessDbContext>();
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var resolved = scope.ServiceProvider.GetRequiredService<IXtraqDbContext>();
+        var usesAdapter = resolved.GetType().Name.Contains("EntityFrameworkXtraqContext", StringComparison.Ordinal);
+
+        var efContext = scope.ServiceProvider.GetRequiredService<EfHarnessDbContext>();
+        await efContext.Database.OpenConnectionAsync().ConfigureAwait(false);
+
+        bool ambientReused;
+        await using (var ambientTransaction = await efContext.Database.BeginTransactionAsync().ConfigureAwait(false))
+        {
+            var ambientConnection = await resolved.OpenConnectionAsync().ConfigureAwait(false);
+            ambientReused = ReferenceEquals(ambientConnection, efContext.Database.GetDbConnection());
+
+            await ambientTransaction.RollbackAsync().ConfigureAwait(false);
+        }
+
+        var standalone = await resolved.OpenConnectionAsync().ConfigureAwait(false);
+        var dedicatedCreated = !ReferenceEquals(standalone, efContext.Database.GetDbConnection());
+        await standalone.DisposeAsync().ConfigureAwait(false);
+
+        return (usesAdapter, ambientReused, dedicatedCreated);
+    }
+
     public static async Task<(bool Committed, bool RolledBack)> RunPolicyIntegrationAsync()
     {
         var connection = new FakeDbConnection();
@@ -608,6 +659,11 @@ public static class OrchestratorHarness
         Assert.True(diResult.DefaultResolved);
         Assert.True(diResult.FactoryResolved);
 
+        var efResult = await InvokeAsync<(bool UsesAdapter, bool AmbientReused, bool DedicatedCreated)>(harnessType, "RunUseXtraqProceduresAsync");
+        Assert.True(efResult.UsesAdapter);
+        Assert.True(efResult.AmbientReused);
+        Assert.True(efResult.DedicatedCreated);
+
         var policyResult = await InvokeAsync<(bool Committed, bool RolledBack)>(harnessType, "RunPolicyIntegrationAsync");
         Assert.Equal((true, false), policyResult);
 
@@ -640,7 +696,13 @@ public static class OrchestratorHarness
             typeof(System.Text.Json.JsonSerializer).Assembly,
             typeof(System.Text.RegularExpressions.Regex).Assembly,
             typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly,
-            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions).Assembly
+            typeof(Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions).Assembly,
+            typeof(DbContext).Assembly,
+            typeof(SqlConnection).Assembly,
+            typeof(Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions).Assembly,
+            typeof(Microsoft.Data.Sqlite.SqliteConnection).Assembly,
+            typeof(Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions).Assembly,
+            typeof(Microsoft.Extensions.Configuration.ConfigurationExtensions).Assembly
         };
 
         var runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)!;

@@ -1,8 +1,16 @@
 ﻿namespace {{ Namespace }};
 
 using System;
+using System.Data;
+using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 public static class XtraqDbContextServiceCollectionExtensions
 {
@@ -56,5 +64,238 @@ public static class XtraqDbContextServiceCollectionExtensions
         });
         return services;
     }
+
+    /// <summary>Replace <see cref="IXtraqDbContext"/> so generated procedures reuse the scoped Entity Framework Core <see cref="DbContext"/> connection and transaction when available.</summary>
+    public static IServiceCollection UseXtraqProcedures<TDbContext>(this IServiceCollection services)
+        where TDbContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.Replace(ServiceDescriptor.Scoped<IXtraqDbContext>(sp =>
+        {
+            var efContext = sp.GetRequiredService<TDbContext>();
+            var options = sp.GetRequiredService<XtraqDbContextOptions>();
+            return new EntityFrameworkXtraqContext<TDbContext>(efContext, options);
+        }));
+
+        return services;
+    }
+}
+
+internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDbContext, IXtraqAmbientTransactionAccessor
+    where TDbContext : DbContext
+{
+    private readonly TDbContext _dbContext;
+    private readonly XtraqDbContextOptions _options;
+
+    internal EntityFrameworkXtraqContext(TDbContext dbContext, XtraqDbContextOptions options)
+    {
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    public int CommandTimeout
+    {
+        get
+        {
+            var timeout = _dbContext.Database.GetCommandTimeout();
+            if (timeout.HasValue && timeout.Value > 0)
+            {
+                return timeout.Value;
+            }
+
+            if (_options.CommandTimeout is { } configured && configured > 0)
+            {
+                return configured;
+            }
+
+            return 30;
+        }
+    }
+
+    public DbTransaction? AmbientTransaction
+    {
+        get
+        {
+            var current = _dbContext.Database.CurrentTransaction;
+            if (current is IInfrastructure<DbTransaction> infrastructure)
+            {
+                return infrastructure.Instance;
+            }
+
+            return null;
+        }
+    }
+
+    public DbConnection? AmbientConnection
+    {
+        get
+        {
+            if (AmbientTransaction is null)
+            {
+                return null;
+            }
+
+            var connection = TryGetRelationalConnection();
+            if (connection is not null)
+            {
+                OnAmbientConnectionResolved(connection);
+            }
+
+            return connection;
+        }
+    }
+
+    public DbConnection OpenConnection()
+    {
+        if (AmbientTransaction is not null)
+        {
+            var connection = AmbientConnection ?? TryGetRelationalConnection();
+            if (connection is null)
+            {
+                throw new InvalidOperationException("Entity Framework did not expose a relational connection for the ambient transaction.");
+            }
+
+            EnsureOpen(connection);
+            return connection;
+        }
+
+        return OpenStandaloneConnection(CancellationToken.None);
+    }
+
+    public Task<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        if (AmbientTransaction is not null)
+        {
+            var connection = AmbientConnection ?? TryGetRelationalConnection();
+            if (connection is null)
+            {
+                throw new InvalidOperationException("Entity Framework did not expose a relational connection for the ambient transaction.");
+            }
+
+            return EnsureOpenAsync(connection, cancellationToken);
+        }
+
+        return OpenStandaloneConnectionAsync(cancellationToken);
+    }
+
+    public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _dbContext.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private DbConnection OpenStandaloneConnection(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var connection = CreateStandaloneConnection();
+        EnsureOpen(connection);
+        return connection;
+    }
+
+    private async Task<DbConnection> OpenStandaloneConnectionAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var connection = CreateStandaloneConnection();
+        await EnsureOpenAsync(connection, cancellationToken).ConfigureAwait(false);
+        return connection;
+    }
+
+    private DbConnection CreateStandaloneConnection()
+    {
+        var prototype = TryGetRelationalConnection();
+        var connectionString = ResolveConnectionString(prototype);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("No connection string could be resolved for the Xtraq Entity Framework adapter. Configure XtraqDbContextOptions.ConnectionString or ensure the DbContext exposes one.");
+        }
+
+        if (prototype is ICloneable cloneable && cloneable.Clone() is DbConnection cloned)
+        {
+            cloned.ConnectionString = connectionString;
+            return cloned;
+        }
+
+        if (prototype is not null && Activator.CreateInstance(prototype.GetType()) is DbConnection newConnection)
+        {
+            newConnection.ConnectionString = connectionString;
+            return newConnection;
+        }
+
+        return new SqlConnection(connectionString);
+    }
+
+    private string ResolveConnectionString(DbConnection? prototype)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.ConnectionString))
+        {
+            return _options.ConnectionString!;
+        }
+
+        try
+        {
+            var fromEf = _dbContext.Database.GetConnectionString();
+            if (!string.IsNullOrWhiteSpace(fromEf))
+            {
+                return fromEf;
+            }
+        }
+        catch
+        {
+            // Provider may not expose a relational connection string; fall back to prototype or explicit options.
+        }
+
+        if (prototype is not null && !string.IsNullOrWhiteSpace(prototype.ConnectionString))
+        {
+            return prototype.ConnectionString;
+        }
+
+        return string.Empty;
+    }
+
+    private DbConnection? TryGetRelationalConnection()
+    {
+        try
+        {
+            return _dbContext.Database.GetDbConnection();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private void EnsureOpen(DbConnection connection)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        connection.Open();
+        OnConnectionOpened(connection);
+    }
+
+    private async Task<DbConnection> EnsureOpenAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            OnConnectionOpened(connection);
+        }
+
+        return connection;
+    }
+
+    partial void OnAmbientConnectionResolved(DbConnection connection);
+    partial void OnConnectionOpened(DbConnection connection);
 }
 
