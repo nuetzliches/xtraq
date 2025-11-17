@@ -68,6 +68,8 @@ internal sealed class SchemaArtifactWriter
             }
         }
 
+        ExtendSchemaSetWithDependencies(schemaSet, requiredTypeRefs, requiredTableRefs);
+
         if (schemaSet.Count == 0)
         {
             return summary;
@@ -100,7 +102,8 @@ internal sealed class SchemaArtifactWriter
         {
             try
             {
-                tableTypes = await _tableTypeMetadataProvider.GetTableTypesAsync(tableTypeSchemas, cancellationToken).ConfigureAwait(false);
+                var skipCache = options?.NoCache == true;
+                tableTypes = await _tableTypeMetadataProvider.GetTableTypesAsync(tableTypeSchemas, skipCache, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -243,6 +246,48 @@ internal sealed class SchemaArtifactWriter
         });
 
         return summary;
+    }
+
+    private static void ExtendSchemaSetWithDependencies(HashSet<string> target, ISet<string>? requiredTypeRefs, ISet<string>? requiredTableRefs)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (requiredTypeRefs != null)
+        {
+            foreach (var typeRef in requiredTypeRefs)
+            {
+                if (string.IsNullOrWhiteSpace(typeRef))
+                {
+                    continue;
+                }
+
+                var parts = SnapshotWriterUtilities.SplitTypeRefParts(typeRef);
+                if (!string.IsNullOrWhiteSpace(parts.Schema))
+                {
+                    target.Add(parts.Schema!);
+                }
+            }
+        }
+
+        if (requiredTableRefs != null)
+        {
+            foreach (var tableRef in requiredTableRefs)
+            {
+                if (string.IsNullOrWhiteSpace(tableRef))
+                {
+                    continue;
+                }
+
+                var parts = SnapshotWriterUtilities.SplitTableRefParts(tableRef);
+                if (!string.IsNullOrWhiteSpace(parts.Schema))
+                {
+                    target.Add(parts.Schema!);
+                }
+            }
+        }
     }
 
     private static HashSet<string> BuildTableTypeSchemaSet(ISet<string>? schemaSet, ISet<string>? requiredTypeRefs)

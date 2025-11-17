@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xtraq.Data;
 using Xtraq.Schema;
 using Xtraq.Services;
@@ -17,8 +18,12 @@ internal static class SnapshotBuilderServiceCollectionExtensions
         services.AddSingleton<IDependencyMetadataProvider, DatabaseDependencyMetadataProvider>();
         services.AddSingleton<IFunctionJsonMetadataProvider, DatabaseFunctionJsonMetadataProvider>();
         services.AddSingleton<ITableMetadataProvider, DatabaseTableMetadataProvider>();
-        services.AddSingleton<ITableTypeMetadataProvider, DatabaseTableTypeMetadataProvider>();
         services.AddSingleton<IUserDefinedTypeMetadataProvider, DatabaseUserDefinedTypeMetadataProvider>();
+        services.TryAddSingleton<SchemaSnapshotFileLayoutService>();
+        services.AddSingleton<ITableTypeMetadataProvider>(provider => new DatabaseTableTypeMetadataProvider(
+            provider.GetRequiredService<DbContext>(),
+            provider.GetRequiredService<IConsoleService>(),
+            provider.GetRequiredService<SchemaSnapshotFileLayoutService>()));
         services.AddSingleton<IProcedureModelBuilder, ProcedureModelScriptDomBuilder>();
         services.AddSingleton<IProcedureAstBuilder>(provider => (IProcedureAstBuilder)provider.GetRequiredService<IProcedureModelBuilder>());
         services.AddSingleton<IProcedureMetadataEnricher>(provider => new ProcedureMetadataEnricher(

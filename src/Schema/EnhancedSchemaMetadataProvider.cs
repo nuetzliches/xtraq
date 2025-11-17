@@ -90,6 +90,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
     private readonly IConsoleService _console;
     private readonly ConcurrentDictionary<string, FunctionReturnMetadata?> _functionReturnCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SnapshotFunction?> _snapshotFunctionCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _functionColumnsSemaphore = new(1, 1);
+    private Dictionary<string, IReadOnlyList<ColumnMetadata>>? _functionColumnsCache;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -240,6 +242,23 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             catch (Exception ex)
             {
                 _console.Verbose($"[enhanced-schema] Database table lookup failed for {schema}.{tableName}: {ex.Message}");
+            }
+        }
+
+        if (resultMap.Count == 0 && _dbContext != null)
+        {
+            var functionColumns = await GetFunctionColumnsFromDatabaseAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+            foreach (var column in functionColumns)
+            {
+                if (!string.IsNullOrWhiteSpace(column?.Name))
+                {
+                    resultMap[column.Name] = column;
+                }
+            }
+
+            if (functionColumns.Count > 0)
+            {
+                _console.Verbose($"[enhanced-schema] Added {functionColumns.Count} column(s) for {schema}.{tableName} from function metadata");
             }
         }
 
@@ -642,6 +661,215 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             _console.Verbose($"[enhanced-schema] Database table lookup failed for {schema}.{tableName}: {ex.Message}");
             return Array.Empty<ColumnMetadata>();
         }
+    }
+
+    private async Task<IReadOnlyList<ColumnMetadata>> GetFunctionColumnsFromDatabaseAsync(string schema, string functionName, string? catalog, CancellationToken cancellationToken)
+    {
+        var cache = await EnsureFunctionColumnCacheAsync(cancellationToken).ConfigureAwait(false);
+        if (cache.Count == 0)
+        {
+            return Array.Empty<ColumnMetadata>();
+        }
+
+        var normalizedSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
+        var normalizedName = string.IsNullOrWhiteSpace(functionName) ? string.Empty : functionName.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return Array.Empty<ColumnMetadata>();
+        }
+
+        var key = string.Concat(normalizedSchema, ".", normalizedName);
+        if (cache.TryGetValue(key, out var columns))
+        {
+            return columns;
+        }
+
+        if (!string.IsNullOrWhiteSpace(catalog))
+        {
+            var qualifiedKey = string.Concat(catalog.Trim(), ".", key);
+            if (cache.TryGetValue(qualifiedKey, out var qualifiedColumns))
+            {
+                return qualifiedColumns;
+            }
+        }
+
+        return Array.Empty<ColumnMetadata>();
+    }
+
+    private async Task<Dictionary<string, IReadOnlyList<ColumnMetadata>>> EnsureFunctionColumnCacheAsync(CancellationToken cancellationToken)
+    {
+        if (_functionColumnsCache != null)
+        {
+            return _functionColumnsCache;
+        }
+
+        await _functionColumnsSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_functionColumnsCache != null)
+            {
+                return _functionColumnsCache;
+            }
+
+            var cache = new Dictionary<string, IReadOnlyList<ColumnMetadata>>(StringComparer.OrdinalIgnoreCase);
+            if (_dbContext == null)
+            {
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            List<FunctionRow> functionRows;
+            try
+            {
+                functionRows = await _dbContext.FunctionListAsync(cancellationToken).ConfigureAwait(false) ?? new List<FunctionRow>();
+            }
+            catch (Exception ex)
+            {
+                _console.Verbose($"[enhanced-schema] Function list lookup failed: {ex.Message}");
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            if (functionRows.Count == 0)
+            {
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            List<FunctionColumnRow> columnRows;
+            try
+            {
+                columnRows = await _dbContext.FunctionTvfColumnsAsync(cancellationToken).ConfigureAwait(false) ?? new List<FunctionColumnRow>();
+            }
+            catch (Exception ex)
+            {
+                _console.Verbose($"[enhanced-schema] Function column lookup failed: {ex.Message}");
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            if (columnRows.Count == 0)
+            {
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            var functionMetadata = new Dictionary<int, (string Schema, string Name)>(columnRows.Count);
+            foreach (var function in functionRows)
+            {
+                if (function == null)
+                {
+                    continue;
+                }
+
+                if (!IsTableValuedFunction(function.type_code))
+                {
+                    continue;
+                }
+
+                var schemaName = NormalizeOptional(function.schema_name) ?? "dbo";
+                var name = NormalizeOptional(function.function_name);
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                functionMetadata[function.object_id] = (schemaName, name);
+            }
+
+            if (functionMetadata.Count == 0)
+            {
+                _functionColumnsCache = cache;
+                return cache;
+            }
+
+            foreach (var group in columnRows.Where(row => row != null && functionMetadata.ContainsKey(row.object_id)).GroupBy(row => row.object_id))
+            {
+                if (!functionMetadata.TryGetValue(group.Key, out var identity))
+                {
+                    continue;
+                }
+
+                var mappedColumns = group
+                    .OrderBy(row => row.ordinal)
+                    .Select(MapFunctionColumnRow)
+                    .Where(column => column != null)
+                    .Cast<ColumnMetadata>()
+                    .ToList();
+
+                if (mappedColumns.Count == 0)
+                {
+                    continue;
+                }
+
+                var key = string.Concat(identity.Schema, ".", identity.Name);
+                cache[key] = mappedColumns;
+            }
+
+            if (cache.Count > 0)
+            {
+                _console.Verbose($"[enhanced-schema] Cached {cache.Count} table-valued function(s) from database metadata");
+            }
+
+            _functionColumnsCache = cache;
+            return cache;
+        }
+        finally
+        {
+            _functionColumnsSemaphore.Release();
+        }
+    }
+
+    private static bool IsTableValuedFunction(string? typeCode)
+    {
+        return string.Equals(typeCode, "IF", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(typeCode, "TF", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ColumnMetadata? MapFunctionColumnRow(FunctionColumnRow? row)
+    {
+        if (row == null)
+        {
+            return null;
+        }
+
+        var columnName = NormalizeOptional(row.column_name);
+        if (string.IsNullOrWhiteSpace(columnName))
+        {
+            return null;
+        }
+
+        var userTypeSchema = NormalizeOptional(row.user_type_schema_name);
+        var userTypeName = NormalizeOptional(row.user_type_name);
+        if (!string.IsNullOrEmpty(userTypeSchema) && string.Equals(userTypeSchema, "sys", StringComparison.OrdinalIgnoreCase))
+        {
+            userTypeSchema = null;
+            userTypeName = null;
+        }
+
+        var hasUserType = !string.IsNullOrEmpty(userTypeName);
+        var sqlTypeCandidate = NormalizeSqlTypeName(row.system_type_name) ?? NormalizeSqlTypeName(row.base_type_name);
+        if (hasUserType)
+        {
+            sqlTypeCandidate = string.Empty;
+        }
+
+        var maxLength = NormalizeMaxLength(row.normalized_length);
+        var precision = NormalizeNumeric(row.precision);
+        var scale = NormalizeNumeric(row.scale);
+
+        return new ColumnMetadata
+        {
+            Name = columnName,
+            SqlTypeName = hasUserType ? string.Empty : sqlTypeCandidate ?? string.Empty,
+            IsNullable = row.is_nullable == 1,
+            MaxLength = maxLength,
+            Precision = precision,
+            Scale = scale,
+            UserTypeSchema = hasUserType ? userTypeSchema : null,
+            UserTypeName = hasUserType ? userTypeName : null,
+            IsFromSnapshot = false
+        };
     }
 
     private async Task<IReadOnlyList<ColumnMetadata>> LoadSnapshotTableColumnsAsync(string path, string schema, string tableName, string? catalog, CancellationToken cancellationToken)

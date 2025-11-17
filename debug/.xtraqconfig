@@ -1,6 +1,6 @@
 {
-    "Namespace": "XtraqDebug",
-    "OutputDir": "Xtraq",
-    "TargetFramework": "net10",
-    "BuildSchemas": []
+  "Namespace": "XtraqDebug",
+  "OutputDir": "Xtraq",
+  "TargetFramework": "net10",
+  "BuildSchemas": []
 }

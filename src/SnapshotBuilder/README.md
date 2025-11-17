@@ -54,6 +54,37 @@ spike only appears in cold snapshot runs (`--no-cache` or first-run scenarios). 
 for batching or dependency-driven selection live in `CHECKLIST.md` under
 “Snapshot-/Caching-Strategie”.
 
+## Procedure Dependency Discovery
+
+- **Catalogue enumeration** – `DatabaseProcedureCollector` seeds the run with
+  `_dbContext.StoredProcedureListAsync(string.Empty, cancellationToken)`, issuing the
+  `StoredProcedureQueries.StoredProcedureListAsync` SQL against `sys.objects`/`sys.schemas`
+  to harvest every procedure plus its `modify_date` for later cache comparisons.
+- **Graph expansion** – the collector immediately follows with
+  `_dbContext.StoredProcedureDependencyListAsync(...)`, which executes the
+  `StoredProcedureQueries.StoredProcedureDependencyListAsync` query over
+  `sys.sql_expression_dependencies`. A breadth-first search walks the edges so any
+  downstream procedure invoked by a seed is included even when filters target a narrow
+  schema or name pattern.
+- **Cache verification** – for each candidate procedure the collector probes
+  `ISnapshotCache.TryGetProcedure`. When a cached fingerprint exists the collector calls
+  `_dependencyMetadataProvider.ResolveAsync(cachedDependencies, cancellationToken)` to
+  refresh `LastModifiedUtc` values and `HasDependencyChanged` decides whether the run can
+  reuse the cached snapshot or must fall back to a full analyse step.
+- **Modify-date resolution** – `DatabaseDependencyMetadataProvider` memoises modify-date
+  lookups per dependency (schema + name + `ProcedureDependencyKind`) via an internal
+  `ConcurrentDictionary`. Depending on the dependency kind it queries:
+  `sys.objects` (procedure `P`, function `FN`/`TF`/`IF`, view `V`, table `U`),
+  `sys.table_types` joined with `sys.objects` (user-defined table types), or
+  `sys.types` with an optional `sys.objects` join (scalar user-defined types). The resolved
+  UTC timestamps feed both collector reuse checks and analyzer output.
+- **Analyzer integration** – when a procedure is marked for analysis the
+  `DatabaseProcedureAnalyzer` rebuilds its dependency list from parameter metadata,
+  executed procedure references, and result-set projections (`Collect*Dependencies` helpers).
+  The analyzer reuses the same `IDependencyMetadataProvider` to stamp each dependency with
+  its current modify date before the snapshot is written. `FileSnapshotCache.RecordAnalysisAsync`
+  persists the refreshed dependencies so warm runs avoid redundant database calls.
+
 ## Cache & Telemetry Layout
 
 - Snapshots live under `<workingDirectory>/.xtraq/snapshots`.
