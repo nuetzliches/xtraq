@@ -8,7 +8,7 @@ seo:
   description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
 ---
 
-::u-page-hero
+::u-page-hero{class="py-12 sm:py-16 lg:py-20"}
 #title
 Stored procedure automation for .NET
 
@@ -83,6 +83,33 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   Capture nested JSON payloads, table-valued parameters, and multi-result sets without manual parsing.
   ::
 
+  ::card
+  ---
+  title: Fluent pipeline design
+  icon: i-heroicons-sparkles
+  to: /reference/api-integration
+  ---
+  Compose policies, transactions, and streaming helpers without losing strongly typed procedures.
+  ::
+
+  ::card
+  ---
+  title: Transaction-aware orchestration
+  icon: i-heroicons-arrow-path-rounded-square
+  to: /reference/entity-framework-integration
+  ---
+  Reuse ambient EF connections or spin up savepoint-backed scopes with generated orchestrator wiring.
+  ::
+
+  ::card
+  ---
+  title: Minimal API ready
+  icon: i-heroicons-adjustments-horizontal
+  to: /reference/api-integration
+  ---
+  Attach generated route handlers and streaming endpoints without abandoning standard `MapGet`/`MapPost` flows.
+  ::
+
 :::
 
 ## Get productive in minutes
@@ -115,6 +142,15 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   to: /cli
   ---
   Dive into every command, flag, and workflow for local development and CI/CD automation.
+  ::
+
+  ::card
+  ---
+  title: Browse the reference
+  icon: i-heroicons-book-open
+  to: /reference
+  ---
+  Dive into configuration, naming, and binding guides before customising your generator.
   ::
 
 :::

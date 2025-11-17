@@ -34,11 +34,12 @@ export default defineNuxtConfig({
       ]
     }
   },
+  css: ['~/assets/css/main.css'],
   appConfig: {
     docus: {
       title: 'xtraq Documentation',
       description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.',
-      url: 'https://xtraq.dev',
+      url: 'https://nuetzliches.github.io/xtraq/',
       socials: {
         github: 'nuetzliches/xtraq',
         nuget: {
@@ -76,7 +77,7 @@ export default defineNuxtConfig({
       },
       main: {
         fluid: false,
-        padded: true
+        padded: true,
       },
       footer: {
         credits: {
