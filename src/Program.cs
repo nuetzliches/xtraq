@@ -173,6 +173,7 @@ public static class Program
         var procedureOption = new Option<string?>("--procedure", "Process only specific procedures (comma separated schema.name)");
         var telemetryOption = new Option<bool>("--telemetry", "Persist a database telemetry report to .xtraq/telemetry");
         var jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values", "Emit JsonIncludeNullValues attribute for JSON result properties");
+        var entityFrameworkOption = new Option<bool>("--entity-framework", "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK)");
         var refreshSnapshotOption = new Option<bool>("--refresh-snapshot", () => false, "Refresh snapshot before executing the build command");
         var ciOption = new Option<bool>("--ci", "Disable Spectre.Console enhancements for CI/plain output modes");
         var projectOption = new Option<string?>("--project-path", "Project root path (.env file or directory). Defaults to current directory when omitted.");
@@ -190,6 +191,7 @@ public static class Program
         root.AddGlobalOption(procedureOption);
         root.AddGlobalOption(telemetryOption);
         root.AddGlobalOption(jsonIncludeNullValuesOption);
+        root.AddGlobalOption(entityFrameworkOption);
         root.AddGlobalOption(ciOption);
         root.AddGlobalOption(projectOption);
 
@@ -212,6 +214,11 @@ public static class Program
             if (!string.IsNullOrWhiteSpace(options.Procedure))
             {
                 Environment.SetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES", options.Procedure);
+            }
+
+            if (options.HasEntityFrameworkIntegrationOverride)
+            {
+                Environment.SetEnvironmentVariable("XTRAQ_ENTITY_FRAMEWORK", options.EntityFrameworkIntegration ? "1" : null);
             }
 
         }
@@ -345,6 +352,8 @@ public static class Program
                 Telemetry = invocationContext.ParseResult.GetValueForOption(telemetryOption),
                 JsonIncludeNullValues = invocationContext.ParseResult.GetValueForOption(jsonIncludeNullValuesOption),
                 HasJsonIncludeNullValuesOverride = invocationContext.ParseResult.HasOption(jsonIncludeNullValuesOption),
+                EntityFrameworkIntegration = invocationContext.ParseResult.GetValueForOption(entityFrameworkOption),
+                HasEntityFrameworkIntegrationOverride = invocationContext.ParseResult.HasOption(entityFrameworkOption),
                 CiMode = invocationContext.ParseResult.GetValueForOption(ciOption)
             };
 

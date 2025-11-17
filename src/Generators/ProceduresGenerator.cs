@@ -121,6 +121,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 new Dictionary<string, int>(artifactsPerSchema, StringComparer.OrdinalIgnoreCase));
 
         var emitJsonIncludeNullValues = ShouldEmitJsonIncludeNullValues();
+        var emitEntityFrameworkIntegration = ShouldEmitEntityFrameworkIntegration();
 
         // Check for explicit procedure filter first
         var buildProceduresRaw = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
@@ -225,9 +226,9 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(execPath, code);
             }
         }
-        if (Templates.TryLoad("ProcedureResultEntityAdapter", out var adapterTpl))
+        var adapterPath = Path.Combine(baseOutputDir, "ProcedureResultEntityAdapter.cs");
+        if (emitEntityFrameworkIntegration && Templates.TryLoad("ProcedureResultEntityAdapter", out var adapterTpl))
         {
-            var adapterPath = Path.Combine(baseOutputDir, "ProcedureResultEntityAdapter.cs");
             bool writeAdapter = !File.Exists(adapterPath);
             if (!writeAdapter)
             {
@@ -251,6 +252,17 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 var adapterModel = new { Namespace = ns, HEADER = headerBlock };
                 var adapterCode = Templates.RenderRawTemplate(adapterTpl, adapterModel);
                 File.WriteAllText(adapterPath, adapterCode);
+            }
+        }
+        else if (!emitEntityFrameworkIntegration && File.Exists(adapterPath))
+        {
+            try
+            {
+                File.Delete(adapterPath);
+            }
+            catch
+            {
+                // Ignore failures when cleaning up optional adapter artifacts.
             }
         }
         if (Templates.TryLoad("ProcedureBuilders", out var builderTpl))

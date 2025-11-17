@@ -1034,6 +1034,12 @@ internal sealed class XtraqCliRuntime(
             map["XTRAQ_JSON_INCLUDE_NULL_VALUES"] = options.JsonIncludeNullValues ? "1" : "0";
         }
 
+        if (options.HasEntityFrameworkIntegrationOverride)
+        {
+            map ??= new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            map["XTRAQ_ENTITY_FRAMEWORK"] = options.EntityFrameworkIntegration ? "1" : "0";
+        }
+
         return map;
     }
 

@@ -685,15 +685,17 @@ public static class OrchestratorHarness
 }
 """;
 
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12, preprocessorSymbols: new[] { "XTRAQ_ENTITY_FRAMEWORK" });
+
         var syntaxTrees = new[]
         {
-            CSharpSyntaxTree.ParseText(globalUsingsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(orchestratorSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(optionsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(serviceSourceForHarness, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(adapterSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(policySource, new CSharpParseOptions(LanguageVersion.CSharp12)),
-            CSharpSyntaxTree.ParseText(harnessSource, new CSharpParseOptions(LanguageVersion.CSharp12))
+            CSharpSyntaxTree.ParseText(globalUsingsSource, parseOptions),
+            CSharpSyntaxTree.ParseText(orchestratorSource, parseOptions),
+            CSharpSyntaxTree.ParseText(optionsSource, parseOptions),
+            CSharpSyntaxTree.ParseText(serviceSourceForHarness, parseOptions),
+            CSharpSyntaxTree.ParseText(adapterSource, parseOptions),
+            CSharpSyntaxTree.ParseText(policySource, parseOptions),
+            CSharpSyntaxTree.ParseText(harnessSource, parseOptions)
         };
 
         var references = GetMetadataReferences();

@@ -409,6 +409,17 @@ internal static class TrackableConfigManager
             }
         }
 
+        var entityFramework = existing?.EntityFramework;
+        var entityFrameworkRaw = ResolveValue(envValues, "XTRAQ_ENTITY_FRAMEWORK");
+        if (entityFrameworkRaw is not null)
+        {
+            var parsed = ParseBoolean(entityFrameworkRaw);
+            if (parsed.HasValue)
+            {
+                entityFramework = parsed;
+            }
+        }
+
         return new TrackableConfigPayload
         {
             Namespace = ns,
@@ -416,7 +427,8 @@ internal static class TrackableConfigManager
             TargetFramework = targetFramework,
             BuildSchemas = buildSchemas,
             JsonIncludeNullValues = jsonIncludeNullValues,
-            MinimalApi = minimalApi
+            MinimalApi = minimalApi,
+            EntityFramework = entityFramework
         };
     }
 
@@ -457,6 +469,7 @@ internal static class TrackableConfigManager
             var targetFramework = TryReadTrimmedString(root, "TargetFramework");
             var jsonIncludeNullValues = TryReadNullableBoolean(root, "JsonIncludeNullValues");
             var minimalApi = TryReadNullableBoolean(root, "MinimalApi");
+            var entityFramework = TryReadNullableBoolean(root, "EntityFramework");
             var schemas = ReadSchemaArray(root, "BuildSchemas");
 
             return new TrackableConfigPayload
@@ -466,7 +479,8 @@ internal static class TrackableConfigManager
                 TargetFramework = targetFramework,
                 BuildSchemas = schemas,
                 JsonIncludeNullValues = jsonIncludeNullValues,
-                MinimalApi = minimalApi
+                MinimalApi = minimalApi,
+                EntityFramework = entityFramework
             };
         }
         catch
@@ -497,6 +511,7 @@ internal static class TrackableConfigManager
         var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
         var jsonIncludeNullValues = overrides.JsonIncludeNullValues ?? baseline.JsonIncludeNullValues;
         var minimalApi = overrides.MinimalApi ?? baseline.MinimalApi;
+        var entityFramework = overrides.EntityFramework ?? baseline.EntityFramework;
         var schemas = overrides.BuildSchemas.Count > 0
             ? overrides.BuildSchemas
             : baseline.BuildSchemas;
@@ -508,7 +523,8 @@ internal static class TrackableConfigManager
             TargetFramework = targetFrameworkValue,
             BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>(),
             JsonIncludeNullValues = jsonIncludeNullValues,
-            MinimalApi = minimalApi
+            MinimalApi = minimalApi,
+            EntityFramework = entityFramework
         };
     }
 
@@ -531,7 +547,8 @@ internal static class TrackableConfigManager
             TargetFramework = string.IsNullOrWhiteSpace(source.TargetFramework) ? null : source.TargetFramework.Trim(),
             BuildSchemas = source.BuildSchemas.Count > 0 ? source.BuildSchemas.ToArray() : Array.Empty<string>(),
             JsonIncludeNullValues = source.JsonIncludeNullValues,
-            MinimalApi = source.MinimalApi
+            MinimalApi = source.MinimalApi,
+            EntityFramework = source.EntityFramework
         };
     }
 
@@ -719,6 +736,11 @@ internal static class TrackableConfigManager
             defaults["XTRAQ_MINIMAL_API"] = payload.MinimalApi.Value ? "1" : "0";
         }
 
+        if (payload.EntityFramework.HasValue)
+        {
+            defaults["XTRAQ_ENTITY_FRAMEWORK"] = payload.EntityFramework.Value ? "1" : "0";
+        }
+
         return defaults;
     }
 
@@ -765,5 +787,6 @@ internal static class TrackableConfigManager
         public bool? JsonIncludeNullValues { get; init; }
         public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
         public bool? MinimalApi { get; init; }
+        public bool? EntityFramework { get; init; }
     }
 }

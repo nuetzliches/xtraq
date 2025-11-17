@@ -51,6 +51,7 @@ public sealed class XtraqConfigurationTests
             Xunit.Assert.Equal("Server=(local);Database=App;", configuration.GeneratorConnectionString);
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT"));
             Xunit.Assert.False(configuration.EnableMinimalApiExtensions);
+            Xunit.Assert.False(configuration.EnableEntityFrameworkIntegration);
         }
         finally
         {
@@ -94,10 +95,10 @@ public sealed class XtraqConfigurationTests
                 "XTRAQ_GENERATOR_DB=Server=(local);Database=App;TrustServerCertificate=True;\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
-                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"MinimalApi\": false\n}\n");
+                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"MinimalApi\": false,\n  \"EntityFramework\": false\n}\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig.local"),
-                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"MinimalApi\": true\n}\n");
+                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"MinimalApi\": true,\n  \"EntityFramework\": true\n}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
@@ -105,6 +106,7 @@ public sealed class XtraqConfigurationTests
             Xunit.Assert.Equal("LocalOutput", configuration.OutputDir);
             Xunit.Assert.Equal(new[] { "LocalOne", "LocalTwo" }, configuration.BuildSchemas);
             Xunit.Assert.True(configuration.EnableMinimalApiExtensions);
+            Xunit.Assert.True(configuration.EnableEntityFrameworkIntegration);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig.local"), configuration.ConfigPath);
         }
         finally

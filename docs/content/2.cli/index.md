@@ -14,6 +14,7 @@ description: Overview of xtraq command-line interface and global options. The xt
 | `--procedure <schema.proc>`         | Limit snapshot/build operations to matching stored procedures (comma separated, wildcards supported). |
 | `--telemetry`                       | Persist a JSON telemetry report for the executed command under `.xtraq/telemetry`.                    |
 | `--json-include-null-values`        | Emit `[JsonIncludeNullValues]` attributes and keep null JSON fields during serialization.             |
+| `--entity-framework`                | Opt in to Entity Framework Core integration helpers (sets `XTRAQ_ENTITY_FRAMEWORK` for the run).      |
 | `--ci`                              | Switch console output to CI-friendly mode (plain progress, no ANSI art).                              |
 
 > `--debug-alias` exists for internal debugging and is intentionally undocumented for the first public release.

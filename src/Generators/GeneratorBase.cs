@@ -38,4 +38,14 @@ internal abstract class GeneratorBase
 
         return EnvironmentHelper.IsTrue("XTRAQ_MINIMAL_API");
     }
+
+    protected bool ShouldEmitEntityFrameworkIntegration()
+    {
+        if (Configuration?.EnableEntityFrameworkIntegration == true)
+        {
+            return true;
+        }
+
+        return EnvironmentHelper.IsTrue("XTRAQ_ENTITY_FRAMEWORK");
+    }
 }

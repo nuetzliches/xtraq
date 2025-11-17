@@ -43,7 +43,8 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_OUTPUT_DIR"] = "Artifacts",
                 ["XTRAQ_BUILD_SCHEMAS"] = "core, identity; audit",
                 ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0",
-                ["XTRAQ_MINIMAL_API"] = "1"
+                ["XTRAQ_MINIMAL_API"] = "1",
+                ["XTRAQ_ENTITY_FRAMEWORK"] = "1"
             };
 
             Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
@@ -64,6 +65,8 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.Equal(new[] { "core", "identity", "audit" }, schemas);
             Xunit.Assert.True(root.TryGetProperty("MinimalApi", out var minimalApiElement));
             Xunit.Assert.True(minimalApiElement.GetBoolean());
+            Xunit.Assert.True(root.TryGetProperty("EntityFramework", out var entityFrameworkElement));
+            Xunit.Assert.True(entityFrameworkElement.GetBoolean());
         }
         finally
         {
@@ -106,12 +109,14 @@ public sealed class TrackableConfigManagerTests
         try
         {
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
-            File.WriteAllText(configPath, "{\n  \"MinimalApi\": true\n}\n");
+            File.WriteAllText(configPath, "{\n  \"MinimalApi\": true,\n  \"EntityFramework\": true\n}\n");
 
             var defaults = Xtraq.Configuration.TrackableConfigManager.ReadDefaults(directory.FullName);
 
             Xunit.Assert.True(defaults.TryGetValue("XTRAQ_MINIMAL_API", out var flag));
             Xunit.Assert.Equal("1", flag);
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_ENTITY_FRAMEWORK", out var efFlag));
+            Xunit.Assert.Equal("1", efFlag);
         }
         finally
         {

@@ -1,5 +1,6 @@
 {{ HEADER }}
 #nullable enable
+#if XTRAQ_ENTITY_FRAMEWORK
 namespace {{ Namespace }};
 
 using System.Reflection;
@@ -572,3 +573,4 @@ public sealed partial class ProcedureResultEntityAdapter<TDbContext>
 
     partial void OnKeylessProjected<TEntity, TRow>(TEntity entity, TRow row, IEntityType entityType);
 }
+#endif
