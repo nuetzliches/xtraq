@@ -134,7 +134,7 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
                     Type = objectType,
                     Schema = ReadField<string>(reader, "schema_name"),
                     Name = ReadField<string>(reader, "object_name"),
-                    ModifiedUtc = ReadField<DateTime>(reader, "modify_date").ToUniversalTime(),
+                    ModifiedUtc = NormalizeSqlTimestamp(ReadField<DateTime>(reader, "modify_date")),
                     ObjectId = ReadField<int>(reader, "object_id"),
                     IsSystemObject = ReadField<bool>(reader, "is_ms_shipped")
                 };
@@ -219,6 +219,17 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
         {
             Modified = modifiedSnapshot,
             Removed = removedObjects
+        };
+    }
+
+    internal static DateTime NormalizeSqlTimestamp(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => value
         };
     }
 
@@ -308,7 +319,7 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
             using var command = new SqlCommand(query, connection);
             var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 
-            return result is DateTime dt ? dt.ToUniversalTime() : DateTime.UtcNow;
+            return result is DateTime dt ? NormalizeSqlTimestamp(dt) : DateTime.UtcNow;
         }
         catch (Exception ex)
         {

@@ -89,9 +89,9 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 
 ## Schema Change Detection Resilience
 
-- [ ] Stop calling `ToUniversalTime()` on SQL Server `modify_date` values (Kind == Unspecified) to avoid skew when the CLI host runs in a different time zone than the database server; normalise using explicit kind handling.
-- [ ] Introduce regression tests that simulate time zone offsets and verify delta windows still surface the expected object set.
+- [x] Stop calling `ToUniversalTime()` on SQL Server `modify_date` values (Kind == Unspecified) to avoid skew when the CLI host runs in a different time zone than the database server; normalise using explicit kind handling. _(Handled via `SchemaChangeDetectionService.NormalizeSqlTimestamp`, which standardises timestamps without applying local offsets.)_
+- [x] Introduce regression tests that simulate time zone offsets and verify delta windows still surface the expected object set. _(Covered by `SchemaChangeDetectionServiceTests`, which assert that unspecified timestamps keep their tick values while local timestamps still convert to UTC.)_
 
 ## Next Steps
 
-- Tackle Schema Change Detection Resilience next (normalize `modify_date` timestamps and add time zone regression coverage) while keeping Minimal API integration on the near-term backlog.
+- Prioritise Minimal API integration next (`RouteHandlerBuilder` extensions, streaming helpers, scaffolding) now that schema detection resilience work is complete.
