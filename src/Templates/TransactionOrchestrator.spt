@@ -22,6 +22,12 @@ public interface IXtraqTransactionOrchestratorAccessor
     IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
 }
 
+public interface IXtraqAmbientTransactionAccessor
+{
+    DbTransaction? AmbientTransaction { get; }
+    DbConnection? AmbientConnection { get; }
+}
+
 public sealed record class XtraqTransactionOptions
 {
     public IsolationLevel? IsolationLevel { get; init; }
@@ -54,38 +60,87 @@ public sealed class XtraqTransactionOrchestrator : IXtraqTransactionOrchestrator
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_connection is null)
-            {
-                _connection = await _dbContext.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            if (_connection.State != ConnectionState.Open)
-            {
-                await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            }
-
             XtraqTransactionScopeState state;
             if (_scopes.Count == 0)
             {
+                if (TryAcquireAmbientTransaction(out var ambientConnection, out var ambientTransaction))
+                {
+                    _connection = ambientConnection;
+                    state = new XtraqTransactionScopeState(
+                        ++_scopeId,
+                        ambientConnection,
+                        ambientTransaction,
+                        null,
+                        isRoot: true,
+                        ownsConnection: false,
+                        ownsTransaction: false,
+                        isExternal: true);
+                }
+                else
+                {
+                    if (_connection is null)
+                    {
+                        _connection = await _dbContext.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (_connection.State != ConnectionState.Open)
+                    {
+                        await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    var isolation = options.IsolationLevel ?? IsolationLevel.ReadCommitted;
+                    var transaction = await BeginTransactionAsync(_connection, isolation, cancellationToken).ConfigureAwait(false);
+                    state = new XtraqTransactionScopeState(
+                        ++_scopeId,
+                        _connection,
+                        transaction,
+                        null,
+                        isRoot: true,
+                        ownsConnection: true,
+                        ownsTransaction: true,
+                        isExternal: false);
+                }
+            }
+            else if (options.RequiresNew)
+            {
+                var parent = _scopes.Peek();
+                var connection = await _dbContext.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+                if (connection.State != ConnectionState.Open)
+                {
+                    await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+
                 var isolation = options.IsolationLevel ?? IsolationLevel.ReadCommitted;
-                var transaction = await BeginTransactionAsync(_connection, isolation, cancellationToken).ConfigureAwait(false);
-                state = new XtraqTransactionScopeState(++_scopeId, transaction, null, isRoot: true);
+                var transaction = await BeginTransactionAsync(connection, isolation, cancellationToken).ConfigureAwait(false);
+                var ownsConnection = !ReferenceEquals(connection, parent.Connection);
+                state = new XtraqTransactionScopeState(
+                    ++_scopeId,
+                    connection,
+                    transaction,
+                    null,
+                    isRoot: false,
+                    ownsConnection: ownsConnection,
+                    ownsTransaction: true,
+                    isExternal: false);
             }
             else
             {
-                if (options.RequiresNew)
-                {
-                    throw new NotSupportedException("RequiresNew transactions are not supported yet.");
-                }
-
                 var parent = _scopes.Peek();
                 var savepoint = GenerateSavepointName();
                 parent.Transaction.Save(savepoint);
-                state = new XtraqTransactionScopeState(++_scopeId, parent.Transaction, savepoint, isRoot: false);
+                state = new XtraqTransactionScopeState(
+                    ++_scopeId,
+                    parent.Connection,
+                    parent.Transaction,
+                    savepoint,
+                    isRoot: false,
+                    ownsConnection: false,
+                    ownsTransaction: false,
+                    isExternal: false);
             }
 
             _scopes.Push(state);
-            return new XtraqTransactionScope(this, state, _connection, state.Transaction);
+            return new XtraqTransactionScope(this, state, state.Connection, state.Transaction);
         }
         finally
         {
@@ -112,16 +167,38 @@ public sealed class XtraqTransactionOrchestrator : IXtraqTransactionOrchestrator
 
             if (state.IsRoot)
             {
-                state.Transaction.Commit();
+                if (!state.IsExternal)
+                {
+                    state.Transaction.Commit();
+                }
+
                 state.MarkCommitted();
                 _scopes.Pop();
-                await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
-                await DisposeConnectionAsync().ConfigureAwait(false);
+                if (state.OwnsTransaction)
+                {
+                    await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
+                }
+
+                await ReleaseRootConnectionAsync(state).ConfigureAwait(false);
             }
-            else
+            else if (state.UsesSavepoint)
             {
                 state.MarkCommitted();
                 _scopes.Pop();
+            }
+            else
+            {
+                state.Transaction.Commit();
+                state.MarkCommitted();
+                _scopes.Pop();
+                if (state.OwnsTransaction)
+                {
+                    await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
+                }
+                if (state.OwnsConnection)
+                {
+                    await DisposeOwnedConnectionAsync(state.Connection).ConfigureAwait(false);
+                }
             }
         }
         finally
@@ -152,22 +229,33 @@ public sealed class XtraqTransactionOrchestrator : IXtraqTransactionOrchestrator
                 state.Transaction.Rollback();
                 state.MarkRolledBack();
                 _scopes.Pop();
-                await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
-                await DisposeConnectionAsync().ConfigureAwait(false);
+                if (state.OwnsTransaction)
+                {
+                    await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
+                }
+
+                await ReleaseRootConnectionAsync(state).ConfigureAwait(false);
+            }
+            else if (state.UsesSavepoint)
+            {
+                state.Transaction.Rollback(state.SavepointName!);
+                state.MarkRolledBack();
+                _scopes.Pop();
             }
             else
             {
-                if (state.SavepointName is not null)
-                {
-                    state.Transaction.Rollback(state.SavepointName);
-                }
-                else
-                {
-                    state.Transaction.Rollback();
-                }
-
+                state.Transaction.Rollback();
                 state.MarkRolledBack();
                 _scopes.Pop();
+                if (state.OwnsTransaction)
+                {
+                    await DisposeTransactionAsync(state.Transaction).ConfigureAwait(false);
+                }
+
+                if (state.OwnsConnection)
+                {
+                    await DisposeOwnedConnectionAsync(state.Connection).ConfigureAwait(false);
+                }
             }
         }
         finally
@@ -217,22 +305,60 @@ public sealed class XtraqTransactionOrchestrator : IXtraqTransactionOrchestrator
         return ValueTask.CompletedTask;
     }
 
-    private async ValueTask DisposeConnectionAsync()
+    private static ValueTask DisposeOwnedConnectionAsync(DbConnection connection)
     {
-        if (_connection is not null)
+        if (connection is IAsyncDisposable asyncDisposable)
         {
-            var connection = _connection;
-            _connection = null;
-
-            if (connection is IAsyncDisposable asyncDisposable)
-            {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                connection.Dispose();
-            }
+            return asyncDisposable.DisposeAsync();
         }
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private bool TryAcquireAmbientTransaction(out DbConnection connection, out DbTransaction transaction)
+    {
+        connection = default!;
+        transaction = default!;
+
+        if (_dbContext is not IXtraqAmbientTransactionAccessor accessor)
+        {
+            return false;
+        }
+
+        var ambientTransaction = accessor.AmbientTransaction;
+        if (ambientTransaction is null)
+        {
+            return false;
+        }
+
+        var ambientConnection = accessor.AmbientConnection ?? ambientTransaction.Connection;
+        if (ambientConnection is null)
+        {
+            return false;
+        }
+
+        connection = ambientConnection;
+        transaction = ambientTransaction;
+        return true;
+    }
+
+    private ValueTask ReleaseRootConnectionAsync(XtraqTransactionScopeState state)
+    {
+        if (!ReferenceEquals(_connection, state.Connection))
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        var connection = _connection;
+        _connection = null;
+
+        if (!state.OwnsConnection || connection is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        return DisposeOwnedConnectionAsync(connection);
     }
 }
 
@@ -284,20 +410,37 @@ internal enum XtraqTransactionScopeStatus
 
 internal sealed class XtraqTransactionScopeState
 {
-    public XtraqTransactionScopeState(long id, DbTransaction transaction, string? savepointName, bool isRoot)
+    public XtraqTransactionScopeState(
+        long id,
+        DbConnection connection,
+        DbTransaction transaction,
+        string? savepointName,
+        bool isRoot,
+        bool ownsConnection,
+        bool ownsTransaction,
+        bool isExternal)
     {
         Id = id;
+        Connection = connection;
         Transaction = transaction;
         SavepointName = savepointName;
         IsRoot = isRoot;
+        OwnsConnection = ownsConnection;
+        OwnsTransaction = ownsTransaction;
+        IsExternal = isExternal;
         Status = XtraqTransactionScopeStatus.Active;
     }
 
     public long Id { get; }
+    public DbConnection Connection { get; }
     public DbTransaction Transaction { get; }
     public string? SavepointName { get; }
     public bool IsRoot { get; }
+    public bool OwnsConnection { get; }
+    public bool OwnsTransaction { get; }
+    public bool IsExternal { get; }
     public XtraqTransactionScopeStatus Status { get; private set; }
+    public bool UsesSavepoint => SavepointName is not null;
 
     public void MarkCommitted() => Status = XtraqTransactionScopeStatus.Committed;
     public void MarkRolledBack() => Status = XtraqTransactionScopeStatus.RolledBack;

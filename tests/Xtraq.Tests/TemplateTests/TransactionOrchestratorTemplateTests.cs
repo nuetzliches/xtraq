@@ -138,6 +138,83 @@ public sealed class FakeDbContext : IXtraqDbContext
     public int CommandTimeout => 30;
 }
 
+public sealed class FreshConnectionDbContext : IXtraqDbContext
+{
+    private readonly List<FakeDbConnection> _connections = new();
+
+    public IReadOnlyList<FakeDbConnection> Connections => _connections;
+
+    private FakeDbConnection CreateConnection()
+    {
+        var connection = new FakeDbConnection();
+        _connections.Add(connection);
+        return connection;
+    }
+
+    public DbConnection OpenConnection()
+    {
+        var connection = CreateConnection();
+        connection.Open();
+        return connection;
+    }
+
+    public async Task<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return connection;
+    }
+
+    public Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(true);
+
+    public int CommandTimeout => 30;
+}
+
+public sealed class AmbientDbContext : IXtraqDbContext, IXtraqAmbientTransactionAccessor
+{
+    private readonly FakeDbConnection _connection;
+    private readonly FakeDbTransaction _transaction;
+
+    public AmbientDbContext()
+    {
+        _connection = new FakeDbConnection();
+        _connection.Open();
+        _transaction = (FakeDbTransaction)_connection.BeginTransaction(IsolationLevel.ReadCommitted);
+    }
+
+    public FakeDbConnection Connection => _connection;
+    public FakeDbTransaction Transaction => _transaction;
+
+    public DbTransaction? AmbientTransaction => _transaction;
+    public DbConnection? AmbientConnection => _connection;
+
+    public DbConnection OpenConnection()
+    {
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
+
+        return _connection;
+    }
+
+    public Task<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
+
+        return Task.FromResult<DbConnection>(_connection);
+    }
+
+    public Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(true);
+
+    public int CommandTimeout => 30;
+}
+
 public sealed class FakeDbConnection : DbConnection
 {
     private readonly List<FakeDbTransaction> _transactions = new();
@@ -305,27 +382,76 @@ public static class OrchestratorHarness
         return (transaction.RolledBackSavepoints.Count, transaction.RollbackCalled, connection.DisposeCalled, transaction.Disposed, orchestrator.HasActiveTransaction);
     }
 
-    public static async Task<bool> RunRequiresNewThrowsAsync()
+    public static async Task<(bool DistinctTransactions, bool NestedCommitted, bool NestedRolledBack, bool RootCommitted, bool RootRolledBack, bool RootConnectionDisposed, bool NestedConnectionDisposed, bool NestedTransactionDisposed, bool HasActiveAfter, int ConnectionCount)> RunRequiresNewScopeAsync()
     {
-        var connection = new FakeDbConnection();
-        var context = new FakeDbContext(connection);
+        var context = new FreshConnectionDbContext();
         var orchestrator = new XtraqTransactionOrchestrator(context);
 
         var root = await orchestrator.BeginAsync().ConfigureAwait(false);
-        try
+        var rootTransaction = (FakeDbTransaction)root.Transaction;
+
+        var nestedOptions = new XtraqTransactionOptions { RequiresNew = true };
+        var nested = await orchestrator.BeginAsync(nestedOptions).ConfigureAwait(false);
+        var nestedTransaction = (FakeDbTransaction)nested.Transaction;
+        var distinctTransactions = !ReferenceEquals(rootTransaction, nestedTransaction);
+
+        await nested.CommitAsync().ConfigureAwait(false);
+        await nested.DisposeAsync().ConfigureAwait(false);
+
+        await root.RollbackAsync().ConfigureAwait(false);
+        await root.DisposeAsync().ConfigureAwait(false);
+
+        var connections = context.Connections;
+        var rootConnectionDisposed = connections.Count > 0 && connections[0].DisposeCalled;
+        var nestedConnectionDisposed = connections.Count > 1 && connections[1].DisposeCalled;
+
+        return (
+            distinctTransactions,
+            nestedTransaction.CommitCalled,
+            nestedTransaction.RollbackCalled,
+            rootTransaction.CommitCalled,
+            rootTransaction.RollbackCalled,
+            rootConnectionDisposed,
+            nestedConnectionDisposed,
+            nestedTransaction.Disposed,
+            orchestrator.HasActiveTransaction,
+            connections.Count);
+    }
+
+    public static async Task<(bool CommitCalled, bool RollbackCalled, bool TransactionDisposed, bool ConnectionDisposed, bool HasActiveAfter)> RunAmbientCommitAsync()
+    {
+        var context = new AmbientDbContext();
+        var orchestrator = new XtraqTransactionOrchestrator(context);
+
+        await using (var scope = await orchestrator.BeginAsync().ConfigureAwait(false))
         {
-            var options = new XtraqTransactionOptions { RequiresNew = true };
-            await orchestrator.BeginAsync(options).ConfigureAwait(false);
-            return false;
+            await scope.CommitAsync().ConfigureAwait(false);
         }
-        catch (NotSupportedException)
+
+        return (
+            context.Transaction.CommitCalled,
+            context.Transaction.RollbackCalled,
+            context.Transaction.Disposed,
+            context.Connection.DisposeCalled,
+            orchestrator.HasActiveTransaction);
+    }
+
+    public static async Task<(bool CommitCalled, bool RollbackCalled, bool TransactionDisposed, bool ConnectionDisposed, bool HasActiveAfter)> RunAmbientRollbackAsync()
+    {
+        var context = new AmbientDbContext();
+        var orchestrator = new XtraqTransactionOrchestrator(context);
+
+        await using (var scope = await orchestrator.BeginAsync().ConfigureAwait(false))
         {
-            return true;
+            await scope.RollbackAsync().ConfigureAwait(false);
         }
-        finally
-        {
-            await root.RollbackAsync().ConfigureAwait(false);
-        }
+
+        return (
+            context.Transaction.CommitCalled,
+            context.Transaction.RollbackCalled,
+            context.Transaction.Disposed,
+            context.Connection.DisposeCalled,
+            orchestrator.HasActiveTransaction);
     }
 
     public static async Task<(bool DefaultResolved, bool FactoryResolved)> RunServiceRegistrationAsync()
@@ -452,8 +578,31 @@ public static class OrchestratorHarness
         Assert.True(rollbackResult.TransactionDisposed);
         Assert.False(rollbackResult.HasActiveAfter);
 
-        var requiresNew = await InvokeAsync<bool>(harnessType, "RunRequiresNewThrowsAsync");
-        Assert.True(requiresNew);
+        var requiresNew = await InvokeAsync<(bool DistinctTransactions, bool NestedCommitted, bool NestedRolledBack, bool RootCommitted, bool RootRolledBack, bool RootConnectionDisposed, bool NestedConnectionDisposed, bool NestedTransactionDisposed, bool HasActiveAfter, int ConnectionCount)>(harnessType, "RunRequiresNewScopeAsync");
+        Assert.True(requiresNew.DistinctTransactions);
+        Assert.True(requiresNew.NestedCommitted);
+        Assert.False(requiresNew.NestedRolledBack);
+        Assert.False(requiresNew.RootCommitted);
+        Assert.True(requiresNew.RootRolledBack);
+        Assert.True(requiresNew.RootConnectionDisposed);
+        Assert.True(requiresNew.NestedConnectionDisposed);
+        Assert.True(requiresNew.NestedTransactionDisposed);
+        Assert.False(requiresNew.HasActiveAfter);
+        Assert.Equal(2, requiresNew.ConnectionCount);
+
+        var ambientCommit = await InvokeAsync<(bool CommitCalled, bool RollbackCalled, bool TransactionDisposed, bool ConnectionDisposed, bool HasActiveAfter)>(harnessType, "RunAmbientCommitAsync");
+        Assert.False(ambientCommit.CommitCalled);
+        Assert.False(ambientCommit.RollbackCalled);
+        Assert.False(ambientCommit.TransactionDisposed);
+        Assert.False(ambientCommit.ConnectionDisposed);
+        Assert.False(ambientCommit.HasActiveAfter);
+
+        var ambientRollback = await InvokeAsync<(bool CommitCalled, bool RollbackCalled, bool TransactionDisposed, bool ConnectionDisposed, bool HasActiveAfter)>(harnessType, "RunAmbientRollbackAsync");
+        Assert.False(ambientRollback.CommitCalled);
+        Assert.True(ambientRollback.RollbackCalled);
+        Assert.False(ambientRollback.TransactionDisposed);
+        Assert.False(ambientRollback.ConnectionDisposed);
+        Assert.False(ambientRollback.HasActiveAfter);
 
         var diResult = await InvokeAsync<(bool DefaultResolved, bool FactoryResolved)>(harnessType, "RunServiceRegistrationAsync");
         Assert.True(diResult.DefaultResolved);

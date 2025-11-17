@@ -26,13 +26,13 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Transaction API
 
-- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request and uses savepoint-backed nesting to expose explicit `Begin/Commit/RollbackAsync` helpers. _(Implementation progressing: orchestrator template, savepoint behavior, DI coverage, and pipeline accessor resolved; next up is aligning option propagation with the execution policy surface.)_
+- [x] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request and uses savepoint-backed nesting to expose explicit `Begin/Commit/RollbackAsync` helpers. _(Template now supports savepoint nesting, scoped DI resolution, and `RequiresNew` transactions with independent connection disposal validated through dynamic compilation tests.)_
 - [x] Extend generated DbContext options and service registrations so consumers can resolve the orchestrator without breaking existing usage patterns or hand-written partials. _(Options now surface a `TransactionOrchestratorFactory` hook and DI registers `IXtraqTransactionOrchestrator` by default.)_
 - [x] Expose transaction-aware execution policies so global defaults or per-procedure overrides (e.g., ambient participation, isolation level) can be configured declaratively. _(TransactionScope execution policy template ships with selector overloads, generator emission, and dynamic tests covering commit/rollback paths.)_
 - [x] Ensure the pipeline execution context resolves the orchestrator via dependency injection, enabling policies to coordinate with logging and telemetry components. _(Procedure pipelines now require an accessor-backed `IXtraqDbContext` and surface the orchestrator via `ProcedureExecutionContext`.)_
-- [ ] Align the design with the planned Entity Framework integration by supporting ambient `DbContext` transactions and connection reuse when both stacks operate side by side. _(Joint review with Framework Integrations track.)_
-- [ ] Backfill regression tests covering nested savepoint flows, auto-rollback on dispose, and streaming pipeline compatibility.
-- [ ] Document orchestrator usage, DI configuration, and migration guidance alongside the SpocR transition playbook.
+- [x] Align the design with the planned Entity Framework integration by supporting ambient `DbContext` transactions and connection reuse when both stacks operate side by side. _(Ambient transaction accessor enables EF-provided connections/transactions to flow without duplicate commits; dynamic template tests cover shared commit and rollback paths.)_
+- [x] Backfill regression tests covering nested savepoint flows, auto-rollback on dispose, and streaming pipeline compatibility. _(Dynamic template tests now assert nested savepoints, `RequiresNew` scopes, dispose-triggered rollbacks, and both call/stream pipelines.)_
+- [x] Document orchestrator usage, DI configuration, and migration guidance alongside the SpocR transition playbook. _(Reference docs now cover the EF ambient accessor in `docs/content/3.reference/6.entity-framework-integration.md` and the migration playbook links the guidance.)_
 
 ## Fluent Pipeline Iteration
 
@@ -82,4 +82,4 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 
 ## Next Steps
 
-- Prototype the DI-scoped transaction orchestrator and corresponding execution policy integration to validate coexistence with the planned Entity Framework support and surface API gaps early.
+- Prioritise Minimal API integration tasks (`RouteHandlerBuilder` extensions, streaming helpers, scaffolding) and plan the Framework Integrations backlog (EF extensions, interceptors, adapters).
