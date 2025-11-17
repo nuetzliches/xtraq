@@ -197,6 +197,8 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         result.RefreshPlan = plan;
         result.SkippedObjects = skipped;
 
+        await _cacheManager.UpdateReferenceTimestampAsync(result.NextReferenceTimestamp).ConfigureAwait(false);
+
         // Flush cache changes
         await _cacheManager.FlushAsync(cancellationToken).ConfigureAwait(false);
         await _changeDetection.FlushIndexAsync(cancellationToken).ConfigureAwait(false);
@@ -245,8 +247,10 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
             var sinceUtc = await GetEarliestCacheTimestampAsync(objectType).ConfigureAwait(false);
 
             // Get modified objects from database
-            var dbObjects = await _changeDetection.GetModifiedObjectsAsync(objectType, sinceUtc, schemaFilter, cancellationToken)
+            var changeSet = await _changeDetection.GetObjectChangesAsync(objectType, sinceUtc, schemaFilter, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+
+            var dbObjects = changeSet.Modified;
 
             foreach (var dbObject in dbObjects)
             {
@@ -273,6 +277,16 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
 
                 // Add invalidated dependents to result
                 await CollectInvalidatedDependentsAsync(objectRef, invalidatedObjects, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (changeSet.Removed.Count > 0)
+            {
+                foreach (var removedObject in changeSet.Removed)
+                {
+                    await _cacheManager.RemoveAsync(removedObject, cancellationToken).ConfigureAwait(false);
+                    invalidatedObjects.Add(removedObject);
+                    await _cacheManager.InvalidateDependentsAsync(removedObject).ConfigureAwait(false);
+                }
             }
         }
         catch (Exception ex)

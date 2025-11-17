@@ -80,6 +80,18 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Document binder customization hooks for UDTT execution.
 - [x] Evaluate an analyzer that verifies `ITableType` usage matches expected schema parameters.
 
+## Cache Invalidation Reliability
+
+- [x] Persist the last observed `modify_date` from `SchemaInvalidationResult.NextReferenceTimestamp` instead of the flush timestamp so mid-run catalog changes are never skipped between runs.
+- [x] Detect dropped schema objects (procedures, functions, UDTTs) and remove their cache entries plus generated artifacts; add regression coverage for drop scenarios.
+- [x] Extend dependency capture beyond `sys.sql_expression_dependencies` so UDTT parameter usage and other metadata-only relationships invalidate dependent procedures correctly. _(UDTT dependencies now flow through `SchemaChangeDetectionService.AppendUserDefinedTableTypeDependenciesAsync`, with coverage in `SchemaInvalidationOrchestratorTests.AnalyzeAndInvalidateAsync_WhenUdttModified_InvalidatesDependentProcedure`.)_
+- [x] Add integration tests around chained invalidations to prove the breadth-first traversal covers transitive dependencies across cached warm runs. _(Validated via `SchemaInvalidationOrchestratorTests.AnalyzeAndInvalidateAsync_WhenDependencyChainChanges_InvalidatesTransitiveDependents`.)_
+
+## Schema Change Detection Resilience
+
+- [ ] Stop calling `ToUniversalTime()` on SQL Server `modify_date` values (Kind == Unspecified) to avoid skew when the CLI host runs in a different time zone than the database server; normalise using explicit kind handling.
+- [ ] Introduce regression tests that simulate time zone offsets and verify delta windows still surface the expected object set.
+
 ## Next Steps
 
-- Prioritise Minimal API integration tasks (`RouteHandlerBuilder` extensions, streaming helpers, scaffolding) and plan the Framework Integrations backlog (EF extensions, interceptors, adapters).
+- Tackle Schema Change Detection Resilience next (normalize `modify_date` timestamps and add time zone regression coverage) while keeping Minimal API integration on the near-term backlog.

@@ -33,9 +33,18 @@ internal interface ISchemaObjectCacheManager
     DateTime? GetLastUpdatedUtc();
 
     /// <summary>
+    /// Persist the reference timestamp representing the latest catalog modification observed.
+    /// </summary>
+    Task UpdateReferenceTimestampAsync(DateTime referenceTimestampUtc);
+
+    /// <summary>
     /// Update the modification timestamp for a schema object.
     /// </summary>
     Task UpdateLastModifiedAsync(SchemaObjectType objectType, string schema, string name, DateTime lastModifiedUtc);
+    /// <summary>
+    /// Remove cached entry for the specified schema object and detach it from the dependency graph.
+    /// </summary>
+    Task RemoveAsync(SchemaObjectRef objectRef, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get objects that have been modified since the specified timestamp.
@@ -171,7 +180,7 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
     private string _cacheDirectory = string.Empty;
     private string _cacheFilePath = string.Empty;
     private string _dependencyGraphFilePath = string.Empty;
-    private DateTime? _lastUpdatedUtc;
+    private DateTime? _referenceTimestampUtc;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -219,8 +228,25 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
     {
         lock (_sync)
         {
-            return _lastUpdatedUtc;
+            return _referenceTimestampUtc;
         }
+    }
+
+    public Task UpdateReferenceTimestampAsync(DateTime referenceTimestampUtc)
+    {
+        lock (_sync)
+        {
+            var normalized = DateTime.SpecifyKind(referenceTimestampUtc, DateTimeKind.Utc);
+            if (_referenceTimestampUtc.HasValue && _referenceTimestampUtc.Value >= normalized)
+            {
+                return Task.CompletedTask;
+            }
+
+            _referenceTimestampUtc = normalized;
+            _dirty = true;
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task UpdateLastModifiedAsync(SchemaObjectType objectType, string schema, string name, DateTime lastModifiedUtc)
@@ -246,6 +272,48 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
             }
             _dirty = true;
         }
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(SchemaObjectRef objectRef, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(objectRef);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var key = BuildKey(objectRef);
+        lock (_sync)
+        {
+            if (_cache.Remove(key, out var entry) && entry.Dependencies.Count > 0)
+            {
+                foreach (var dependency in entry.Dependencies)
+                {
+                    var dependencyKey = BuildKey(dependency);
+                    if (_dependencyGraph.TryGetValue(dependencyKey, out var dependents))
+                    {
+                        dependents.Remove(key);
+                        if (dependents.Count == 0)
+                        {
+                            _dependencyGraph.Remove(dependencyKey);
+                        }
+                    }
+                }
+            }
+
+            // Remove dependent edges pointing at the removed node
+            if (_dependencyGraph.Remove(key, out var downstreamDependents) && downstreamDependents.Count > 0)
+            {
+                foreach (var dependentKey in downstreamDependents)
+                {
+                    if (_cache.TryGetValue(dependentKey, out var dependentEntry))
+                    {
+                        dependentEntry.Dependencies.RemoveAll(dep => ObjectComparer.Equals(dep, objectRef));
+                    }
+                }
+            }
+
+            _dirty = true;
+        }
+
         return Task.CompletedTask;
     }
 
@@ -426,10 +494,15 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
         try
         {
             var now = DateTime.UtcNow;
+            DateTime referenceTimestamp;
+            lock (_sync)
+            {
+                referenceTimestamp = _referenceTimestampUtc ?? now;
+            }
             var document = new SchemaCacheDocument
             {
                 Version = 1,
-                LastUpdatedUtc = now,
+                LastUpdatedUtc = referenceTimestamp,
                 Entries = entries.OrderBy(e => e.Type).ThenBy(e => e.Schema).ThenBy(e => e.Name).ToList()
             };
             var dependencyDocument = new DependencyGraphDocument
@@ -475,7 +548,10 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
 
             lock (_sync)
             {
-                _lastUpdatedUtc = now;
+                if (!_referenceTimestampUtc.HasValue)
+                {
+                    _referenceTimestampUtc = referenceTimestamp;
+                }
             }
             _console.Verbose($"[schema-cache] Persisted {entries.Count} schema object entries to cache");
         }
@@ -493,7 +569,7 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
             _cache.Clear();
             _dependencyGraph.Clear();
             _dirty = true;
-            _lastUpdatedUtc = null;
+            _referenceTimestampUtc = null;
         }
 
         try
@@ -593,7 +669,7 @@ internal class SchemaObjectCacheManager : ISchemaObjectCacheManager
             {
                 _cache.Clear();
                 _dependencyGraph.Clear();
-                _lastUpdatedUtc = document.LastUpdatedUtc;
+                _referenceTimestampUtc = document.LastUpdatedUtc;
 
                 foreach (var entry in document.Entries)
                 {

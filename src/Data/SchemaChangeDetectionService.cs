@@ -1,4 +1,3 @@
-using System.Data;
 using Microsoft.Data.SqlClient;
 using Xtraq.Cache;
 using Xtraq.Services;
@@ -17,13 +16,13 @@ internal interface ISchemaChangeDetectionService
     void Initialize(string connectionString);
 
     /// <summary>
-    /// Get all objects of a specific type that have been modified since the specified timestamp.
-    /// If sinceUtc is null, returns all objects.
+    /// Get schema changes (modifications and removals) for a specific object type relative to the provided timestamp.
     /// </summary>
-    Task<IReadOnlyList<SchemaObjectMetadata>> GetModifiedObjectsAsync(
+    Task<SchemaObjectChangeSet> GetObjectChangesAsync(
         SchemaObjectType objectType,
         DateTime? sinceUtc = null,
         IReadOnlyList<string>? schemaFilter = null,
+        bool allowFullScanFallback = true,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -60,6 +59,22 @@ internal sealed class SchemaObjectMetadata
     public bool IsSystemObject { get; set; }
 }
 
+/// <summary>
+/// Aggregates the catalog changes detected for a given schema object type.
+/// </summary>
+internal sealed class SchemaObjectChangeSet
+{
+    /// <summary>
+    /// Objects whose definition changed since the previous reference timestamp.
+    /// </summary>
+    public IReadOnlyList<SchemaObjectMetadata> Modified { get; init; } = Array.Empty<SchemaObjectMetadata>();
+
+    /// <summary>
+    /// Objects that were removed from the catalog since the previous reference timestamp.
+    /// </summary>
+    public IReadOnlyList<SchemaObjectRef> Removed { get; init; } = Array.Empty<SchemaObjectRef>();
+}
+
 internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionService
 {
     private readonly IConsoleService _console;
@@ -79,10 +94,11 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
-    public async Task<IReadOnlyList<SchemaObjectMetadata>> GetModifiedObjectsAsync(
+    public async Task<SchemaObjectChangeSet> GetObjectChangesAsync(
         SchemaObjectType objectType,
         DateTime? sinceUtc = null,
         IReadOnlyList<string>? schemaFilter = null,
+        bool allowFullScanFallback = true,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(_connectionString))
@@ -116,11 +132,11 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
                 var metadata = new SchemaObjectMetadata
                 {
                     Type = objectType,
-                    Schema = reader.GetString("schema_name"),
-                    Name = reader.GetString("object_name"),
-                    ModifiedUtc = reader.GetDateTime("modify_date").ToUniversalTime(),
-                    ObjectId = reader.GetInt32("object_id"),
-                    IsSystemObject = reader.GetBoolean("is_ms_shipped")
+                    Schema = ReadField<string>(reader, "schema_name"),
+                    Name = ReadField<string>(reader, "object_name"),
+                    ModifiedUtc = ReadField<DateTime>(reader, "modify_date").ToUniversalTime(),
+                    ObjectId = ReadField<int>(reader, "object_id"),
+                    IsSystemObject = ReadField<bool>(reader, "is_ms_shipped")
                 };
 
                 // Get definition for programmable objects
@@ -146,6 +162,16 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
             throw;
         }
 
+        if (!performFullScan && allowFullScanFallback && indexAvailable && results.Count == 0)
+        {
+            return await GetObjectChangesAsync(
+                objectType,
+                sinceUtc: null,
+                schemaFilter,
+                allowFullScanFallback: false,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
         var updatedEntries = results
             .Select(static metadata => new SchemaObjectIndexEntry
             {
@@ -156,42 +182,29 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
             })
             .ToList();
 
+        IReadOnlyList<SchemaObjectMetadata> modifiedSnapshot = results;
+        IReadOnlyList<SchemaObjectRef> removedObjects = Array.Empty<SchemaObjectRef>();
+
         if (performFullScan)
         {
             _indexManager.ReplaceEntries(objectType, updatedEntries);
 
             if (indexAvailable)
             {
-                // Compare with previous snapshot to determine actual deltas.
-                var previousMap = existingIndex.ToDictionary(
-                    entry => BuildKey(entry.Schema, entry.Name),
-                    entry => entry,
-                    StringComparer.OrdinalIgnoreCase);
-                var modified = new List<SchemaObjectMetadata>();
-                var currentMap = updatedEntries.ToDictionary(
-                    entry => BuildKey(entry.Schema, entry.Name),
-                    entry => entry,
-                    StringComparer.OrdinalIgnoreCase);
+                var filtered = FilterModified(results, existingIndex);
+                modifiedSnapshot = filtered.Count == 0
+                    ? Array.Empty<SchemaObjectMetadata>()
+                    : (IReadOnlyList<SchemaObjectMetadata>)filtered;
 
-                foreach (var metadata in results)
-                {
-                    var key = BuildKey(metadata.Schema, metadata.Name);
-                    if (!previousMap.TryGetValue(key, out var previous) || previous.LastModifiedUtc != metadata.ModifiedUtc)
-                    {
-                        modified.Add(metadata);
-                    }
-                }
-
-                var removed = previousMap.Keys.Except(currentMap.Keys, StringComparer.OrdinalIgnoreCase).ToList();
+                var removed = DetectRemoved(existingIndex, updatedEntries);
                 if (removed.Count > 0)
                 {
-                    foreach (var key in removed)
+                    removedObjects = removed;
+                    foreach (var removedObject in removed)
                     {
-                        _console.Verbose($"[schema-detection] {objectType} removed from catalog: {key}");
+                        _console.Verbose($"[schema-detection] {objectType} removed from catalog: {removedObject.FullName}");
                     }
                 }
-
-                results = modified;
             }
         }
         else
@@ -202,7 +215,17 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
         _console.Verbose($"[schema-detection] Found {results.Count} {objectType} objects" +
                         (performFullScan ? " (full scan)" : sinceUtc.HasValue ? $" modified since {sinceUtc}" : ""));
 
-        return results;
+        return new SchemaObjectChangeSet
+        {
+            Modified = modifiedSnapshot,
+            Removed = removedObjects
+        };
+    }
+
+    private static T ReadField<T>(SqlDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.GetFieldValue<T>(ordinal);
     }
 
     public async Task<IReadOnlyList<SchemaObjectRef>> GetDependenciesAsync(
@@ -240,18 +263,22 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
             command.Parameters.AddWithValue("@Schema", objectRef.Schema);
             command.Parameters.AddWithValue("@Name", objectRef.Name);
 
-            using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
             {
-                var refSchema = reader.GetString("ref_schema_name");
-                var refName = reader.GetString("ref_object_name");
-                var refTypeDesc = reader.GetString("ref_object_type");
-
-                if (TryMapSqlObjectType(refTypeDesc, out var objectType))
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    results.Add(new SchemaObjectRef(objectType, refSchema, refName));
+                    var refSchema = ReadField<string>(reader, "ref_schema_name");
+                    var refName = ReadField<string>(reader, "ref_object_name");
+                    var refTypeDesc = ReadField<string>(reader, "ref_object_type");
+
+                    if (TryMapSqlObjectType(refTypeDesc, out var objectType))
+                    {
+                        results.Add(new SchemaObjectRef(objectType, refSchema, refName));
+                    }
                 }
             }
+
+            await AppendUserDefinedTableTypeDependenciesAsync(connection, objectRef, results, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -295,6 +322,59 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
         return _indexManager.FlushAsync(cancellationToken);
     }
 
+    private static List<SchemaObjectMetadata> FilterModified(
+        IReadOnlyList<SchemaObjectMetadata> current,
+        IReadOnlyList<SchemaObjectIndexEntry> previousIndex)
+    {
+        if (previousIndex.Count == 0)
+        {
+            return new List<SchemaObjectMetadata>(current);
+        }
+
+        var previousMap = previousIndex.ToDictionary(
+            static entry => BuildKey(entry.Schema, entry.Name),
+            static entry => entry,
+            StringComparer.OrdinalIgnoreCase);
+
+        var modified = new List<SchemaObjectMetadata>(current.Count);
+        foreach (var metadata in current)
+        {
+            var key = BuildKey(metadata.Schema, metadata.Name);
+            if (!previousMap.TryGetValue(key, out var previous) || previous.LastModifiedUtc != metadata.ModifiedUtc)
+            {
+                modified.Add(metadata);
+            }
+        }
+
+        return modified;
+    }
+
+    private static IReadOnlyList<SchemaObjectRef> DetectRemoved(
+        IReadOnlyList<SchemaObjectIndexEntry> previousIndex,
+        IReadOnlyList<SchemaObjectIndexEntry> currentIndex)
+    {
+        if (previousIndex.Count == 0)
+        {
+            return Array.Empty<SchemaObjectRef>();
+        }
+
+        var currentKeys = new HashSet<string>(currentIndex.Select(static entry => BuildKey(entry.Schema, entry.Name)), StringComparer.OrdinalIgnoreCase);
+
+        var removed = new List<SchemaObjectRef>();
+        foreach (var entry in previousIndex)
+        {
+            var key = BuildKey(entry.Schema, entry.Name);
+            if (!currentKeys.Contains(key))
+            {
+                removed.Add(new SchemaObjectRef(entry.Type, entry.Schema, entry.Name));
+            }
+        }
+
+        return removed.Count == 0
+            ? Array.Empty<SchemaObjectRef>()
+            : (IReadOnlyList<SchemaObjectRef>)removed;
+    }
+
     private static string BuildObjectQuery(
         SchemaObjectType objectType,
         DateTime? sinceUtc,
@@ -320,7 +400,7 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
 
                 var parameterName = $"@Schema{index}";
                 builder.Append(parameterName);
-                parameterBag.Add(new SqlParameter(parameterName, SqlDbType.NVarChar, 128)
+                parameterBag.Add(new SqlParameter(parameterName, System.Data.SqlDbType.NVarChar, 128)
                 {
                     Value = schemas[index]
                 });
@@ -343,7 +423,7 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
             }
 
             var normalized = DateTime.SpecifyKind(filterValue.Value, DateTimeKind.Utc);
-            var parameter = new SqlParameter("@SinceUtc", SqlDbType.DateTime2)
+            var parameter = new SqlParameter("@SinceUtc", System.Data.SqlDbType.DateTime2)
             {
                 Value = normalized
             };
@@ -518,5 +598,59 @@ internal sealed class SchemaChangeDetectionService : ISchemaChangeDetectionServi
         };
 
         return objectType != default;
+    }
+
+    private static bool ContainsDependency(ICollection<SchemaObjectRef> entries, SchemaObjectRef candidate)
+    {
+        foreach (var entry in entries)
+        {
+            if (entry.Type == candidate.Type &&
+                string.Equals(entry.Schema, candidate.Schema, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(entry.Name, candidate.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Capture UDTT parameter dependencies not surfaced via sys.sql_expression_dependencies.
+    private static async Task AppendUserDefinedTableTypeDependenciesAsync(
+        SqlConnection connection,
+        SchemaObjectRef source,
+        List<SchemaObjectRef> results,
+        CancellationToken cancellationToken)
+    {
+        const string udttQuery = @"
+            SELECT DISTINCT
+                tt_schema.name AS tt_schema_name,
+                tt.name AS tt_name
+            FROM sys.objects obj
+            INNER JOIN sys.schemas obj_schema ON obj.schema_id = obj_schema.schema_id
+            INNER JOIN sys.parameters p ON obj.object_id = p.object_id
+            INNER JOIN sys.types t ON p.user_type_id = t.user_type_id
+            INNER JOIN sys.table_types tt ON t.user_type_id = tt.user_type_id
+            INNER JOIN sys.schemas tt_schema ON tt.schema_id = tt_schema.schema_id
+            WHERE obj_schema.name = @Schema
+              AND obj.name = @Name
+              AND tt.is_user_defined = 1";
+
+        using var command = new SqlCommand(udttQuery, connection);
+        command.Parameters.AddWithValue("@Schema", source.Schema);
+        command.Parameters.AddWithValue("@Name", source.Name);
+
+        using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var schema = ReadField<string>(reader, "tt_schema_name");
+            var name = ReadField<string>(reader, "tt_name");
+            var dependency = new SchemaObjectRef(SchemaObjectType.UserDefinedTableType, schema, name);
+
+            if (!ContainsDependency(results, dependency))
+            {
+                results.Add(dependency);
+            }
+        }
     }
 }
