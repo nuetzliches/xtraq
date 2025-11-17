@@ -223,6 +223,35 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(builderPath, builderCode);
             }
         }
+        if (Templates.TryLoad("TransactionOrchestrator", out var orchestratorTpl))
+        {
+            var orchestratorPath = Path.Combine(baseOutputDir, "TransactionOrchestrator.cs");
+            var writeOrchestrator = !File.Exists(orchestratorPath);
+            if (!writeOrchestrator)
+            {
+                try
+                {
+                    var existing = File.ReadAllText(orchestratorPath);
+                    if (!existing.Contains("IXtraqTransactionOrchestrator", StringComparison.Ordinal) ||
+                        !existing.Contains("XtraqTransactionScope", StringComparison.Ordinal) ||
+                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
+                    {
+                        writeOrchestrator = true;
+                    }
+                }
+                catch
+                {
+                    writeOrchestrator = true;
+                }
+            }
+
+            if (writeOrchestrator)
+            {
+                var orchestratorModel = new { Namespace = ns, HEADER = headerBlock };
+                var orchestratorCode = Templates.RenderRawTemplate(orchestratorTpl, orchestratorModel);
+                File.WriteAllText(orchestratorPath, orchestratorCode);
+            }
+        }
         // StoredProcedure template no longer used after consolidation
         string? unifiedTemplateRaw = null;
         bool hasUnifiedTemplate = Templates.TryLoad("UnifiedProcedure", out unifiedTemplateRaw);

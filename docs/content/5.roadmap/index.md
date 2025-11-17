@@ -26,10 +26,13 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Transaction API
 
-- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request while exposing explicit `Begin/Commit/RollbackAsync` helpers for nested flows. _(Blocked on design review.)_
+- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request and uses savepoint-backed nesting to expose explicit `Begin/Commit/RollbackAsync` helpers. _(Implementation started: contract and template scaffolding in progress.)_
+- [ ] Extend generated DbContext options and service registrations so consumers can resolve the orchestrator without breaking existing usage patterns or hand-written partials.
 - [ ] Expose transaction-aware execution policies so global defaults or per-procedure overrides (e.g., ambient participation, isolation level) can be configured declaratively. _(Design follows orchestrator prototype.)_
 - [ ] Ensure the pipeline execution context resolves the orchestrator via dependency injection, enabling policies to coordinate with logging and telemetry components.
 - [ ] Align the design with the planned Entity Framework integration by supporting ambient `DbContext` transactions and connection reuse when both stacks operate side by side. _(Joint review with Framework Integrations track.)_
+- [ ] Backfill regression tests covering nested savepoint flows, auto-rollback on dispose, and streaming pipeline compatibility.
+- [ ] Document orchestrator usage, DI configuration, and migration guidance alongside the SpocR transition playbook.
 
 ## Fluent Pipeline Iteration
 

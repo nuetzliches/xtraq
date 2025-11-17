@@ -4,13 +4,13 @@ description: Snapshot your database, generate typed clients, and keep .NET appli
 layout: landing
 navigation: false
 seo:
-  title: SQL to C# without manual plumbing
+  title: Stored procedure automation for .NET
   description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
 ---
 
 ::u-page-hero
 #title
-SQL to C# without the guesswork.
+Stored procedure automation for .NET
 
 #description
 Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.

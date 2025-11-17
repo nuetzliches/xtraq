@@ -69,7 +69,7 @@ public static class BuilderHarness
             .WithPolicy(policy)
             .WithExecutor(static async (db, value, ct) =>
             {
-                await Task.Delay(1, ct).ConfigureAwait(false);
+                await Task.Delay(1, ct);
                 return value + 1;
             });
 
@@ -82,10 +82,9 @@ public static class BuilderHarness
             .TapAsync(async (value, ct) =>
             {
                 asyncObserved = value + 10;
-                await Task.Delay(1, ct).ConfigureAwait(false);
+                await Task.Delay(1, ct);
             })
-            .ExecuteAsync()
-            .ConfigureAwait(false);
+            .ExecuteAsync();
 
         return (result + observed + asyncObserved, policy.Label, policy.Invocations);
     }
@@ -100,10 +99,10 @@ public static class BuilderHarness
             .WithPolicy(policy)
             .WithExecutor(static async (db, value, onRow, ct) =>
         {
-            await onRow(1, ct).ConfigureAwait(false);
-            await onRow(2, ct).ConfigureAwait(false);
-            await onRow(3, ct).ConfigureAwait(false);
-            await Task.Delay(1, ct).ConfigureAwait(false);
+            await onRow(1, ct);
+            await onRow(2, ct);
+            await onRow(3, ct);
+            await Task.Delay(1, ct);
             return 42;
         });
 
@@ -120,8 +119,7 @@ public static class BuilderHarness
             })
             .TapCompletion(output => observedOutput = output)
             .CompleteWith((output, _) => new ValueTask<(int RowCount, int Sum, int Output)>((count, sum, output)))
-            .ExecuteAsync()
-            .ConfigureAwait(false);
+            .ExecuteAsync();
 
         return (outcome.RowCount, outcome.Sum, outcome.Output, observedOutput, policy.Label, policy.Invocations);
     }
@@ -133,14 +131,14 @@ public static class BuilderHarness
         var execution = ctx.ConfigureProcedureStream<int, int>(0)
             .WithExecutor(static async (db, value, onRow, ct) =>
             {
-                await onRow(5, ct).ConfigureAwait(false);
-                await onRow(6, ct).ConfigureAwait(false);
-                await onRow(7, ct).ConfigureAwait(false);
+                await onRow(5, ct);
+                await onRow(6, ct);
+                await onRow(7, ct);
                 return 11;
             });
 
-        var buffered = await execution.BufferAsync().ConfigureAwait(false);
-        var aggregated = await execution.AggregateAsync((rows, output) => (rows.Count, output)).ConfigureAwait(false);
+        var buffered = await execution.BufferAsync();
+        var aggregated = await execution.AggregateAsync((rows, output) => (rows.Count, output));
         return (buffered.Count, aggregated.Item1, aggregated.Item2);
     }
 }
@@ -176,16 +174,16 @@ public static class BuilderHarness
         {
             var mi = harnessType.GetMethod(method, BindingFlags.Public | BindingFlags.Static)!;
             var task = (Task<T>)mi.Invoke(null, Array.Empty<object>())!;
-            return await task.ConfigureAwait(false);
+            return await task;
         }
 
-        var callResult = await InvokeAsync<(int Total, string? Label, int PolicyInvocations)>(harnessType, "RunCallPipelineAsync").ConfigureAwait(false);
+        var callResult = await InvokeAsync<(int Total, string? Label, int PolicyInvocations)>(harnessType, "RunCallPipelineAsync");
         Assert.Equal((34, "call-pipeline", 1), callResult);
 
-        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)>(harnessType, "RunStreamPipelineAsync").ConfigureAwait(false);
+        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)>(harnessType, "RunStreamPipelineAsync");
         Assert.Equal((3, 6, 42, 42, "stream-pipeline", 1), streamResult);
 
-        var aggregateResult = await InvokeAsync<(int BufferCount, int AggregatedCount, int Output)>(harnessType, "RunBufferAndAggregateAsync").ConfigureAwait(false);
+        var aggregateResult = await InvokeAsync<(int BufferCount, int AggregatedCount, int Output)>(harnessType, "RunBufferAndAggregateAsync");
         Assert.Equal((3, 3, 11), aggregateResult);
     }
 
