@@ -290,7 +290,15 @@ internal static class SnapshotWriterUtilities
             return null;
         }
 
-        return sqlTypeName.Trim().ToLowerInvariant();
+        var trimmed = sqlTypeName.Trim();
+        var parenthesisIndex = trimmed.IndexOf('(');
+        if (parenthesisIndex >= 0)
+        {
+            trimmed = trimmed[..parenthesisIndex];
+        }
+
+        var normalized = trimmed.Trim().ToLowerInvariant();
+        return normalized.Length == 0 ? null : normalized;
     }
 
     internal static bool ShouldEmitIsNullable(bool value, string? typeRefOrTypeName)

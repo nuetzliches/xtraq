@@ -423,16 +423,12 @@ internal sealed class XtraqCliRuntime(
             }
 
             HashSet<string>? requiredTableTypeReferences = null;
-            if (procedures.Count > 0 && cfg.BuildSchemas is { Count: > 0 })
+            if (procedures.Count > 0)
             {
-                requiredTableTypeReferences = CollectRequiredTableTypeReferences(procedures, cfg.BuildSchemas);
-                if (requiredTableTypeReferences.Count == 0)
+                requiredTableTypeReferences = CollectRequiredTableTypeReferences(procedures, cfg.BuildSchemas ?? Array.Empty<string>());
+                if (options.Verbose)
                 {
-                    requiredTableTypeReferences = null;
-                }
-                else if (options.Verbose)
-                {
-                    consoleService.Verbose($"[build] Table type dependencies after schema filter: {requiredTableTypeReferences.Count}");
+                    consoleService.Verbose($"[build] Table type dependencies resolved: {requiredTableTypeReferences.Count}");
                 }
             }
 

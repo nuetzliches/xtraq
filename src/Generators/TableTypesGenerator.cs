@@ -90,7 +90,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
         }
 
         var normalizedDependencies = NormalizeDependencies(requiredTableTypeReferences);
-        if (normalizedDependencies is { Count: > 0 })
+        if (normalizedDependencies.Count > 0)
         {
             var beforeFilter = types.Count;
             types = types.Where(t => normalizedDependencies.Contains(NormalizeTypeIdentity(t.Catalog, t.Schema, t.Name))).ToList();
@@ -104,12 +104,21 @@ internal sealed class TableTypesGenerator : GeneratorBase
                 // logging best-effort only
             }
         }
-        else if (_cfg.BuildSchemas is { Count: > 0 })
+        else
         {
-            var beforeT = types.Count;
-            types = types.Where(t => _cfg.BuildSchemas.Contains(t.Schema)).ToList();
-            var removedT = beforeT - types.Count;
-            try { Console.Out.WriteLine($"[xtraq] Info: TableTypes allow-list applied -> {types.Count}/{beforeT} retained (removed {removedT}). Schemas: {string.Join(",", _cfg.BuildSchemas)}"); } catch { }
+            if (types.Count > 0)
+            {
+                try
+                {
+                    Console.Out.WriteLine("[xtraq] Info: No table type dependencies detected -> skipping emission.");
+                }
+                catch
+                {
+                    // logging best-effort only
+                }
+            }
+
+            types = Array.Empty<TableTypeInfo>();
         }
         foreach (var tt in types.OrderBy(t => t.Schema).ThenBy(t => t.Name))
         {
@@ -176,14 +185,14 @@ internal sealed class TableTypesGenerator : GeneratorBase
             new Dictionary<string, int>(artifactsPerSchema, StringComparer.OrdinalIgnoreCase)); // includes interface (even if 0 types)
     }
 
-    private static HashSet<string>? NormalizeDependencies(IReadOnlyCollection<string>? required)
+    private static HashSet<string> NormalizeDependencies(IReadOnlyCollection<string>? required)
     {
+        var normalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (required is not { Count: > 0 })
         {
-            return null;
+            return normalized;
         }
 
-        var normalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in required)
         {
             if (string.IsNullOrWhiteSpace(entry))
@@ -203,7 +212,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
             }
         }
 
-        return normalized.Count == 0 ? null : normalized;
+        return normalized;
     }
 
     private static string NormalizeTypeIdentity(string? catalog, string schema, string name)
