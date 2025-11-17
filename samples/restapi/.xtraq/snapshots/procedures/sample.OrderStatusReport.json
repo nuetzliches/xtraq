@@ -1,0 +1,58 @@
+{
+  "Schema": "sample",
+  "Name": "OrderStatusReport",
+  "Parameters": [
+    {
+      "Name": "FromUtc",
+      "TypeRef": "sys.datetime2",
+      "IsNullable": true,
+      "Precision": 23,
+      "Scale": 3
+    },
+    {
+      "Name": "ToUtc",
+      "TypeRef": "sys.datetime2",
+      "IsNullable": true,
+      "Precision": 23,
+      "Scale": 3
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "Status",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 50,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
+        },
+        {
+          "Name": "Orders",
+          "TypeRef": "sys.bigint",
+          "IsNullable": true,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
+        },
+        {
+          "Name": "TotalAmount",
+          "TypeRef": "sys.decimal",
+          "IsNullable": true,
+          "MaxLength": 17,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
+        },
+        {
+          "Name": "AverageAmount",
+          "TypeRef": "sys.decimal",
+          "IsNullable": true,
+          "MaxLength": 17,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
+        },
+        {
+          "Name": "LastPlacedAtUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
+        }
+      ]
+    }
+  ]
+}

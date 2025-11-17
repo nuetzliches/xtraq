@@ -1,0 +1,68 @@
+{
+  "Schema": "sample",
+  "Name": "UserFind",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "IsNullable": true
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "Alias",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "MaxLength": 120
+        },
+        {
+          "Name": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Email",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "MaxLength": 320
+        },
+        {
+          "Name": "IsActive",
+          "TypeRef": "sys.bit"
+        },
+        {
+          "Name": "PreferredLocale",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 10
+        },
+        {
+          "Name": "CreatedAtUtc",
+          "TypeRef": "sys.datetime2"
+        },
+        {
+          "Name": "UpdatedAtUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
+        },
+        {
+          "Name": "PreferredContactEmail",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 320,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        },
+        {
+          "Name": "PreferredContactDisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        }
+      ]
+    }
+  ]
+}

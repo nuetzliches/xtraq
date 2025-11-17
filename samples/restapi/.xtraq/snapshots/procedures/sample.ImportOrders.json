@@ -1,0 +1,23 @@
+{
+  "Schema": "sample",
+  "Name": "ImportOrders",
+  "Parameters": [
+    {
+      "Name": "Orders",
+      "TypeRef": "sample.OrderImportTableType",
+      "TableTypeRef": "sample.OrderImportTableType",
+      "TableTypeSchema": "sample",
+      "TableTypeName": "OrderImportTableType"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "ImportedOrders",
+          "TypeRef": "sys.int"
+        }
+      ]
+    }
+  ]
+}

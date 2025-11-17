@@ -1,0 +1,38 @@
+{
+  "Schema": "sample",
+  "Name": "UserContactTableType",
+  "Columns": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int"
+    },
+    {
+      "Name": "Email",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 320
+    },
+    {
+      "Name": "DisplayName",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 200
+    },
+    {
+      "Name": "Source",
+      "TypeRef": "sys.nvarchar",
+      "IsNullable": true,
+      "MaxLength": 50
+    },
+    {
+      "Name": "Preferred",
+      "TypeRef": "sys.bit",
+      "IsNullable": true
+    },
+    {
+      "Name": "LastInteractionUtc",
+      "TypeRef": "sys.datetime2",
+      "IsNullable": true,
+      "Precision": 23,
+      "Scale": 3
+    }
+  ]
+}

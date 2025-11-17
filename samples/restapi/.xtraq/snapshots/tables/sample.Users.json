@@ -1,0 +1,79 @@
+{
+  "Schema": "sample",
+  "Name": "Users",
+  "Columns": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "IsIdentity": true
+    },
+    {
+      "Name": "Alias",
+      "TypeRef": "sys.nvarchar",
+      "IsNullable": true,
+      "MaxLength": 120
+    },
+    {
+      "Name": "DisplayName",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 200
+    },
+    {
+      "Name": "Email",
+      "TypeRef": "sys.nvarchar",
+      "IsNullable": true,
+      "MaxLength": 320
+    },
+    {
+      "Name": "IsActive",
+      "TypeRef": "sys.bit",
+      "HasDefaultValue": true,
+      "DefaultConstraintName": "DF_sample_Users_IsActive",
+      "DefaultDefinition": "1"
+    },
+    {
+      "Name": "Bio",
+      "TypeRef": "sample.UserBioType"
+    },
+    {
+      "Name": "PreferredLocale",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 10,
+      "HasDefaultValue": true,
+      "DefaultConstraintName": "DF_sample_Users_PreferredLocale",
+      "DefaultDefinition": "N\u0027en-US\u0027"
+    },
+    {
+      "Name": "CreatedAtUtc",
+      "TypeRef": "sys.datetime2",
+      "Precision": 23,
+      "Scale": 3,
+      "HasDefaultValue": true,
+      "DefaultConstraintName": "DF_sample_Users_CreatedAtUtc",
+      "DefaultDefinition": "sysutcdatetime()"
+    },
+    {
+      "Name": "UpdatedAtUtc",
+      "TypeRef": "sys.datetime2",
+      "IsNullable": true,
+      "Precision": 23,
+      "Scale": 3
+    },
+    {
+      "Name": "Metadata",
+      "TypeRef": "sample.JsonDocument"
+    },
+    {
+      "Name": "SearchName",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 321,
+      "IsComputed": true,
+      "ComputedDefinition": "concat([DisplayName],N\u0027 \u0027,isnull([Alias],N\u0027\u0027))",
+      "IsComputedPersisted": true
+    },
+    {
+      "Name": "ProfileVersion",
+      "TypeRef": "sys.timestamp"
+    }
+  ]
+}
