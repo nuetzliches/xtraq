@@ -1,12 +1,9 @@
 namespace Xtraq.Configuration;
 
-// TODO remove all but net8.0 and net10.0
 internal enum TargetFrameworkEnum
 {
-    NetCoreApp22,
-    Net60,
     Net80,
-    Net90
+    Net100
 }
 
 internal static class TargetFrameworkExtensions
@@ -20,10 +17,8 @@ internal static class TargetFrameworkExtensions
     {
         return framework switch
         {
-            TargetFrameworkEnum.NetCoreApp22 => "netcoreapp2.2",
-            TargetFrameworkEnum.Net60 => "net6.0",
             TargetFrameworkEnum.Net80 => "net8.0",
-            TargetFrameworkEnum.Net90 => "net9.0",
+            TargetFrameworkEnum.Net100 => "net10.0",
             _ => framework.ToDefaultTargetFramework()
         };
     }
@@ -35,10 +30,8 @@ internal static class TargetFrameworkExtensions
 
         return frameworkString.ToLowerInvariant() switch
         {
-            "netcoreapp2.2" => TargetFrameworkEnum.NetCoreApp22,
-            "net6.0" => TargetFrameworkEnum.Net60,
             "net8.0" => TargetFrameworkEnum.Net80,
-            "net9.0" => TargetFrameworkEnum.Net90,
+            "net10.0" => TargetFrameworkEnum.Net100,
             _ => Constants.DefaultTargetFramework
         };
     }

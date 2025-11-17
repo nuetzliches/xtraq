@@ -10,7 +10,7 @@ description: Tracking upcoming work and temporary deferrals.
 
 ## Default Target Framework
 
-- [ ] Update `src\Configuration\Constants.cs` and `src\Configuration\TargetFrameworkEnum.cs` to set .NET 10.0 as the default target framework for new projects and remove legacy frameworks from the enum.
+- [x] Update `src\Configuration\Constants.cs` and `src\Configuration\TargetFrameworkEnum.cs` to set .NET 10.0 as the default target framework for new projects and remove legacy frameworks from the enum. _(Default now targets net10.0; legacy entries trimmed to net8.0/net10.0 coverage.)_
 
 ## ResultSet Naming
 
