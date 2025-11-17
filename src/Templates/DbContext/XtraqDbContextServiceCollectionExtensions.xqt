@@ -78,6 +78,8 @@ public static class XtraqDbContextServiceCollectionExtensions
             return new EntityFrameworkXtraqContext<TDbContext>(efContext, options);
         }));
 
+        services.TryAddScoped<ProcedureResultEntityAdapter<TDbContext>>();
+
         return services;
     }
 }

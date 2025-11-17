@@ -51,6 +51,13 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ Namespace }}", "TestNamespace");
         var serviceSourceForHarness = serviceSource.Replace("new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp)", "new FakeDbContext(sp.GetRequiredService<XtraqDbContextOptions>())");
 
+        var adapterTemplatePath = Path.Combine(root, "src", "Templates", "ProcedureResultEntityAdapter.xqt");
+        Assert.True(File.Exists(adapterTemplatePath), $"Adapter template not found: {adapterTemplatePath}");
+        var adapterTemplate = File.ReadAllText(adapterTemplatePath);
+        var adapterSource = adapterTemplate
+            .Replace("{{ HEADER }}", "// generated for tests")
+            .Replace("{{ Namespace }}", "TestNamespace");
+
         var policyTemplatePath = Path.Combine(root, "src", "Templates", "Policies", "TransactionExecutionPolicy.xqt");
         Assert.True(File.Exists(policyTemplatePath), $"Transaction policy template not found: {policyTemplatePath}");
         var policyTemplate = File.ReadAllText(policyTemplatePath);
@@ -115,7 +122,42 @@ public sealed class EfHarnessDbContext : DbContext
         : base(options)
     {
     }
+
+    public DbSet<Banner> Banners => Set<Banner>();
+    public DbSet<ProcedureMetric> ProcedureMetrics => Set<ProcedureMetric>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Banner>(builder =>
+        {
+            builder.HasKey(x => x.BannerId);
+            builder.Property(x => x.DisplayName);
+        });
+
+        modelBuilder.Entity<ProcedureMetric>(builder =>
+        {
+            builder.HasNoKey();
+            builder.Property(x => x.Scope);
+            builder.Property(x => x.Count);
+        });
+    }
 }
+
+public sealed class Banner
+{
+    public int BannerId { get; set; }
+    public string? DisplayName { get; set; }
+}
+
+public sealed class ProcedureMetric
+{
+    public string Scope { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public readonly record struct BannerRow(int bannerId, string? displayName);
+
+public readonly record struct ProcedureMetricRow(string scope, int count);
 
 public sealed class FakeDbContext : IXtraqDbContext
 {
@@ -541,6 +583,63 @@ public static class OrchestratorHarness
         return (usesAdapter, ambientReused, dedicatedCreated);
     }
 
+    public static async Task<(bool AdapterRegistered, bool TracksTwo, bool ReusesTracked, bool KeylessProjected, bool KeylessTracked)> RunProcedureResultEntityAdapterAsync()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<EfHarnessDbContext>(options =>
+        {
+            options.UseSqlite("Data Source=:memory:");
+        });
+
+        services.AddXtraqDbContext(options =>
+        {
+            options.ConnectionString = "Data Source=:memory:";
+        });
+
+        services.UseXtraqProcedures<EfHarnessDbContext>();
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        var adapter = scope.ServiceProvider.GetService<ProcedureResultEntityAdapter<EfHarnessDbContext>>();
+        var adapterRegistered = adapter is not null;
+        if (adapter is null)
+        {
+            throw new InvalidOperationException("ProcedureResultEntityAdapter was not registered.");
+        }
+
+        var context = scope.ServiceProvider.GetRequiredService<EfHarnessDbContext>();
+        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+
+        var initialRows = new[]
+        {
+            new BannerRow(1, "One"),
+            new BannerRow(2, "Two")
+        };
+
+        var tracked = adapter.AttachEntities<Banner, BannerRow>(initialRows);
+        var tracksTwo = tracked.Count == 2 && context.ChangeTracker.Entries<Banner>().Count() == 2;
+
+        var updatedRows = new[]
+        {
+            new BannerRow(1, "One-updated")
+        };
+
+        var refreshed = adapter.AttachEntities<Banner, BannerRow>(updatedRows);
+        var reusesTracked = ReferenceEquals(tracked[0], refreshed[0]) && refreshed[0].DisplayName == "One-updated";
+
+        var metricRows = new[]
+        {
+            new ProcedureMetricRow("scope", 5)
+        };
+
+        var keyless = adapter.ProjectKeyless<ProcedureMetric, ProcedureMetricRow>(metricRows);
+        var keylessProjected = keyless.Count == 1 && keyless[0].Scope == "scope" && keyless[0].Count == 5;
+        var keylessTracked = context.ChangeTracker.Entries<ProcedureMetric>().Any();
+
+        return (adapterRegistered, tracksTwo, reusesTracked, keylessProjected, keylessTracked);
+    }
+
     public static async Task<(bool Committed, bool RolledBack)> RunPolicyIntegrationAsync()
     {
         var connection = new FakeDbConnection();
@@ -592,6 +691,7 @@ public static class OrchestratorHarness
             CSharpSyntaxTree.ParseText(orchestratorSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(optionsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(serviceSourceForHarness, new CSharpParseOptions(LanguageVersion.CSharp12)),
+            CSharpSyntaxTree.ParseText(adapterSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(policySource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(harnessSource, new CSharpParseOptions(LanguageVersion.CSharp12))
         };
@@ -664,6 +764,13 @@ public static class OrchestratorHarness
         Assert.True(efResult.AmbientReused);
         Assert.True(efResult.DedicatedCreated);
 
+        var adapterResult = await InvokeAsync<(bool AdapterRegistered, bool TracksTwo, bool ReusesTracked, bool KeylessProjected, bool KeylessTracked)>(harnessType, "RunProcedureResultEntityAdapterAsync");
+        Assert.True(adapterResult.AdapterRegistered);
+        Assert.True(adapterResult.TracksTwo);
+        Assert.True(adapterResult.ReusesTracked);
+        Assert.True(adapterResult.KeylessProjected);
+        Assert.False(adapterResult.KeylessTracked);
+
         var policyResult = await InvokeAsync<(bool Committed, bool RolledBack)>(harnessType, "RunPolicyIntegrationAsync");
         Assert.Equal((true, false), policyResult);
 
@@ -702,7 +809,8 @@ public static class OrchestratorHarness
             typeof(Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions).Assembly,
             typeof(Microsoft.Data.Sqlite.SqliteConnection).Assembly,
             typeof(Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions).Assembly,
-            typeof(Microsoft.Extensions.Configuration.ConfigurationExtensions).Assembly
+            typeof(Microsoft.Extensions.Configuration.ConfigurationExtensions).Assembly,
+            typeof(System.Linq.Expressions.Expression).Assembly
         };
 
         var runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)!;

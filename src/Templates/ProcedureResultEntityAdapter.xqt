@@ -1,0 +1,574 @@
+{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
+
+using System.Reflection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+
+/// <summary>Maps generated procedure result rows into Entity Framework Core entities.</summary>
+public sealed partial class ProcedureResultEntityAdapter<TDbContext>
+    where TDbContext : DbContext
+{
+    private readonly TDbContext _dbContext;
+
+    public ProcedureResultEntityAdapter(TDbContext dbContext)
+    {
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    }
+
+    /// <summary>
+    /// Projects procedure result rows onto tracked Entity Framework entities, attaching new instances when required.
+    /// </summary>
+    /// <typeparam name="TEntity">Entity Framework entity type to materialise.</typeparam>
+    /// <typeparam name="TRow">Generated procedure row type.</typeparam>
+    /// <param name="rows">Rows produced by the stored procedure.</param>
+    /// <param name="projector">Optional projector that copies row values onto the entity instance.</param>
+    /// <param name="state">Desired <see cref="EntityState"/> for newly attached entities.</param>
+    /// <param name="keyResolver">Optional key resolver used when the generated row type does not expose key columns with recognisable names.</param>
+    /// <returns>A read-only list of tracked entity instances.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the entity type is not part of the model or lacks a primary key.</exception>
+    public IReadOnlyList<TEntity> AttachEntities<TEntity, TRow>(
+        IEnumerable<TRow> rows,
+        Action<TEntity, TRow>? projector = null,
+        EntityState state = EntityState.Unchanged,
+        Func<TRow, object?[]?>? keyResolver = null)
+        where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var entityType = _dbContext.Model.FindEntityType(typeof(TEntity))
+            ?? throw new InvalidOperationException($"Entity type '{typeof(TEntity).FullName}' is not part of the DbContext '{_dbContext.GetType().Name}'.");
+
+        var primaryKey = entityType.FindPrimaryKey();
+        if (primaryKey is null || primaryKey.Properties.Count == 0)
+        {
+            throw new InvalidOperationException($"Entity type '{entityType.Name}' does not declare a primary key. Use ProjectKeyless for keyless types.");
+        }
+
+        var binding = projector is null
+            ? BindingCache<TEntity, TRow>.Info
+            : BindingCache<TEntity, TRow>.Info.WithBinder(projector);
+
+        if (projector is null && !binding.HasBindings)
+        {
+            throw new InvalidOperationException($"No matching properties were found between '{typeof(TRow).FullName}' and '{typeof(TEntity).FullName}'. Provide a custom projector.");
+        }
+
+        IReadOnlyList<PropertyInfo> rowKeyProperties;
+        IReadOnlyList<PropertyInfo> entityKeyProperties;
+        if (keyResolver is null)
+        {
+            (rowKeyProperties, entityKeyProperties) = ResolveKeyProperties<TEntity, TRow>(entityType, primaryKey, binding);
+        }
+        else
+        {
+            rowKeyProperties = Array.Empty<PropertyInfo>();
+            entityKeyProperties = ResolveEntityKeyProperties<TEntity>(entityType, primaryKey);
+        }
+
+        var tracked = BuildTrackedLookup<TEntity>(entityKeyProperties);
+        var result = new List<TEntity>();
+
+        foreach (var row in rows)
+        {
+            if (row is null)
+            {
+                continue;
+            }
+
+            string key;
+            if (keyResolver is null)
+            {
+                key = CreateRowKey(row, rowKeyProperties);
+            }
+            else
+            {
+                var parts = keyResolver(row) ?? throw new InvalidOperationException("Key resolver returned null.");
+                if (parts.Length != entityKeyProperties.Count)
+                {
+                    throw new InvalidOperationException($"Key resolver for '{typeof(TRow).FullName}' returned {parts.Length} values, but entity '{entityType.Name}' expects {entityKeyProperties.Count} key components.");
+                }
+
+                key = ComposeKeyString(parts);
+            }
+
+            if (!tracked.TryGetValue(key, out var entity))
+            {
+                entity = CreateEntity<TEntity>();
+                binding.Binder(entity, row);
+                var entry = _dbContext.Attach(entity);
+                entry.State = state;
+                tracked[key] = entity;
+                OnEntityAttached(entity, row, entityType);
+            }
+            else
+            {
+                binding.Binder(entity, row);
+                if (state != EntityState.Unchanged)
+                {
+                    _dbContext.Entry(entity).State = state;
+                }
+                OnEntityRefreshed(entity, row, entityType);
+            }
+
+            result.Add(entity);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Projects procedure rows into keyless query types without attaching them to the DbContext change tracker.
+    /// </summary>
+    /// <typeparam name="TEntity">Keyless query type to populate.</typeparam>
+    /// <typeparam name="TRow">Generated procedure row type.</typeparam>
+    /// <param name="rows">Rows produced by the stored procedure.</param>
+    /// <param name="projector">Optional projector that copies row values onto the keyless type.</param>
+    /// <returns>A read-only list containing the projected keyless entities.</returns>
+    public IReadOnlyList<TEntity> ProjectKeyless<TEntity, TRow>(
+        IEnumerable<TRow> rows,
+        Action<TEntity, TRow>? projector = null)
+        where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var entityType = _dbContext.Model.FindEntityType(typeof(TEntity))
+            ?? throw new InvalidOperationException($"Entity type '{typeof(TEntity).FullName}' is not part of the DbContext '{_dbContext.GetType().Name}'.");
+
+        var primaryKey = entityType.FindPrimaryKey();
+        if (primaryKey is not null && primaryKey.Properties.Count > 0)
+        {
+            throw new InvalidOperationException($"Entity type '{entityType.Name}' declares a primary key. Use AttachEntities to materialise tracked entities.");
+        }
+
+        var binding = projector is null
+            ? BindingCache<TEntity, TRow>.Info
+            : BindingCache<TEntity, TRow>.Info.WithBinder(projector);
+
+        if (projector is null && !binding.HasBindings)
+        {
+            throw new InvalidOperationException($"No matching properties were found between '{typeof(TRow).FullName}' and '{typeof(TEntity).FullName}'. Provide a custom projector.");
+        }
+
+        var result = new List<TEntity>();
+        foreach (var row in rows)
+        {
+            if (row is null)
+            {
+                continue;
+            }
+
+            var entity = CreateEntity<TEntity>();
+            binding.Binder(entity, row);
+            OnKeylessProjected(entity, row, entityType);
+            result.Add(entity);
+        }
+
+        return result;
+    }
+
+    private Dictionary<string, TEntity> BuildTrackedLookup<TEntity>(IReadOnlyList<PropertyInfo> entityKeyProperties)
+        where TEntity : class
+    {
+        var lookup = new Dictionary<string, TEntity>(StringComparer.Ordinal);
+        if (entityKeyProperties.Count == 0)
+        {
+            return lookup;
+        }
+
+        foreach (var entry in _dbContext.ChangeTracker.Entries<TEntity>())
+        {
+            if (entry.State == EntityState.Detached)
+            {
+                continue;
+            }
+
+            var key = CreateEntityKey(entry.Entity, entityKeyProperties);
+            if (key.Length > 0)
+            {
+                lookup[key] = entry.Entity;
+            }
+        }
+
+        return lookup;
+    }
+
+    private static string CreateEntityKey<TEntity>(TEntity entity, IReadOnlyList<PropertyInfo> properties)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (var i = 0; i < properties.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('|');
+            }
+
+            var value = properties[i].GetValue(entity);
+            builder.Append(ConvertKeyComponent(value));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string CreateRowKey<TRow>(TRow row, IReadOnlyList<PropertyInfo> properties)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (var i = 0; i < properties.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('|');
+            }
+
+            var value = properties[i].GetValue(row);
+            builder.Append(ConvertKeyComponent(value));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string ComposeKeyString(object?[] values)
+    {
+        if (values.Length == 0)
+        {
+            throw new InvalidOperationException("Key resolver must return at least one component.");
+        }
+
+        var builder = new System.Text.StringBuilder();
+        for (var i = 0; i < values.Length; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('|');
+            }
+
+            builder.Append(ConvertKeyComponent(values[i]));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string ConvertKeyComponent(object? value)
+    {
+        return value switch
+        {
+            null => "<null>",
+            string s => s,
+            Guid g => g.ToString("D", System.Globalization.CultureInfo.InvariantCulture),
+            IFormattable formattable => formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? string.Empty
+        };
+    }
+
+    private static (IReadOnlyList<PropertyInfo> RowKeyProperties, IReadOnlyList<PropertyInfo> EntityKeyProperties) ResolveKeyProperties<TEntity, TRow>(
+        IEntityType entityType,
+        IKey primaryKey,
+        BindingInfo<TEntity, TRow> binding)
+        where TEntity : class
+    {
+        var rowProps = new List<PropertyInfo>(primaryKey.Properties.Count);
+        var entityProps = new List<PropertyInfo>(primaryKey.Properties.Count);
+
+        foreach (var keyProperty in primaryKey.Properties)
+        {
+            if (keyProperty.PropertyInfo is null)
+            {
+                throw new InvalidOperationException($"Primary key property '{keyProperty.Name}' on '{entityType.Name}' does not expose a public property accessor.");
+            }
+
+            var normalized = Normalize(keyProperty.PropertyInfo.Name);
+            if (!binding.RowProperties.TryGetValue(normalized, out var rowProp))
+            {
+                throw new InvalidOperationException($"Result row '{typeof(TRow).FullName}' does not expose a property matching key '{keyProperty.PropertyInfo.Name}'. Provide a key resolver.");
+            }
+
+            rowProps.Add(rowProp);
+            entityProps.Add(keyProperty.PropertyInfo);
+        }
+
+        return (rowProps, entityProps);
+    }
+
+    private static IReadOnlyList<PropertyInfo> ResolveEntityKeyProperties<TEntity>(IEntityType entityType, IKey primaryKey)
+        where TEntity : class
+    {
+        var list = new List<PropertyInfo>(primaryKey.Properties.Count);
+        foreach (var keyProperty in primaryKey.Properties)
+        {
+            if (keyProperty.PropertyInfo is null)
+            {
+                throw new InvalidOperationException($"Primary key property '{keyProperty.Name}' on '{entityType.Name}' does not expose a public property accessor.");
+            }
+
+            list.Add(keyProperty.PropertyInfo);
+        }
+
+        return list;
+    }
+
+    private static string Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var buffer = new char[value.Length];
+        var index = 0;
+        foreach (var ch in value)
+        {
+            if (ch == '_' || ch == '-')
+            {
+                continue;
+            }
+
+            buffer[index++] = char.ToUpperInvariant(ch);
+        }
+
+        return new string(buffer, 0, index);
+    }
+
+    private static IReadOnlyDictionary<string, PropertyInfo> BuildRowPropertyMap(Type rowType)
+    {
+        var properties = rowType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+        var dict = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+        foreach (var property in properties)
+        {
+            if (property.GetMethod is null)
+            {
+                continue;
+            }
+
+            if (property.GetMethod.GetParameters().Length > 0)
+            {
+                continue;
+            }
+
+            var key = Normalize(property.Name);
+            if (key.Length == 0)
+            {
+                continue;
+            }
+
+            dict[key] = property;
+        }
+
+        return dict;
+    }
+
+    private static IReadOnlyDictionary<string, PropertyInfo> BuildEntityPropertyMap(Type entityType)
+    {
+        var properties = entityType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+        var dict = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+        foreach (var property in properties)
+        {
+            if (property.SetMethod is null)
+            {
+                continue;
+            }
+
+            if (property.SetMethod.GetParameters().Length > 1)
+            {
+                continue;
+            }
+
+            var key = Normalize(property.Name);
+            if (key.Length == 0)
+            {
+                continue;
+            }
+
+            dict[key] = property;
+        }
+
+        return dict;
+    }
+
+    private static IReadOnlyList<PropertyBinding> BuildBindings(
+        IReadOnlyDictionary<string, PropertyInfo> entityProperties,
+        IReadOnlyDictionary<string, PropertyInfo> rowProperties)
+    {
+        var bindings = new List<PropertyBinding>();
+        foreach (var kvp in entityProperties)
+        {
+            if (!rowProperties.TryGetValue(kvp.Key, out var rowProperty))
+            {
+                continue;
+            }
+
+            bindings.Add(new PropertyBinding(kvp.Value, rowProperty));
+        }
+
+        return bindings;
+    }
+
+    private static Action<TEntity, TRow> BuildBinder<TEntity, TRow>(IReadOnlyList<PropertyBinding> bindings)
+    {
+        if (bindings.Count == 0)
+        {
+            return static (_, _) => { };
+        }
+
+        return (entity, row) =>
+        {
+            foreach (var binding in bindings)
+            {
+                var value = binding.RowProperty.GetValue(row);
+                var converted = ConvertValue(value, binding.EntityProperty.PropertyType);
+                binding.EntityProperty.SetValue(entity, converted);
+            }
+        };
+    }
+
+    private static object? ConvertValue(object? value, Type targetType)
+    {
+        if (value is null)
+        {
+            if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) is null)
+            {
+                return Activator.CreateInstance(targetType);
+            }
+
+            return null;
+        }
+
+        var effectiveTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        var valueType = value.GetType();
+
+        if (effectiveTarget.IsAssignableFrom(valueType))
+        {
+            return value;
+        }
+
+        if (effectiveTarget.IsEnum)
+        {
+            if (value is string s)
+            {
+                return Enum.Parse(effectiveTarget, s, ignoreCase: true);
+            }
+
+            var underlying = Convert.ChangeType(value, Enum.GetUnderlyingType(effectiveTarget), System.Globalization.CultureInfo.InvariantCulture);
+            return Enum.ToObject(effectiveTarget, underlying!);
+        }
+
+        if (effectiveTarget == typeof(Guid))
+        {
+            if (value is Guid guid)
+            {
+                return guid;
+            }
+
+            if (value is string str && Guid.TryParse(str, out var parsedGuid))
+            {
+                return parsedGuid;
+            }
+        }
+
+        if (effectiveTarget == typeof(DateTimeOffset))
+        {
+            if (value is DateTimeOffset dto)
+            {
+                return dto;
+            }
+
+            if (value is string str && DateTimeOffset.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedDto))
+            {
+                return parsedDto;
+            }
+        }
+
+        if (effectiveTarget == typeof(TimeSpan))
+        {
+            if (value is TimeSpan ts)
+            {
+                return ts;
+            }
+
+            if (value is string str && TimeSpan.TryParse(str, System.Globalization.CultureInfo.InvariantCulture, out var parsedTs))
+            {
+                return parsedTs;
+            }
+        }
+
+        try
+        {
+            return Convert.ChangeType(value, effectiveTarget, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return value;
+        }
+    }
+
+    private static TEntity CreateEntity<TEntity>()
+    {
+        if (typeof(TEntity).IsValueType)
+        {
+            return Activator.CreateInstance<TEntity>();
+        }
+
+        if (Activator.CreateInstance(typeof(TEntity)) is TEntity instance)
+        {
+            return instance;
+        }
+
+        throw new InvalidOperationException($"Entity type '{typeof(TEntity).FullName}' must expose a public parameterless constructor.");
+    }
+
+    private sealed class BindingInfo<TEntity, TRow>
+    {
+        internal BindingInfo(
+            Action<TEntity, TRow> binder,
+            IReadOnlyDictionary<string, PropertyInfo> rowProperties,
+            IReadOnlyDictionary<string, PropertyInfo> entityProperties,
+            IReadOnlyList<PropertyBinding> bindings)
+        {
+            Binder = binder;
+            RowProperties = rowProperties;
+            EntityProperties = entityProperties;
+            Bindings = bindings;
+        }
+
+        internal Action<TEntity, TRow> Binder { get; }
+        internal IReadOnlyDictionary<string, PropertyInfo> RowProperties { get; }
+        internal IReadOnlyDictionary<string, PropertyInfo> EntityProperties { get; }
+        internal IReadOnlyList<PropertyBinding> Bindings { get; }
+        internal bool HasBindings => Bindings.Count > 0;
+
+        internal BindingInfo<TEntity, TRow> WithBinder(Action<TEntity, TRow> binder)
+            => new BindingInfo<TEntity, TRow>(binder, RowProperties, EntityProperties, Bindings);
+    }
+
+    private readonly struct PropertyBinding
+    {
+        internal PropertyBinding(PropertyInfo entityProperty, PropertyInfo rowProperty)
+        {
+            EntityProperty = entityProperty;
+            RowProperty = rowProperty;
+        }
+
+        internal PropertyInfo EntityProperty { get; }
+        internal PropertyInfo RowProperty { get; }
+    }
+
+    private static class BindingCache<TEntity, TRow>
+    {
+        internal static readonly BindingInfo<TEntity, TRow> Info = Create();
+
+        private static BindingInfo<TEntity, TRow> Create()
+        {
+            var rowProperties = BuildRowPropertyMap(typeof(TRow));
+            var entityProperties = BuildEntityPropertyMap(typeof(TEntity));
+            var bindings = BuildBindings(entityProperties, rowProperties);
+            var binder = BuildBinder<TEntity, TRow>(bindings);
+            return new BindingInfo<TEntity, TRow>(binder, rowProperties, entityProperties, bindings);
+        }
+    }
+
+    partial void OnEntityAttached<TEntity, TRow>(TEntity entity, TRow row, IEntityType entityType);
+
+    partial void OnEntityRefreshed<TEntity, TRow>(TEntity entity, TRow row, IEntityType entityType);
+
+    partial void OnKeylessProjected<TEntity, TRow>(TEntity entity, TRow row, IEntityType entityType);
+}

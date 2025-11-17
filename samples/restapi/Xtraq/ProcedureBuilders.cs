@@ -65,6 +65,18 @@ public static class ProcedureRouteHandlerBuilderExtensions
         return builder;
     }
 
+    public static RouteHandlerBuilder WithProcedureStream<TInput, TRow, TUpstream, TResult>(
+        this RouteHandlerBuilder builder,
+        Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> configure,
+        Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.AddEndpointFilter(new ProcedureStreamEndpointFilter<TInput, TRow, TUpstream, TResult>(configure, responseWriter));
+        return builder;
+    }
+
     private sealed class ProcedurePipelineEndpointFilter<TInput, TResult> : IEndpointFilter
     {
         private readonly Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> _configure;
@@ -129,6 +141,260 @@ public static class ProcedureRouteHandlerBuilderExtensions
             return ValueTask.FromResult<IResult>(Results.Ok(result));
         }
     }
+
+    private sealed class ProcedureStreamEndpointFilter<TInput, TRow, TUpstream, TResult> : IEndpointFilter
+    {
+        private static readonly JsonSerializerOptions NdjsonSerializerOptions = new(JsonSerializerDefaults.Web);
+        private readonly Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> _configure;
+        private readonly Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>> _responseWriter;
+
+        public ProcedureStreamEndpointFilter(
+            Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> configure,
+            Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter)
+        {
+            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            _responseWriter = responseWriter ?? DefaultWriter;
+        }
+
+        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var httpContext = context.HttpContext;
+            var dbContext = httpContext.RequestServices.GetRequiredService<IXtraqDbContext>();
+            var input = ResolveInput(context);
+            var pipeline = ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input);
+            var execution = _configure(pipeline) ?? throw new InvalidOperationException("Procedure stream pipeline configuration returned null execution.");
+
+            var cancellationToken = ResolveCancellationToken(context, httpContext.RequestAborted);
+            var channel = System.Threading.Channels.Channel.CreateBounded<TRow>(new System.Threading.Channels.BoundedChannelOptions(64)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.Wait,
+                AllowSynchronousContinuations = false
+            });
+
+            var streamingExecution = execution.ForEach((row, token) => WriteRowAsync(channel.Writer, row, token));
+            var completionTask = ExecutePipelineAsync(streamingExecution, channel.Writer, cancellationToken);
+
+            var rows = ReadChannel(channel.Reader, cancellationToken);
+            var response = await _responseWriter(rows, completionTask, httpContext, cancellationToken).ConfigureAwait(false);
+
+            if (!completionTask.IsCompleted)
+            {
+                await completionTask.ConfigureAwait(false);
+            }
+
+            return response;
+        }
+
+        private static TInput ResolveInput(EndpointFilterInvocationContext context)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is TInput typed)
+                {
+                    return typed;
+                }
+            }
+
+            throw new InvalidOperationException($"Route handler must expose a parameter of type '{typeof(TInput).FullName}'.");
+        }
+
+        private static CancellationToken ResolveCancellationToken(EndpointFilterInvocationContext context, CancellationToken fallback)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is CancellationToken token)
+                {
+                    return token;
+                }
+            }
+
+            return fallback;
+        }
+
+        private static async Task<TResult> ExecutePipelineAsync(
+            ProcedureStreamExecution<TInput, TRow, TUpstream, TResult> execution,
+            System.Threading.Channels.ChannelWriter<TRow> writer,
+            CancellationToken cancellationToken)
+        {
+            Exception? failure = null;
+            try
+            {
+                return await execution.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+                throw;
+            }
+            finally
+            {
+                writer.TryComplete(failure);
+            }
+        }
+
+        private static ValueTask WriteRowAsync(System.Threading.Channels.ChannelWriter<TRow> writer, TRow row, CancellationToken cancellationToken)
+        {
+            if (writer.TryWrite(row))
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            return writer.WriteAsync(row, cancellationToken);
+        }
+
+        private static async IAsyncEnumerable<TRow> ReadChannel(
+            System.Threading.Channels.ChannelReader<TRow> reader,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        private static async ValueTask<IResult> DefaultWriter(
+            IAsyncEnumerable<TRow> rows,
+            Task<TResult> completionTask,
+            HttpContext httpContext,
+            CancellationToken cancellationToken)
+        {
+            var response = httpContext.Response;
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType ??= "application/x-ndjson";
+
+            await foreach (var row in rows.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                var json = JsonSerializer.Serialize(row, NdjsonSerializerOptions);
+                await response.WriteAsync(json, cancellationToken).ConfigureAwait(false);
+                await response.WriteAsync("\n", cancellationToken).ConfigureAwait(false);
+                await response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await completionTask.ConfigureAwait(false);
+            return Results.Empty;
+        }
+    }
+}
+
+public static class ProcedureRouteHandlerScaffolding
+{
+    /// <summary>Attaches the Minimal API pipeline for 'sample.ImportOrders'.</summary>
+    public static RouteHandlerBuilder WithSampleImportOrdersProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.ImportOrdersInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.ImportOrdersResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.ImportOrdersResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.ImportOrdersExtensions.ImportOrdersAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.OrderListAsJson'.</summary>
+    public static RouteHandlerBuilder WithSampleOrderListAsJsonProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListAsJsonInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListAsJsonResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListAsJsonResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListAsJsonExtensions.OrderListAsJsonAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.OrderListByUserAsJson'.</summary>
+    public static RouteHandlerBuilder WithSampleOrderListByUserAsJsonProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListByUserAsJsonInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListByUserAsJsonResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListByUserAsJsonResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderListByUserAsJsonExtensions.OrderListByUserAsJsonAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.OrderStatusReport'.</summary>
+    public static RouteHandlerBuilder WithSampleOrderStatusReportProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderStatusReportInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderStatusReportResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderStatusReportResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.OrderStatusReportExtensions.OrderStatusReportAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.SyncUserContacts'.</summary>
+    public static RouteHandlerBuilder WithSampleSyncUserContactsProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.SyncUserContactsInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.SyncUserContactsResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.SyncUserContactsResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.SyncUserContactsExtensions.SyncUserContactsAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.UpdateUserBio'.</summary>
+    public static RouteHandlerBuilder WithSampleUpdateUserBioProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.UpdateUserBioInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.UpdateUserBioResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.UpdateUserBioResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.UpdateUserBioExtensions.UpdateUserBioAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.UserDetailsWithOrders'.</summary>
+    public static RouteHandlerBuilder WithSampleUserDetailsWithOrdersProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserDetailsWithOrdersInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.UserDetailsWithOrdersResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserDetailsWithOrdersResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.UserDetailsWithOrdersExtensions.UserDetailsWithOrdersAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.UserFind'.</summary>
+    public static RouteHandlerBuilder WithSampleUserFindProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserFindInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.UserFindResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserFindResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.UserFindExtensions.UserFindAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.UserList'.</summary>
+    public static RouteHandlerBuilder WithSampleUserListProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserListInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.UserListResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserListResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.UserListExtensions.UserListAsync(dbContext, input, cancellationToken))));
+    }
+
+    /// <summary>Attaches the Minimal API pipeline for 'sample.UserOrderHierarchyJson'.</summary>
+    public static RouteHandlerBuilder WithSampleUserOrderHierarchyJsonProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserOrderHierarchyJsonInput, global::Xtraq.Samples.RestApi.Xtraq.Sample.UserOrderHierarchyJsonResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<global::Xtraq.Samples.RestApi.Xtraq.Sample.UserOrderHierarchyJsonResult>(
+                    global::Xtraq.Samples.RestApi.Xtraq.Sample.UserOrderHierarchyJsonExtensions.UserOrderHierarchyJsonAsync(dbContext, input, cancellationToken))));
+    }
+
 }
 
 #endif

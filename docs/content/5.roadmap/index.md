@@ -58,7 +58,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 ## Framework Integrations
 
 - [x] Offer `UseXtraqProcedures` extensions for EF `DbContext` that register the generated `IXtraqDbContext` within the same DI scope, reusing EF's connection pooling and transaction management via `DbContext.Database.GetDbConnection()`. _(Template emits the adapter and extension; documentation updated in `docs/content/3.reference/3.entity-framework-integration.md`.)_
-- [ ] Add an adapter layer (`ProcedureResultEntityAdapter`) that maps procedure rows into tracked EF entities or keyless query types to enable hybrid read patterns without manual mapping.
+- [x] Add an adapter layer (`ProcedureResultEntityAdapter`) that maps procedure rows into tracked EF entities or keyless query types to enable hybrid read patterns without manual mapping. _(Ships via the shared adapter template; documented under Entity Framework integration with attach/keyless examples.)_
 - [ ] Support EF interceptors so procedure executions can join ambient transactions and leverage EF's logging providers, keeping configuration consistent across direct EF queries and Xtraq procedure calls.
 
 ## Telemetry

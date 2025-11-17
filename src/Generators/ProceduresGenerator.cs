@@ -225,6 +225,34 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(execPath, code);
             }
         }
+        if (Templates.TryLoad("ProcedureResultEntityAdapter", out var adapterTpl))
+        {
+            var adapterPath = Path.Combine(baseOutputDir, "ProcedureResultEntityAdapter.cs");
+            bool writeAdapter = !File.Exists(adapterPath);
+            if (!writeAdapter)
+            {
+                try
+                {
+                    var existing = File.ReadAllText(adapterPath);
+                    if (!existing.Contains("ProcedureResultEntityAdapter", StringComparison.Ordinal) ||
+                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
+                    {
+                        writeAdapter = true;
+                    }
+                }
+                catch
+                {
+                    writeAdapter = true;
+                }
+            }
+
+            if (writeAdapter)
+            {
+                var adapterModel = new { Namespace = ns, HEADER = headerBlock };
+                var adapterCode = Templates.RenderRawTemplate(adapterTpl, adapterModel);
+                File.WriteAllText(adapterPath, adapterCode);
+            }
+        }
         if (Templates.TryLoad("ProcedureBuilders", out var builderTpl))
         {
             var builderPath = Path.Combine(baseOutputDir, "ProcedureBuilders.cs");
