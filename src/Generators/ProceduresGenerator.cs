@@ -252,6 +252,35 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(orchestratorPath, orchestratorCode);
             }
         }
+        if (Templates.TryLoad("TransactionExecutionPolicy", out var transactionPolicyTpl))
+        {
+            var policyPath = Path.Combine(baseOutputDir, "TransactionExecutionPolicy.cs");
+            var writePolicy = !File.Exists(policyPath);
+            if (!writePolicy)
+            {
+                try
+                {
+                    var existing = File.ReadAllText(policyPath);
+                    if (!existing.Contains("TransactionScopeExecutionPolicy", StringComparison.Ordinal) ||
+                        !existing.Contains("TransactionScopeExecutionPolicyFactory", StringComparison.Ordinal) ||
+                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
+                    {
+                        writePolicy = true;
+                    }
+                }
+                catch
+                {
+                    writePolicy = true;
+                }
+            }
+
+            if (writePolicy)
+            {
+                var policyModel = new { Namespace = ns, HEADER = headerBlock };
+                var policyCode = Templates.RenderRawTemplate(transactionPolicyTpl, policyModel);
+                File.WriteAllText(policyPath, policyCode);
+            }
+        }
         // StoredProcedure template no longer used after consolidation
         string? unifiedTemplateRaw = null;
         bool hasUnifiedTemplate = Templates.TryLoad("UnifiedProcedure", out unifiedTemplateRaw);

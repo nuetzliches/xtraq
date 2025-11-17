@@ -41,11 +41,22 @@ public static class ProcedurePipelineExtensions
     }
 }
 
+public interface IProcedureExecutionContext
+{
+    IXtraqDbContext DbContext { get; }
+    object? InputValue { get; }
+    string? Label { get; }
+    IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
+}
+
 public readonly record struct ProcedureExecutionContext<TInput>(
     IXtraqDbContext DbContext,
     TInput Input,
     string? Label,
-    IXtraqTransactionOrchestrator TransactionOrchestrator);
+    IXtraqTransactionOrchestrator TransactionOrchestrator) : IProcedureExecutionContext
+{
+    object? IProcedureExecutionContext.InputValue => Input;
+}
 
 public delegate ValueTask<TResult> ProcedureCallDelegate<TInput, TResult>(
     ProcedureExecutionContext<TInput> context,
@@ -104,6 +115,27 @@ public sealed class ProcedureCallPipeline<TInput>
         }
 
         return new ProcedureCallPipeline<TInput>(_dbContext, _input, _label, current);
+    }
+
+    public ProcedureCallPipeline<TInput> WithTransaction()
+        => WithPolicy(TransactionScopeExecutionPolicyFactory.Default);
+
+    public ProcedureCallPipeline<TInput> WithTransaction(XtraqTransactionOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return WithPolicy(TransactionScopeExecutionPolicyFactory.FromOptions(options));
+    }
+
+    public ProcedureCallPipeline<TInput> WithTransaction(Func<IProcedureExecutionContext, XtraqTransactionOptions?> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        return WithPolicy(TransactionScopeExecutionPolicyFactory.FromSelector(selector));
+    }
+
+    public ProcedureCallPipeline<TInput> WithTransaction(TransactionOptionsSelector<TInput> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        return WithPolicy(TransactionScopeExecutionPolicyFactory.FromSelector(selector));
     }
 
     public ProcedureCallExecution<TInput, TResult> WithExecutor<TResult>(
@@ -277,6 +309,18 @@ public sealed class ProcedureStreamPipeline<TInput, TRow>
             static (context, upstream, _) => new ValueTask<TUpstream>(upstream),
             null);
     }
+
+    public ProcedureStreamPipeline<TInput, TRow> WithTransaction()
+        => new(_inner.WithTransaction());
+
+    public ProcedureStreamPipeline<TInput, TRow> WithTransaction(XtraqTransactionOptions options)
+        => new(_inner.WithTransaction(options));
+
+    public ProcedureStreamPipeline<TInput, TRow> WithTransaction(Func<IProcedureExecutionContext, XtraqTransactionOptions?> selector)
+        => new(_inner.WithTransaction(selector));
+
+    public ProcedureStreamPipeline<TInput, TRow> WithTransaction(TransactionOptionsSelector<TInput> selector)
+        => new(_inner.WithTransaction(selector));
 }
 
 public sealed class ProcedureStreamExecution<TInput, TRow, TUpstream, TCurrent>

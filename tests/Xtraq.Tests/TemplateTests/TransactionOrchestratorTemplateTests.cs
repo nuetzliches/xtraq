@@ -49,6 +49,13 @@ public sealed class TransactionOrchestratorTemplateTests
             .Replace("{{ Namespace }}", "TestNamespace");
         var serviceSourceForHarness = serviceSource.Replace("new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp)", "new FakeDbContext(sp.GetRequiredService<XtraqDbContextOptions>())");
 
+        var policyTemplatePath = Path.Combine(root, "src", "Templates", "Policies", "TransactionExecutionPolicy.spt");
+        Assert.True(File.Exists(policyTemplatePath), $"Transaction policy template not found: {policyTemplatePath}");
+        var policyTemplate = File.ReadAllText(policyTemplatePath);
+        var policySource = policyTemplate
+            .Replace("{{ HEADER }}", "// generated for tests")
+            .Replace("{{ Namespace }}", "TestNamespace");
+
         var harnessSource = """
 // harness
 using System;
@@ -60,6 +67,35 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace TestNamespace;
+
+public interface IProcedureExecutionContext
+{
+    IXtraqDbContext DbContext { get; }
+    object? InputValue { get; }
+    string? Label { get; }
+    IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
+}
+
+public readonly record struct ProcedureExecutionContext<TInput>(
+    IXtraqDbContext DbContext,
+    TInput Input,
+    string? Label,
+    IXtraqTransactionOrchestrator TransactionOrchestrator) : IProcedureExecutionContext
+{
+    object? IProcedureExecutionContext.InputValue => Input;
+}
+
+public delegate ValueTask<TResult> ProcedureCallDelegate<TInput, TResult>(
+    ProcedureExecutionContext<TInput> context,
+    CancellationToken cancellationToken);
+
+public interface IProcedureExecutionPolicy
+{
+    ValueTask<TResult> ExecuteAsync<TInput, TResult>(
+        ProcedureExecutionContext<TInput> context,
+        ProcedureCallDelegate<TInput, TResult> next,
+        CancellationToken cancellationToken);
+}
 
 public interface IXtraqDbContext
 {
@@ -108,6 +144,8 @@ public sealed class FakeDbConnection : DbConnection
     private ConnectionState _state = ConnectionState.Closed;
 
     public bool DisposeCalled { get; private set; }
+    public IReadOnlyList<FakeDbTransaction> Transactions => _transactions;
+    public FakeDbTransaction? LastTransaction => _transactions.Count > 0 ? _transactions[^1] : null;
     public override string ConnectionString { get; set; } = string.Empty;
     public override string Database => "Fake";
     public override string DataSource => "Fake";
@@ -325,6 +363,49 @@ public static class OrchestratorHarness
 
         return (defaultResolved, factoryResolved);
     }
+
+    public static async Task<(bool Committed, bool RolledBack)> RunPolicyIntegrationAsync()
+    {
+        var connection = new FakeDbConnection();
+        var context = new FakeDbContext(connection);
+        var orchestrator = new XtraqTransactionOrchestrator(context);
+        var policy = new TransactionScopeExecutionPolicy();
+        var execContext = new ProcedureExecutionContext<int>(context, 5, "policy-success", orchestrator);
+
+        var result = await policy.ExecuteAsync(execContext, static async ValueTask<int> (ctx, ct) =>
+        {
+            await Task.Delay(1, ct).ConfigureAwait(false);
+            return 123;
+        }, CancellationToken.None).ConfigureAwait(false);
+
+        _ = result;
+        var transaction = connection.LastTransaction!;
+        return (transaction.CommitCalled, transaction.RollbackCalled);
+    }
+
+    public static async Task<(bool Committed, bool RolledBack)> RunPolicyRollbackAsync()
+    {
+        var connection = new FakeDbConnection();
+        var context = new FakeDbContext(connection);
+        var orchestrator = new XtraqTransactionOrchestrator(context);
+        var policy = new TransactionScopeExecutionPolicy();
+        var execContext = new ProcedureExecutionContext<int>(context, 5, "policy-failure", orchestrator);
+
+        try
+        {
+            await policy.ExecuteAsync(execContext, static async ValueTask<int> (ctx, ct) =>
+            {
+                await Task.Delay(1, ct).ConfigureAwait(false);
+                throw new InvalidOperationException("policy failure");
+            }, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        var transaction = connection.LastTransaction!;
+        return (transaction.CommitCalled, transaction.RollbackCalled || transaction.RolledBackSavepoints.Count > 0);
+    }
 }
 """;
 
@@ -334,6 +415,7 @@ public static class OrchestratorHarness
             CSharpSyntaxTree.ParseText(orchestratorSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(optionsSource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(serviceSourceForHarness, new CSharpParseOptions(LanguageVersion.CSharp12)),
+            CSharpSyntaxTree.ParseText(policySource, new CSharpParseOptions(LanguageVersion.CSharp12)),
             CSharpSyntaxTree.ParseText(harnessSource, new CSharpParseOptions(LanguageVersion.CSharp12))
         };
 
@@ -376,6 +458,12 @@ public static class OrchestratorHarness
         var diResult = await InvokeAsync<(bool DefaultResolved, bool FactoryResolved)>(harnessType, "RunServiceRegistrationAsync");
         Assert.True(diResult.DefaultResolved);
         Assert.True(diResult.FactoryResolved);
+
+        var policyResult = await InvokeAsync<(bool Committed, bool RolledBack)>(harnessType, "RunPolicyIntegrationAsync");
+        Assert.Equal((true, false), policyResult);
+
+        var policyRollbackResult = await InvokeAsync<(bool Committed, bool RolledBack)>(harnessType, "RunPolicyRollbackAsync");
+        Assert.Equal((false, true), policyRollbackResult);
     }
 
     private static async Task<T> InvokeAsync<T>(Type harnessType, string method)

@@ -26,9 +26,9 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Transaction API
 
-- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request and uses savepoint-backed nesting to expose explicit `Begin/Commit/RollbackAsync` helpers. _(Implementation progressing: orchestrator template, savepoint behavior, DI coverage, and pipeline accessor resolved; policy coordination remains outstanding.)_
+- [ ] Introduce a DI-scoped transaction orchestrator that keeps a shared connection per request and uses savepoint-backed nesting to expose explicit `Begin/Commit/RollbackAsync` helpers. _(Implementation progressing: orchestrator template, savepoint behavior, DI coverage, and pipeline accessor resolved; next up is aligning option propagation with the execution policy surface.)_
 - [x] Extend generated DbContext options and service registrations so consumers can resolve the orchestrator without breaking existing usage patterns or hand-written partials. _(Options now surface a `TransactionOrchestratorFactory` hook and DI registers `IXtraqTransactionOrchestrator` by default.)_
-- [ ] Expose transaction-aware execution policies so global defaults or per-procedure overrides (e.g., ambient participation, isolation level) can be configured declaratively. _(Design follows orchestrator prototype.)_
+- [x] Expose transaction-aware execution policies so global defaults or per-procedure overrides (e.g., ambient participation, isolation level) can be configured declaratively. _(TransactionScope execution policy template ships with selector overloads, generator emission, and dynamic tests covering commit/rollback paths.)_
 - [x] Ensure the pipeline execution context resolves the orchestrator via dependency injection, enabling policies to coordinate with logging and telemetry components. _(Procedure pipelines now require an accessor-backed `IXtraqDbContext` and surface the orchestrator via `ProcedureExecutionContext`.)_
 - [ ] Align the design with the planned Entity Framework integration by supporting ambient `DbContext` transactions and connection reuse when both stacks operate side by side. _(Joint review with Framework Integrations track.)_
 - [ ] Backfill regression tests covering nested savepoint flows, auto-rollback on dispose, and streaming pipeline compatibility.

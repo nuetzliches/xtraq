@@ -39,18 +39,123 @@ namespace TestNamespace;
 
 public interface IXtraqDbContext { }
 
-public interface IXtraqTransactionOrchestrator { }
+public delegate XtraqTransactionOptions? TransactionOptionsSelector<TInput>(ProcedureExecutionContext<TInput> context);
+
+public sealed class XtraqTransactionOptions { }
+
+public sealed class XtraqTransactionScope : IAsyncDisposable
+{
+    private readonly FakeOrchestrator _owner;
+
+    internal XtraqTransactionScope(FakeOrchestrator owner)
+    {
+        _owner = owner;
+    }
+
+    public ValueTask CommitAsync(CancellationToken cancellationToken = default)
+    {
+        _owner.NotifyCommitted();
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
+    {
+        _owner.NotifyRolledBack();
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DisposeAsync()
+        => ValueTask.CompletedTask;
+}
+
+public interface IXtraqTransactionOrchestrator
+{
+    ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default);
+}
 
 public interface IXtraqTransactionOrchestratorAccessor
 {
     IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
 }
 
-public sealed class FakeOrchestrator : IXtraqTransactionOrchestrator { }
+public sealed class FakeOrchestrator : IXtraqTransactionOrchestrator
+{
+    public int BeginCount { get; private set; }
+    public int CommitCount { get; private set; }
+    public int RollbackCount { get; private set; }
+
+    public ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        BeginCount++;
+        return ValueTask.FromResult(new XtraqTransactionScope(this));
+    }
+
+    internal void NotifyCommitted() => CommitCount++;
+    internal void NotifyRolledBack() => RollbackCount++;
+}
 
 public sealed class FakeContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor
 {
-    public IXtraqTransactionOrchestrator TransactionOrchestrator { get; } = new FakeOrchestrator();
+    private readonly FakeOrchestrator _orchestrator = new();
+
+    public FakeOrchestrator Orchestrator => _orchestrator;
+
+    IXtraqTransactionOrchestrator IXtraqTransactionOrchestratorAccessor.TransactionOrchestrator => _orchestrator;
+}
+
+public sealed class TransactionScopeExecutionPolicy : IProcedureExecutionPolicy
+{
+    public static int BeginCount { get; private set; }
+    public static int CommitCount { get; private set; }
+    public static int RollbackCount { get; private set; }
+
+    public static void Reset()
+    {
+        BeginCount = 0;
+        CommitCount = 0;
+        RollbackCount = 0;
+    }
+
+    public async ValueTask<TResult> ExecuteAsync<TInput, TResult>(
+        ProcedureExecutionContext<TInput> context,
+        ProcedureCallDelegate<TInput, TResult> next,
+        CancellationToken cancellationToken)
+    {
+        BeginCount++;
+        var scope = await context.TransactionOrchestrator.BeginAsync(null, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var result = await next(context, cancellationToken).ConfigureAwait(false);
+            CommitCount++;
+            await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch
+        {
+            RollbackCount++;
+            await scope.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            await scope.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+}
+
+public static class TransactionScopeExecutionPolicyFactory
+{
+    public static TransactionScopeExecutionPolicy Default => new();
+
+    public static TransactionScopeExecutionPolicy FromOptions(XtraqTransactionOptions options)
+        => new();
+
+    public static TransactionScopeExecutionPolicy FromSelector(Func<IProcedureExecutionContext, XtraqTransactionOptions?> selector)
+        => new();
+
+    public static TransactionScopeExecutionPolicy FromSelector<TInput>(TransactionOptionsSelector<TInput> selector)
+        => new();
 }
 
 public sealed class CapturePolicy : IProcedureExecutionPolicy
@@ -71,13 +176,15 @@ public sealed class CapturePolicy : IProcedureExecutionPolicy
 
 public static class BuilderHarness
 {
-    public static async Task<(int Total, string? Label, int PolicyInvocations)> RunCallPipelineAsync()
+    public static async Task<(int Total, string? Label, int PolicyInvocations, int PolicyBegins, int PolicyCommits, int PolicyRollbacks, int OrchestratorBegins, int OrchestratorCommits, int OrchestratorRollbacks)> RunCallPipelineAsync()
     {
+        TransactionScopeExecutionPolicy.Reset();
         var ctx = new FakeContext();
         var policy = new CapturePolicy();
 
         var execution = ctx.ConfigureProcedure(3)
             .WithLabel(""call-pipeline"")
+            .WithTransaction()
             .WithPolicy(policy)
             .WithExecutor(static async (db, value, ct) =>
             {
@@ -98,16 +205,28 @@ public static class BuilderHarness
             })
             .ExecuteAsync();
 
-        return (result + observed + asyncObserved, policy.Label, policy.Invocations);
+        var orchestrator = ctx.Orchestrator;
+        return (
+            result + observed + asyncObserved,
+            policy.Label,
+            policy.Invocations,
+            TransactionScopeExecutionPolicy.BeginCount,
+            TransactionScopeExecutionPolicy.CommitCount,
+            TransactionScopeExecutionPolicy.RollbackCount,
+            orchestrator.BeginCount,
+            orchestrator.CommitCount,
+            orchestrator.RollbackCount);
     }
 
-    public static async Task<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)> RunStreamPipelineAsync()
+    public static async Task<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations, int PolicyBegins, int PolicyCommits, int PolicyRollbacks, int OrchestratorBegins, int OrchestratorCommits, int OrchestratorRollbacks)> RunStreamPipelineAsync()
     {
+        TransactionScopeExecutionPolicy.Reset();
         var ctx = new FakeContext();
         var policy = new CapturePolicy();
 
         var execution = ctx.ConfigureProcedureStream<int, int>(0)
             .WithLabel(""stream-pipeline"")
+            .WithTransaction()
             .WithPolicy(policy)
             .WithExecutor(static async (db, value, onRow, ct) =>
         {
@@ -133,7 +252,20 @@ public static class BuilderHarness
             .CompleteWith((output, _) => new ValueTask<(int RowCount, int Sum, int Output)>((count, sum, output)))
             .ExecuteAsync();
 
-        return (outcome.RowCount, outcome.Sum, outcome.Output, observedOutput, policy.Label, policy.Invocations);
+        var orchestrator = ctx.Orchestrator;
+        return (
+            outcome.RowCount,
+            outcome.Sum,
+            outcome.Output,
+            observedOutput,
+            policy.Label,
+            policy.Invocations,
+            TransactionScopeExecutionPolicy.BeginCount,
+            TransactionScopeExecutionPolicy.CommitCount,
+            TransactionScopeExecutionPolicy.RollbackCount,
+            orchestrator.BeginCount,
+            orchestrator.CommitCount,
+            orchestrator.RollbackCount);
     }
 
     public static async Task<(int BufferCount, int AggregatedCount, int Output)> RunBufferAndAggregateAsync()
@@ -141,6 +273,7 @@ public static class BuilderHarness
         var ctx = new FakeContext();
 
         var execution = ctx.ConfigureProcedureStream<int, int>(0)
+            .WithTransaction()
             .WithExecutor(static async (db, value, onRow, ct) =>
             {
                 await onRow(5, ct);
@@ -189,11 +322,11 @@ public static class BuilderHarness
             return await task;
         }
 
-        var callResult = await InvokeAsync<(int Total, string? Label, int PolicyInvocations)>(harnessType, "RunCallPipelineAsync");
-        Assert.Equal((34, "call-pipeline", 1), callResult);
+        var callResult = await InvokeAsync<(int Total, string? Label, int PolicyInvocations, int PolicyBegins, int PolicyCommits, int PolicyRollbacks, int OrchestratorBegins, int OrchestratorCommits, int OrchestratorRollbacks)>(harnessType, "RunCallPipelineAsync");
+        Assert.Equal((34, "call-pipeline", 1, 1, 1, 0, 1, 1, 0), callResult);
 
-        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations)>(harnessType, "RunStreamPipelineAsync");
-        Assert.Equal((3, 6, 42, 42, "stream-pipeline", 1), streamResult);
+        var streamResult = await InvokeAsync<(int RowCount, int Sum, int Output, int ObservedOutput, string? Label, int PolicyInvocations, int PolicyBegins, int PolicyCommits, int PolicyRollbacks, int OrchestratorBegins, int OrchestratorCommits, int OrchestratorRollbacks)>(harnessType, "RunStreamPipelineAsync");
+        Assert.Equal((3, 6, 42, 42, "stream-pipeline", 1, 1, 1, 0, 1, 1, 0), streamResult);
 
         var aggregateResult = await InvokeAsync<(int BufferCount, int AggregatedCount, int Output)>(harnessType, "RunBufferAndAggregateAsync");
         Assert.Equal((3, 3, 11), aggregateResult);
