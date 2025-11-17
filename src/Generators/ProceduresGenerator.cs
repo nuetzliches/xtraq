@@ -72,6 +72,37 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return (schema, name);
     }
 
+    private static string StripMinimalApiExtensions(string builderCode)
+    {
+        if (string.IsNullOrEmpty(builderCode))
+        {
+            return builderCode;
+        }
+
+        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API";
+        const string endMarker = "#endif";
+
+        var startIndex = builderCode.IndexOf(startMarker, StringComparison.Ordinal);
+        if (startIndex < 0)
+        {
+            return builderCode;
+        }
+
+        var endIndex = builderCode.IndexOf(endMarker, startIndex, StringComparison.Ordinal);
+        if (endIndex < 0)
+        {
+            return builderCode;
+        }
+
+        var removalEnd = endIndex + endMarker.Length;
+        while (removalEnd < builderCode.Length && (builderCode[removalEnd] == '\r' || builderCode[removalEnd] == '\n'))
+        {
+            removalEnd++;
+        }
+
+        return builderCode.Remove(startIndex, removalEnd - startIndex);
+    }
+
     public ProcedureGenerationResult Generate(string ns, string baseOutputDir)
     {
         // Capture full unfiltered list (needed for cross-schema forwarding even if target schema excluded by allow-list)
@@ -218,8 +249,64 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
             if (writeBuilder)
             {
-                var builderModel = new { Namespace = ns, HEADER = headerBlock };
+                var builderProcedures = procs
+                    .Select(proc =>
+                    {
+                        var schemaPart = proc.Schema ?? "dbo";
+                        var operationPart = proc.OperationName ?? proc.ProcedureName ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(operationPart))
+                        {
+                            operationPart = proc.ProcedureName ?? string.Empty;
+                        }
+
+                        var schemaFromOperation = operationPart;
+                        var schemaSeparatorIndex = schemaFromOperation.IndexOf('.');
+                        if (schemaSeparatorIndex >= 0)
+                        {
+                            schemaPart = schemaFromOperation[..schemaSeparatorIndex];
+                            operationPart = schemaSeparatorIndex + 1 < schemaFromOperation.Length
+                                ? schemaFromOperation[(schemaSeparatorIndex + 1)..]
+                                : operationPart;
+                        }
+
+                        var schemaPascal = ToPascalCase(schemaPart);
+                        var procedureTypeName = NamePolicy.Procedure(operationPart);
+                        var inputTypeName = NamePolicy.Input(operationPart);
+                        var resultTypeName = NamePolicy.Result(operationPart);
+                        var methodSuffix = procedureTypeName.Length > 0 && procedureTypeName[0] == '@'
+                            ? procedureTypeName[1..]
+                            : procedureTypeName;
+                        if (string.IsNullOrEmpty(methodSuffix))
+                        {
+                            methodSuffix = "Procedure";
+                        }
+
+                        var methodPrefix = string.IsNullOrWhiteSpace(schemaPascal) ? string.Empty : schemaPascal;
+                        var methodName = "With" + methodPrefix + methodSuffix + "Procedure";
+
+                        var schemaQualifiedNamespace = string.IsNullOrWhiteSpace(schemaPascal)
+                            ? ns
+                            : string.Concat(ns, ".", schemaPascal);
+
+                        return new
+                        {
+                            DisplayName = ComposeSchemaObjectRef(proc.Schema, proc.ProcedureName) ?? proc.OperationName ?? operationPart,
+                            MethodName = methodName,
+                            InputTypeName = string.Concat("global::", schemaQualifiedNamespace, ".", inputTypeName),
+                            ResultTypeName = string.Concat("global::", schemaQualifiedNamespace, ".", resultTypeName),
+                            ExtensionTypeName = string.Concat("global::", schemaQualifiedNamespace, ".", procedureTypeName, "Extensions"),
+                            ProcedureMethodName = procedureTypeName + "Async"
+                        };
+                    })
+                    .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures };
                 var builderCode = Templates.RenderRawTemplate(builderTpl, builderModel);
+                if (!ShouldEmitMinimalApiExtensions())
+                {
+                    builderCode = StripMinimalApiExtensions(builderCode);
+                }
                 File.WriteAllText(builderPath, builderCode);
             }
         }

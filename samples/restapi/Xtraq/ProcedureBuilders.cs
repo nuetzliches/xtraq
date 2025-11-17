@@ -3,6 +3,11 @@
 // Changes may be overwritten. For customization extend generated partials.
 
 #nullable enable
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 namespace Xtraq.Samples.RestApi.Xtraq;
 
 public static class ProcedurePipelineExtensions
@@ -43,6 +48,90 @@ public static class ProcedurePipelineExtensions
         return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input).WithExecutor(streamExecutor);
     }
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+
+public static class ProcedureRouteHandlerBuilderExtensions
+{
+    public static RouteHandlerBuilder WithProcedure<TInput, TResult>(
+        this RouteHandlerBuilder builder,
+        Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> configure,
+        Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.AddEndpointFilter(new ProcedurePipelineEndpointFilter<TInput, TResult>(configure, responseWriter));
+        return builder;
+    }
+
+    private sealed class ProcedurePipelineEndpointFilter<TInput, TResult> : IEndpointFilter
+    {
+        private readonly Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> _configure;
+        private readonly Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>> _responseWriter;
+
+        public ProcedurePipelineEndpointFilter(
+            Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> configure,
+            Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter)
+        {
+            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            _responseWriter = responseWriter ?? DefaultWriter;
+        }
+
+        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var httpContext = context.HttpContext;
+            var dbContext = httpContext.RequestServices.GetRequiredService<IXtraqDbContext>();
+            var input = ResolveInput(context);
+            var pipeline = ProcedureCallPipeline<TInput>.Create(dbContext, input);
+            var execution = _configure(pipeline) ?? throw new InvalidOperationException("Procedure pipeline configuration returned null execution.");
+
+            var cancellationToken = ResolveCancellationToken(context, httpContext.RequestAborted);
+            var result = await execution.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            return await _responseWriter(result, httpContext, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static TInput ResolveInput(EndpointFilterInvocationContext context)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is TInput typed)
+                {
+                    return typed;
+                }
+            }
+
+            throw new InvalidOperationException($"Route handler must expose a parameter of type '{typeof(TInput).FullName}'.");
+        }
+
+        private static CancellationToken ResolveCancellationToken(EndpointFilterInvocationContext context, CancellationToken fallback)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is CancellationToken token)
+                {
+                    return token;
+                }
+            }
+
+            return fallback;
+        }
+
+        private static ValueTask<IResult> DefaultWriter(TResult result, HttpContext httpContext, CancellationToken cancellationToken)
+        {
+            if (result is IResult direct)
+            {
+                return ValueTask.FromResult(direct);
+            }
+
+            return ValueTask.FromResult<IResult>(Results.Ok(result));
+        }
+    }
+}
+
+#endif
 
 public interface IProcedureExecutionContext
 {

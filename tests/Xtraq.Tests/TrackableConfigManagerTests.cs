@@ -42,7 +42,8 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_NAMESPACE"] = "Acme.Product",
                 ["XTRAQ_OUTPUT_DIR"] = "Artifacts",
                 ["XTRAQ_BUILD_SCHEMAS"] = "core, identity; audit",
-                ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0"
+                ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0",
+                ["XTRAQ_MINIMAL_API"] = "1"
             };
 
             Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
@@ -61,6 +62,8 @@ public sealed class TrackableConfigManagerTests
                 .Select(static item => item.GetString())
                 .ToArray();
             Xunit.Assert.Equal(new[] { "core", "identity", "audit" }, schemas);
+            Xunit.Assert.True(root.TryGetProperty("MinimalApi", out var minimalApiElement));
+            Xunit.Assert.True(minimalApiElement.GetBoolean());
         }
         finally
         {
@@ -89,6 +92,26 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.True(root.TryGetProperty("ProjectPath", out var projectPathElement));
             Xunit.Assert.Equal("..\\target", projectPathElement.GetString());
             Xunit.Assert.False(root.TryGetProperty("Namespace", out _));
+        }
+        finally
+        {
+            Directory.Delete(directory.FullName, true);
+        }
+    }
+
+    [Xunit.Fact]
+    public void ReadDefaults_WhenMinimalApiSet_ExposesEnvironmentFlag()
+    {
+        var directory = Directory.CreateTempSubdirectory("xtraq-config-defaults-");
+        try
+        {
+            var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
+            File.WriteAllText(configPath, "{\n  \"MinimalApi\": true\n}\n");
+
+            var defaults = Xtraq.Configuration.TrackableConfigManager.ReadDefaults(directory.FullName);
+
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_MINIMAL_API", out var flag));
+            Xunit.Assert.Equal("1", flag);
         }
         finally
         {

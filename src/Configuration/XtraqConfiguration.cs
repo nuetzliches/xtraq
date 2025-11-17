@@ -38,6 +38,10 @@ public sealed class XtraqConfiguration
     /// Gets a value indicating whether the generator should emit <c>[JsonIncludeNullValues]</c> attributes.
     /// </summary>
     public bool EmitJsonIncludeNullValuesAttribute { get; init; }
+    /// <summary>
+    /// Gets a value indicating whether Minimal API helpers should be enabled for generated projects.
+    /// </summary>
+    public bool EnableMinimalApiExtensions { get; init; }
 
     /// <summary>
     /// Loads the environment configuration by merging CLI overrides, environment variables, and .env settings.
@@ -135,6 +139,7 @@ public sealed class XtraqConfiguration
 
         var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR")) ?? "Xtraq";
         var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_JSON_INCLUDE_NULL_VALUES"));
+        var enableMinimalApi = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_MINIMAL_API"));
 
         var cfg = new XtraqConfiguration
         {
@@ -145,7 +150,8 @@ public sealed class XtraqConfiguration
             ConfigPath = File.Exists(effectiveConfigPath) ? effectiveConfigPath : null,
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
-            EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues
+            EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues,
+            EnableMinimalApiExtensions = enableMinimalApi
         };
 
         if (string.IsNullOrEmpty(envFilePath) || !File.Exists(envFilePath))

@@ -23,29 +23,34 @@
         {
           "Name": "Status",
           "TypeRef": "sys.nvarchar",
-          "MaxLength": 50
+          "MaxLength": 50,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "Orders",
           "TypeRef": "sys.bigint",
-          "IsNullable": true
+          "IsNullable": true,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "TotalAmount",
           "TypeRef": "sys.decimal",
           "IsNullable": true,
-          "MaxLength": 17
+          "MaxLength": 17,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "AverageAmount",
           "TypeRef": "sys.decimal",
           "IsNullable": true,
-          "MaxLength": 17
+          "MaxLength": 17,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "LastPlacedAtUtc",
           "TypeRef": "sys.datetime2",
-          "IsNullable": true
+          "IsNullable": true,
+          "FunctionRef": "sample.fnOrderTotalsByStatus"
         }
       ]
     }

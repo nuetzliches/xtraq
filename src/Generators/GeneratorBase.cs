@@ -28,4 +28,14 @@ internal abstract class GeneratorBase
 
         return EnvironmentHelper.IsTrue("XTRAQ_JSON_INCLUDE_NULL_VALUES");
     }
+
+    protected bool ShouldEmitMinimalApiExtensions()
+    {
+        if (Configuration?.EnableMinimalApiExtensions == true)
+        {
+            return true;
+        }
+
+        return EnvironmentHelper.IsTrue("XTRAQ_MINIMAL_API");
+    }
 }

@@ -8,6 +8,10 @@ description: Tracking upcoming work and temporary deferrals.
 - [x] Re-enable CI execution for .NET 10 once integration test runtime stabilises. _(Matrix now covers net8.0 and net10.0 using the latest preview SDK while we wait for GA.)_
 - [x] Extend the publish pipeline so the global tool ships a net10.0 asset once the hosted runners expose a compatible SDK or we provide it explicitly. _(Workflow installs the preview SDK and packs multi-target assets.)_
 
+## Default Target Framework
+
+- [ ] Update `src\Configuration\Constants.cs` and `src\Configuration\TargetFrameworkEnum.cs` to set .NET 10.0 as the default target framework for new projects and remove legacy frameworks from the enum.
+
 ## ResultSet Naming
 
 Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and the streaming helper surface (`ProcedureExecutor.StreamResultSetAsync` plus generated `StreamResult…Async` wrappers). The checklist below captures what landed during the naming work and helps track any follow-up tasks.
@@ -43,9 +47,9 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Minimal API Integration
 
-- [ ] Ship `RouteHandlerBuilder` extensions (for example `.WithProcedurePipeline(...)`) that bind the fluent pipeline to standard `MapGet`/`MapPost` delegates without replacing the Minimal API entry points.
-- [ ] Provide streaming helpers that expose `IAsyncEnumerable` and NDJSON writer adapters while returning `RouteHandlerBuilder`, reusing the existing fluent streaming semantics.
-- [ ] Deliver optional scaffolding (template, analyzer, or source generator) that emits the `.WithProcedure...` calls beside generated procedures to standardise adoption.
+- [x] Ship `RouteHandlerBuilder` extensions (for example `.WithProcedure(...)`) that bind the fluent pipeline to standard `MapGet`/`MapPost` delegates without replacing the Minimal API entry points. _(Emitted via `ProcedureRouteHandlerBuilderExtensions` behind `#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API`; enable the symbol in consuming apps to opt in.)_
+- [x] Provide streaming helpers that expose `IAsyncEnumerable` and NDJSON writer adapters while returning `RouteHandlerBuilder`, reusing the existing fluent streaming semantics. _(Implemented via `WithProcedureStream` with a default NDJSON response filter and optional custom writers.)_
+- [x] Deliver optional scaffolding (template, analyzer, or source generator) that emits the `.WithProcedure...` calls beside generated procedures to standardise adoption. _(Implemented via `ProcedureRouteHandlerScaffolding`)_
 
 ## Template Conventions
 
@@ -94,4 +98,4 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 
 ## Next Steps
 
-- Prioritise Minimal API integration next (`RouteHandlerBuilder` extensions, streaming helpers, scaffolding) now that schema detection resilience work is complete.
+- Evaluate analyzers or source generators that flag Minimal API routes missing generated scaffolding so teams can opt-in gradually without regressions.

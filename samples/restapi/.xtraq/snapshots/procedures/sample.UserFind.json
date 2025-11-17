@@ -53,12 +53,14 @@
         {
           "Name": "PreferredContactEmail",
           "TypeRef": "sys.nvarchar",
-          "MaxLength": 320
+          "MaxLength": 320,
+          "FunctionRef": "sample.fnUserPreferredContact"
         },
         {
           "Name": "PreferredContactDisplayName",
           "TypeRef": "sys.nvarchar",
-          "MaxLength": 200
+          "MaxLength": 200,
+          "FunctionRef": "sample.fnUserPreferredContact"
         }
       ]
     }

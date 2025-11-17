@@ -1,5 +1,6 @@
 namespace Xtraq.Configuration;
 
+// TODO remove all but net8.0 and net10.0
 internal enum TargetFrameworkEnum
 {
     NetCoreApp22,

@@ -29,13 +29,13 @@ public readonly record struct SyncUserContactsInput(
 /// </summary>
 public readonly record struct SyncUserContactsResultSet1Result(
     string MergeAction,
-    string ContactId,
-    string UserId,
+    int ContactId,
+    int UserId,
     string Email,
     string DisplayName,
-    string Preferred,
-    string LastInteractionUtc,
-    string UpdatedAtUtc
+    bool Preferred,
+    DateTime? LastInteractionUtc,
+    DateTime? UpdatedAtUtc
 );
 
 public sealed class SyncUserContactsResult
@@ -69,7 +69,7 @@ internal static partial class SyncUserContactsPlan
 		{
             new("ResultSet1", async (r, ct) =>
 			{
-                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "MergeAction"); int o1=ReaderUtil.TryGetOrdinal(r, "ContactId"); int o2=ReaderUtil.TryGetOrdinal(r, "UserId"); int o3=ReaderUtil.TryGetOrdinal(r, "Email"); int o4=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o5=ReaderUtil.TryGetOrdinal(r, "Preferred"); int o6=ReaderUtil.TryGetOrdinal(r, "LastInteractionUtc"); int o7=ReaderUtil.TryGetOrdinal(r, "UpdatedAtUtc"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new SyncUserContactsResultSet1Result(o0 < 0 ? string.Empty : (r.IsDBNull(o0) ? string.Empty : r.GetString(o0)), o1 < 0 ? string.Empty : (r.IsDBNull(o1) ? string.Empty : r.GetString(o1)), o2 < 0 ? string.Empty : (r.IsDBNull(o2) ? string.Empty : r.GetString(o2)), o3 < 0 ? string.Empty : (r.IsDBNull(o3) ? string.Empty : r.GetString(o3)), o4 < 0 ? string.Empty : (r.IsDBNull(o4) ? string.Empty : r.GetString(o4)), o5 < 0 ? string.Empty : (r.IsDBNull(o5) ? string.Empty : r.GetString(o5)), o6 < 0 ? string.Empty : (r.IsDBNull(o6) ? string.Empty : r.GetString(o6)), o7 < 0 ? string.Empty : (r.IsDBNull(o7) ? string.Empty : r.GetString(o7)))); } return list;
+                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "MergeAction"); int o1=ReaderUtil.TryGetOrdinal(r, "ContactId"); int o2=ReaderUtil.TryGetOrdinal(r, "UserId"); int o3=ReaderUtil.TryGetOrdinal(r, "Email"); int o4=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o5=ReaderUtil.TryGetOrdinal(r, "Preferred"); int o6=ReaderUtil.TryGetOrdinal(r, "LastInteractionUtc"); int o7=ReaderUtil.TryGetOrdinal(r, "UpdatedAtUtc"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new SyncUserContactsResultSet1Result(o0 < 0 ? string.Empty : (r.IsDBNull(o0) ? string.Empty : r.GetString(o0)), o1 < 0 ? default(int) : r.GetInt32(o1), o2 < 0 ? default(int) : r.GetInt32(o2), o3 < 0 ? string.Empty : (r.IsDBNull(o3) ? string.Empty : r.GetString(o3)), o4 < 0 ? string.Empty : (r.IsDBNull(o4) ? string.Empty : r.GetString(o4)), o5 < 0 ? default(bool) : r.GetBoolean(o5), o6 < 0 ? null : (r.IsDBNull(o6) ? null : (DateTime?)r.GetDateTime(o6)), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (DateTime?)r.GetDateTime(o7)))); } return list;
 			}),
 
         };
@@ -148,7 +148,7 @@ public static class SyncUserContactsProcedure
             int o7=ReaderUtil.TryGetOrdinal(reader, "UpdatedAtUtc");
 			while (await reader.ReadAsync(ct).ConfigureAwait(false))
 			{
-				var row = new SyncUserContactsResultSet1Result(o0 < 0 ? string.Empty : (reader.IsDBNull(o0) ? string.Empty : reader.GetString(o0)), o1 < 0 ? string.Empty : (reader.IsDBNull(o1) ? string.Empty : reader.GetString(o1)), o2 < 0 ? string.Empty : (reader.IsDBNull(o2) ? string.Empty : reader.GetString(o2)), o3 < 0 ? string.Empty : (reader.IsDBNull(o3) ? string.Empty : reader.GetString(o3)), o4 < 0 ? string.Empty : (reader.IsDBNull(o4) ? string.Empty : reader.GetString(o4)), o5 < 0 ? string.Empty : (reader.IsDBNull(o5) ? string.Empty : reader.GetString(o5)), o6 < 0 ? string.Empty : (reader.IsDBNull(o6) ? string.Empty : reader.GetString(o6)), o7 < 0 ? string.Empty : (reader.IsDBNull(o7) ? string.Empty : reader.GetString(o7)));
+				var row = new SyncUserContactsResultSet1Result(o0 < 0 ? string.Empty : (reader.IsDBNull(o0) ? string.Empty : reader.GetString(o0)), o1 < 0 ? default(int) : reader.GetInt32(o1), o2 < 0 ? default(int) : reader.GetInt32(o2), o3 < 0 ? string.Empty : (reader.IsDBNull(o3) ? string.Empty : reader.GetString(o3)), o4 < 0 ? string.Empty : (reader.IsDBNull(o4) ? string.Empty : reader.GetString(o4)), o5 < 0 ? default(bool) : reader.GetBoolean(o5), o6 < 0 ? null : (reader.IsDBNull(o6) ? null : (DateTime?)reader.GetDateTime(o6)), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (DateTime?)reader.GetDateTime(o7)));
 				await onRowAsync(row, ct).ConfigureAwait(false);
 			}
 		}

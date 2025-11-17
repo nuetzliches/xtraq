@@ -1,5 +1,10 @@
 {{ HEADER }}
 #nullable enable
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 namespace {{ Namespace }};
 
 public static class ProcedurePipelineExtensions
@@ -40,6 +45,259 @@ public static class ProcedurePipelineExtensions
         return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input).WithExecutor(streamExecutor);
     }
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+
+public static class ProcedureRouteHandlerBuilderExtensions
+{
+    public static RouteHandlerBuilder WithProcedure<TInput, TResult>(
+        this RouteHandlerBuilder builder,
+        Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> configure,
+        Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.AddEndpointFilter(new ProcedurePipelineEndpointFilter<TInput, TResult>(configure, responseWriter));
+        return builder;
+    }
+
+    public static RouteHandlerBuilder WithProcedureStream<TInput, TRow, TUpstream, TResult>(
+        this RouteHandlerBuilder builder,
+        Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> configure,
+        Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.AddEndpointFilter(new ProcedureStreamEndpointFilter<TInput, TRow, TUpstream, TResult>(configure, responseWriter));
+        return builder;
+    }
+
+    private sealed class ProcedurePipelineEndpointFilter<TInput, TResult> : IEndpointFilter
+    {
+        private readonly Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> _configure;
+        private readonly Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>> _responseWriter;
+
+        public ProcedurePipelineEndpointFilter(
+            Func<ProcedureCallPipeline<TInput>, ProcedureCallExecution<TInput, TResult>> configure,
+            Func<TResult, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter)
+        {
+            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            _responseWriter = responseWriter ?? DefaultWriter;
+        }
+
+        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var httpContext = context.HttpContext;
+            var dbContext = httpContext.RequestServices.GetRequiredService<IXtraqDbContext>();
+            var input = ResolveInput(context);
+            var pipeline = ProcedureCallPipeline<TInput>.Create(dbContext, input);
+            var execution = _configure(pipeline) ?? throw new InvalidOperationException("Procedure pipeline configuration returned null execution.");
+
+            var cancellationToken = ResolveCancellationToken(context, httpContext.RequestAborted);
+            var result = await execution.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            return await _responseWriter(result, httpContext, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static TInput ResolveInput(EndpointFilterInvocationContext context)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is TInput typed)
+                {
+                    return typed;
+                }
+            }
+
+            throw new InvalidOperationException($"Route handler must expose a parameter of type '{typeof(TInput).FullName}'.");
+        }
+
+        private static CancellationToken ResolveCancellationToken(EndpointFilterInvocationContext context, CancellationToken fallback)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is CancellationToken token)
+                {
+                    return token;
+                }
+            }
+
+            return fallback;
+        }
+
+        private static ValueTask<IResult> DefaultWriter(TResult result, HttpContext httpContext, CancellationToken cancellationToken)
+        {
+            if (result is IResult direct)
+            {
+                return ValueTask.FromResult(direct);
+            }
+
+            return ValueTask.FromResult<IResult>(Results.Ok(result));
+        }
+    }
+
+    private sealed class ProcedureStreamEndpointFilter<TInput, TRow, TUpstream, TResult> : IEndpointFilter
+    {
+        private static readonly JsonSerializerOptions NdjsonSerializerOptions = new(JsonSerializerDefaults.Web);
+        private readonly Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> _configure;
+        private readonly Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>> _responseWriter;
+
+        public ProcedureStreamEndpointFilter(
+            Func<ProcedureStreamPipeline<TInput, TRow>, ProcedureStreamExecution<TInput, TRow, TUpstream, TResult>> configure,
+            Func<IAsyncEnumerable<TRow>, Task<TResult>, HttpContext, CancellationToken, ValueTask<IResult>>? responseWriter)
+        {
+            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            _responseWriter = responseWriter ?? DefaultWriter;
+        }
+
+        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var httpContext = context.HttpContext;
+            var dbContext = httpContext.RequestServices.GetRequiredService<IXtraqDbContext>();
+            var input = ResolveInput(context);
+            var pipeline = ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input);
+            var execution = _configure(pipeline) ?? throw new InvalidOperationException("Procedure stream pipeline configuration returned null execution.");
+
+            var cancellationToken = ResolveCancellationToken(context, httpContext.RequestAborted);
+            var channel = System.Threading.Channels.Channel.CreateBounded<TRow>(new System.Threading.Channels.BoundedChannelOptions(64)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.Wait,
+                AllowSynchronousContinuations = false
+            });
+
+            var streamingExecution = execution.ForEach((row, token) => WriteRowAsync(channel.Writer, row, token));
+            var completionTask = ExecutePipelineAsync(streamingExecution, channel.Writer, cancellationToken);
+
+            var rows = ReadChannel(channel.Reader, cancellationToken);
+            var response = await _responseWriter(rows, completionTask, httpContext, cancellationToken).ConfigureAwait(false);
+
+            if (!completionTask.IsCompleted)
+            {
+                await completionTask.ConfigureAwait(false);
+            }
+
+            return response;
+        }
+
+        private static TInput ResolveInput(EndpointFilterInvocationContext context)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is TInput typed)
+                {
+                    return typed;
+                }
+            }
+
+            throw new InvalidOperationException($"Route handler must expose a parameter of type '{typeof(TInput).FullName}'.");
+        }
+
+        private static CancellationToken ResolveCancellationToken(EndpointFilterInvocationContext context, CancellationToken fallback)
+        {
+            for (var index = 0; index < context.Arguments.Count; index++)
+            {
+                if (context.Arguments[index] is CancellationToken token)
+                {
+                    return token;
+                }
+            }
+
+            return fallback;
+        }
+
+        private static async Task<TResult> ExecutePipelineAsync(
+            ProcedureStreamExecution<TInput, TRow, TUpstream, TResult> execution,
+            System.Threading.Channels.ChannelWriter<TRow> writer,
+            CancellationToken cancellationToken)
+        {
+            Exception? failure = null;
+            try
+            {
+                return await execution.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+                throw;
+            }
+            finally
+            {
+                writer.TryComplete(failure);
+            }
+        }
+
+        private static ValueTask WriteRowAsync(System.Threading.Channels.ChannelWriter<TRow> writer, TRow row, CancellationToken cancellationToken)
+        {
+            if (writer.TryWrite(row))
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            return writer.WriteAsync(row, cancellationToken);
+        }
+
+        private static async IAsyncEnumerable<TRow> ReadChannel(
+            System.Threading.Channels.ChannelReader<TRow> reader,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        private static async ValueTask<IResult> DefaultWriter(
+            IAsyncEnumerable<TRow> rows,
+            Task<TResult> completionTask,
+            HttpContext httpContext,
+            CancellationToken cancellationToken)
+        {
+            var response = httpContext.Response;
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType ??= "application/x-ndjson";
+
+            await foreach (var row in rows.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                var json = JsonSerializer.Serialize(row, NdjsonSerializerOptions);
+                await response.WriteAsync(json, cancellationToken).ConfigureAwait(false);
+                await response.WriteAsync("\n", cancellationToken).ConfigureAwait(false);
+                await response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await completionTask.ConfigureAwait(false);
+            return Results.Empty;
+        }
+    }
+}
+
+public static class ProcedureRouteHandlerScaffolding
+{
+{{#each Procedures as procedure}}
+    /// <summary>Attaches the Minimal API pipeline for '{{ procedure.DisplayName }}'.</summary>
+    public static RouteHandlerBuilder {{ procedure.MethodName }}(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<{{ procedure.InputTypeName }}, {{ procedure.ResultTypeName }}>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input, cancellationToken) => new ValueTask<{{ procedure.ResultTypeName }}>(
+                    {{ procedure.ExtensionTypeName }}.{{ procedure.ProcedureMethodName }}(dbContext, input, cancellationToken))));
+    }
+
+{{/each}}
+}
+
+#endif
 
 public interface IProcedureExecutionContext
 {
