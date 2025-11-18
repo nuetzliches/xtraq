@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using Microsoft.Extensions.Configuration;
@@ -9,8 +9,8 @@ using Xtraq.Extensions;
 using Xtraq.Infrastructure;
 using Xtraq.Runtime;
 using Xtraq.Services;
-using Xtraq.Utils;
 using Xtraq.Telemetry;
+using Xtraq.Utils;
 
 namespace Xtraq;
 

@@ -47,7 +47,7 @@ public sealed class EnhancedSchemaMetadataProviderTests
 
     private static async System.Threading.Tasks.Task CreateSnapshotIndexAsync(string workspace)
     {
-    var schemaPath = System.IO.Path.Combine(workspace, ".xtraq", "snapshots");
+        var schemaPath = System.IO.Path.Combine(workspace, ".xtraq", "snapshots");
         System.IO.Directory.CreateDirectory(schemaPath);
 
         var json = """

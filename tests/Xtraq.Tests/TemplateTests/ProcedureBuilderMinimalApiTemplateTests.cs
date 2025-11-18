@@ -1,8 +1,8 @@
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Xunit;
 using Xtraq.Engine;
+using Xunit;
 
 namespace Xtraq.Tests.TemplateTests;
 

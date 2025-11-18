@@ -64,7 +64,7 @@ public sealed class ProcedureMetadataEnricherTests
 
         var enricher = new Xtraq.SnapshotBuilder.Metadata.ProcedureMetadataEnricher(console, functionProvider, schemaProvider);
         var descriptor = new Xtraq.SnapshotBuilder.Models.ProcedureDescriptor { Schema = "identity", Name = "RecordAsJson" };
-    var request = new Xtraq.SnapshotBuilder.Analyzers.ProcedureMetadataEnrichmentRequest(descriptor, procedure, SnapshotFile: null);
+        var request = new Xtraq.SnapshotBuilder.Analyzers.ProcedureMetadataEnrichmentRequest(descriptor, procedure, SnapshotFile: null);
 
         await enricher.EnrichAsync(request, System.Threading.CancellationToken.None);
 
