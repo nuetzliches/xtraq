@@ -89,7 +89,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [ ] Step 1: Replace `UserTypeSchema`/`UserTypeName` with a single `UserTypeRef`, back the resolver with three-part identifier support, and add a dedicated `Alias` field on result columns while keeping `SqlTypeName` populated with the normalized system type.
   - [x] Guard snapshot emission so built-in system types (for example `sys.char`) are never persisted as `UserTypeRef` entries.
   - [ ] Evaluate whether snapshot consumers need the raw source column name retained alongside the exposed alias (`Name`) and design a non-breaking way to surface both identifiers.
-- [ ] Step 2: Fix the table-type collector so shared UDTTs (for example `shared.AuditLogEntryTableType`) are still captured when referenced, ensuring snapshot diffs remain stable after the metadata change.
+  - [x] Preserve nullable metadata for result columns backed by user-defined scalar types so `IsNullable` stays consistent with table definitions.
 - [x] Step 2: Fix the table-type collector so shared UDTTs (for example `shared.AuditLogEntryTableType`) are still captured when referenced, ensuring snapshot diffs remain stable after the metadata change.
 
 ## Cache Invalidation Reliability

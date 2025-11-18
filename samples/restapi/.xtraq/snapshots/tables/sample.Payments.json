@@ -39,7 +39,8 @@
     },
     {
       "Name": "Properties",
-      "TypeRef": "sample.JsonDocument"
+      "TypeRef": "sample.JsonDocument",
+      "IsNullable": true
     },
     {
       "Name": "MetadataChecksum",

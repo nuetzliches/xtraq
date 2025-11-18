@@ -321,12 +321,6 @@ internal static class SnapshotWriterUtilities
         {
             return true;
         }
-
-        if (!string.Equals(schema, "sys", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
         return true;
     }
 

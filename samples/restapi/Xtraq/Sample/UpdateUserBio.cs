@@ -22,7 +22,7 @@ using System.Threading.Tasks;
 /// </remarks>
 public readonly record struct UpdateUserBioInput(
     int? UserId,
-    string Bio
+    string? Bio
 );
 
 /// <summary>
@@ -60,7 +60,7 @@ internal static partial class UpdateUserBioPlan
 		var parameters = new ProcedureParameter[]
 		{
             new("@UserId", System.Data.DbType.Int32, null, false, true),
-            new("@Bio", System.Data.DbType.String, 4000, false, false),
+            new("@Bio", System.Data.DbType.String, 4000, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]

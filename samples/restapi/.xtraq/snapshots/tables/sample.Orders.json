@@ -51,7 +51,8 @@
     },
     {
       "Name": "Metadata",
-      "TypeRef": "sample.JsonDocument"
+      "TypeRef": "sample.JsonDocument",
+      "IsNullable": true
     },
     {
       "Name": "HasOutstandingBalance",
