@@ -15,6 +15,7 @@
       "Columns": [
         {
           "Name": "MergeAction",
+          "Alias": "MergeAction",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 10
         },

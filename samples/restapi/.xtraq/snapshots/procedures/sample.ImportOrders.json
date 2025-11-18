@@ -15,6 +15,7 @@
       "Columns": [
         {
           "Name": "ImportedOrders",
+          "Alias": "ImportedOrders",
           "TypeRef": "sys.int"
         }
       ]

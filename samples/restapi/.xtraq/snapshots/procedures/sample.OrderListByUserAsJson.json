@@ -48,6 +48,7 @@
         },
         {
           "Name": "Payments",
+          "Alias": "Payments",
           "ReturnsJson": true,
           "ReturnsJsonArray": true,
           "IsNullable": true,

@@ -13,6 +13,7 @@
       "Columns": [
         {
           "Name": "OrdersJson",
+          "Alias": "OrdersJson",
           "TypeRef": "sys.nvarchar"
         }
       ]

@@ -6007,23 +6007,64 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 candidates.Add(projectRootEnv);
             }
 
-            return candidates
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Select(path =>
+            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var candidate in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
                 {
-                    try
+                    continue;
+                }
+
+                string fullPath;
+                try
+                {
+                    fullPath = Path.GetFullPath(candidate);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!Directory.Exists(fullPath))
+                {
+                    continue;
+                }
+
+                if (TryAddSnapshotRoot(fullPath, roots))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (var snapshotDir in Directory.EnumerateDirectories(fullPath, ".xtraq", SearchOption.AllDirectories))
                     {
-                        return Path.GetFullPath(path!);
+                        var parent = Path.GetDirectoryName(snapshotDir);
+                        if (!string.IsNullOrWhiteSpace(parent))
+                        {
+                            TryAddSnapshotRoot(parent, roots);
+                        }
                     }
-                    catch
-                    {
-                        return null;
-                    }
-                })
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(path => Directory.Exists(Path.Combine(path!, ".xtraq")))!
-                .Select(path => path!);
+                }
+                catch
+                {
+                    // Ignore traversal failures for individual candidates.
+                }
+            }
+
+            return roots;
+
+            static bool TryAddSnapshotRoot(string root, ISet<string> collector)
+            {
+                if (!Directory.Exists(Path.Combine(root, ".xtraq")))
+                {
+                    return false;
+                }
+
+                collector.Add(root);
+                return true;
+            }
         }
 
         private static string BuildTableTypeKey(string? schema, string? name)

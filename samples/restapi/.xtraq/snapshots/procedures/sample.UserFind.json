@@ -52,12 +52,14 @@
         },
         {
           "Name": "PreferredContactEmail",
+          "Alias": "PreferredContactEmail",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 320,
           "FunctionRef": "sample.fnUserPreferredContact"
         },
         {
           "Name": "PreferredContactDisplayName",
+          "Alias": "PreferredContactDisplayName",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 200,
           "FunctionRef": "sample.fnUserPreferredContact"
