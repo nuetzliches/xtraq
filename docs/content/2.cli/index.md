@@ -12,12 +12,23 @@ description: Overview of xtraq command-line interface and global options. The xt
 | `--debug`                           | Use the debug environment wiring for additional diagnostics.                                          |
 | `--no-cache`                        | Skip cached metadata (forces a full snapshot refresh).                                                |
 | `--procedure <schema.proc>`         | Limit snapshot/build operations to matching stored procedures (comma separated, wildcards supported). |
-| `--telemetry`                       | Persist a JSON telemetry report for the executed command under `.xtraq/telemetry`.                    |
+| `--telemetry`                       | Persist a detailed database telemetry report for the executed command under `.xtraq/telemetry`.       |
 | `--json-include-null-values`        | Emit `[JsonIncludeNullValues]` attributes and keep null JSON fields during serialization.             |
 | `--entity-framework`                | Opt in to Entity Framework Core integration helpers (sets `XTRAQ_ENTITY_FRAMEWORK` for the run).      |
 | `--ci`                              | Switch console output to CI-friendly mode (plain progress, no ANSI art).                              |
 
 > `--debug-alias` exists for internal debugging and is intentionally undocumented for the first public release.
+
+## Telemetry
+
+Xtraq now mirrors the .NET CLI telemetry model:
+
+- Every command writes an anonymised usage event to `.xtraq/telemetry/cli-usage.jsonl` (plus consent + machine markers) unless telemetry is explicitly disabled.
+- Set one of `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `XTRAQ_CLI_TELEMETRY_OPTOUT=1`, or `XTRAQ_TELEMETRY_OPTOUT=1`, or run in CI mode, to skip event collection entirely.
+- A first-run disclosure banner explains the data flow and is recorded in `.xtraq/telemetry/cli-telemetry-consent.json`. The full rollout plan lives in [CLI Telemetry Alignment](/meta/cli-telemetry-alignment).
+- The `--telemetry` switch adds the high-fidelity database report used for troubleshooting query plans in addition to the default anonymised CLI event.
+
+CLI telemetry currently stays local; we will document any remote publishing before enabling it.
 
 ## Core Commands
 

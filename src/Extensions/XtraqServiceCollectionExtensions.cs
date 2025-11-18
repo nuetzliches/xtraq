@@ -73,5 +73,6 @@ public static class XtraqServiceCollectionExtensions
 
         // Telemetry
         services.AddSingleton<IDatabaseTelemetryCollector, DatabaseTelemetryCollector>();
+        services.AddSingleton<ICliTelemetryService, CliTelemetryService>();
     }
 }

@@ -63,7 +63,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Telemetry
 
-- [ ] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision.
+- [ ] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Stage 1 underway: local hashed CLI telemetry channel, opt-out parity, and disclosure banner added 2025-11-18; decide on remote publishing and retention next.)_
 
 ## Documentation Alignment
 
