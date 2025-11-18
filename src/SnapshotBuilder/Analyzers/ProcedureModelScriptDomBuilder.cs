@@ -1,5 +1,6 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Xtraq.Metadata;
+using Xtraq.Schema;
 using Xtraq.SnapshotBuilder.Models;
 using Xtraq.Utils;
 using ProcedureReferenceModel = Xtraq.SnapshotBuilder.Models.ProcedureReference;
@@ -12,6 +13,13 @@ namespace Xtraq.SnapshotBuilder.Analyzers;
 /// </summary>
 internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IProcedureModelBuilder
 {
+    private readonly IEnhancedSchemaMetadataProvider? _schemaMetadataProvider;
+
+    public ProcedureModelScriptDomBuilder(IEnhancedSchemaMetadataProvider? schemaMetadataProvider = null)
+    {
+        _schemaMetadataProvider = schemaMetadataProvider;
+    }
+
     /// <summary>
     /// Builds a <see cref="ProcedureModel"/> using the legacy model builder signature.
     /// </summary>
@@ -42,7 +50,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         }
 
         var model = new ProcedureModel();
-        var visitor = new ProcedureVisitor(request.DefaultSchema, request.DefaultCatalog, request.VerboseParsing);
+        var visitor = new ProcedureVisitor(request.DefaultSchema, request.DefaultCatalog, request.VerboseParsing, _schemaMetadataProvider);
         fragment.Accept(visitor);
 
         model.ExecutedProcedures.AddRange(visitor.ExecutedProcedures);
@@ -94,6 +102,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             public Dictionary<string, ColumnSourceInfo>? Columns { get; set; }
             public bool IsCte { get; set; }
             public bool ForceNullableColumns { get; set; }
+            public bool IsFunction { get; set; }
         }
 
         private sealed class JsonPathBinding
@@ -123,6 +132,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         private readonly string? _defaultSchema;
         private readonly string? _defaultCatalog;
         private readonly bool _verboseParsing;
+        private readonly IEnhancedSchemaMetadataProvider? _schemaMetadataProvider;
         private readonly List<ProcedureExecutedProcedureCall> _executedProcedures = new();
         private readonly List<ProcedureResultSet> _resultSets = new();
         private readonly Stack<Dictionary<string, TableAliasInfo>> _aliasScopes = new();
@@ -130,6 +140,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         private readonly HashSet<QuerySpecification> _cteQuerySpecifications = new();
         private readonly Dictionary<string, TableTypeBinding> _tableTypeBindings = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ColumnSourceInfo> _scalarVariableMetadata = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<string, ColumnSourceInfo>> _fallbackTableColumnCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<string, ColumnSourceInfo>> _fallbackFunctionColumnCache = new(StringComparer.OrdinalIgnoreCase);
         private bool _inTopLevelSelect;
         private int _selectStatementDepth;
         private int _selectInsertSourceDepth;
@@ -179,11 +191,12 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             ["uniqueidentifier"] = 66
         };
 
-        public ProcedureVisitor(string? defaultSchema, string? defaultCatalog, bool verboseParsing)
+        public ProcedureVisitor(string? defaultSchema, string? defaultCatalog, bool verboseParsing, IEnhancedSchemaMetadataProvider? schemaMetadataProvider)
         {
             _defaultSchema = string.IsNullOrWhiteSpace(defaultSchema) ? null : defaultSchema;
             _defaultCatalog = string.IsNullOrWhiteSpace(defaultCatalog) ? null : defaultCatalog;
             _verboseParsing = verboseParsing;
+            _schemaMetadataProvider = schemaMetadataProvider;
         }
 
         public IReadOnlyList<ProcedureExecutedProcedureCall> ExecutedProcedures => _executedProcedures;
@@ -885,7 +898,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             return true;
         }
 
-        private static void EnsureAliasColumns(TableAliasInfo aliasInfo)
+        private void EnsureAliasColumns(TableAliasInfo aliasInfo)
         {
             if (aliasInfo == null)
             {
@@ -897,7 +910,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 return;
             }
 
-            var resolvedColumns = ResolveAliasColumns(aliasInfo.Schema, aliasInfo.Name);
+            var resolvedColumns = ResolveAliasColumns(aliasInfo);
             if (resolvedColumns != null && resolvedColumns.Count > 0)
             {
                 aliasInfo.Columns = CloneAliasColumns(resolvedColumns, aliasInfo.ForceNullableColumns);
@@ -1050,7 +1063,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
             if (aliasInfo.Columns == null || aliasInfo.Columns.Count == 0)
             {
-                var resolvedColumns = ResolveAliasColumns(aliasInfo.Schema, aliasInfo.Name);
+                var resolvedColumns = ResolveAliasColumns(aliasInfo);
                 if (resolvedColumns != null && resolvedColumns.Count > 0)
                 {
                     aliasInfo.Columns = CloneAliasColumns(resolvedColumns, aliasInfo.ForceNullableColumns);
@@ -3099,154 +3112,183 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
                     if (resolved.Columns != null && !string.IsNullOrWhiteSpace(column.SourceColumn) && resolved.Columns.TryGetValue(column.SourceColumn, out var sourceInfo))
                     {
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.Schema))
+                        if (IsAliasDebugEnabled())
                         {
-                            column.SourceSchema = sourceInfo.Schema;
-                            schemaUpdated = true;
+                            var hasReference = sourceInfo?.Reference != null;
+                            Console.WriteLine(
+                                $"[alias-column-source] alias={tableOrAlias ?? "<null>"} lookup={column.SourceColumn ?? "<null>"} hasReference={hasReference}");
                         }
 
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.Catalog))
+                        if (sourceInfo != null)
                         {
-                            column.SourceCatalog = sourceInfo.Catalog;
-                        }
-                        else if (!string.IsNullOrWhiteSpace(resolved.Catalog))
-                        {
-                            column.SourceCatalog ??= resolved.Catalog;
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.Table))
-                        {
-                            column.SourceTable = sourceInfo.Table;
-                            tableUpdated = true;
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.Column))
-                        {
-                            column.SourceColumn = sourceInfo.Column;
-                            columnUpdated = true;
-                        }
-
-                        if (sourceInfo.Reference != null && column.Reference == null)
-                        {
-                            column.Reference = CloneReference(sourceInfo.Reference);
-                            referenceUpdated = true;
-                        }
-
-                        if (sourceInfo.ReturnsJson.HasValue)
-                        {
-                            column.ReturnsJson ??= sourceInfo.ReturnsJson;
-                            jsonMetadataUpdated = true;
-                        }
-
-                        if (sourceInfo.ReturnsJsonArray.HasValue)
-                        {
-                            column.ReturnsJsonArray ??= sourceInfo.ReturnsJsonArray;
-                            jsonMetadataUpdated = true;
-                        }
-
-                        if (sourceInfo.ReturnsUnknownJson.HasValue)
-                        {
-                            column.ReturnsUnknownJson ??= sourceInfo.ReturnsUnknownJson;
-                            jsonMetadataUpdated = true;
-                        }
-
-                        if (sourceInfo.IsNestedJson.HasValue)
-                        {
-                            column.IsNestedJson ??= sourceInfo.IsNestedJson;
-                            jsonMetadataUpdated = true;
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.SqlTypeName))
-                        {
-                            var before = column.SqlTypeName;
-                            column.SqlTypeName ??= sourceInfo.SqlTypeName;
-                            if (!string.Equals(before, column.SqlTypeName, StringComparison.OrdinalIgnoreCase))
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.Schema))
                             {
-                                typeMetadataUpdated = true;
+                                column.SourceSchema = sourceInfo.Schema;
+                                schemaUpdated = true;
                             }
-                        }
 
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.CastTargetType))
-                        {
-                            var before = column.CastTargetType;
-                            column.CastTargetType ??= sourceInfo.CastTargetType;
-                            if (!string.Equals(before, column.CastTargetType, StringComparison.OrdinalIgnoreCase))
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.Catalog))
                             {
-                                typeMetadataUpdated = true;
+                                column.SourceCatalog = sourceInfo.Catalog;
                             }
-                        }
-
-                        if (sourceInfo.CastTargetLength.HasValue)
-                        {
-                            var before = column.CastTargetLength;
-                            column.CastTargetLength ??= sourceInfo.CastTargetLength;
-                            if (before != column.CastTargetLength)
+                            else if (!string.IsNullOrWhiteSpace(resolved.Catalog))
                             {
-                                typeMetadataUpdated = true;
+                                column.SourceCatalog ??= resolved.Catalog;
                             }
-                        }
 
-                        if (sourceInfo.CastTargetPrecision.HasValue)
-                        {
-                            var before = column.CastTargetPrecision;
-                            column.CastTargetPrecision ??= sourceInfo.CastTargetPrecision;
-                            if (before != column.CastTargetPrecision)
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.Table))
                             {
-                                typeMetadataUpdated = true;
+                                column.SourceTable = sourceInfo.Table;
+                                tableUpdated = true;
                             }
-                        }
 
-                        if (sourceInfo.CastTargetScale.HasValue)
-                        {
-                            var before = column.CastTargetScale;
-                            column.CastTargetScale ??= sourceInfo.CastTargetScale;
-                            if (before != column.CastTargetScale)
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.Column))
                             {
-                                typeMetadataUpdated = true;
+                                column.SourceColumn = sourceInfo.Column;
+                                columnUpdated = true;
                             }
-                        }
 
-                        if (sourceInfo.MaxLength.HasValue)
-                        {
-                            var before = column.MaxLength;
-                            column.MaxLength ??= sourceInfo.MaxLength;
-                            if (before != column.MaxLength)
+                            if (sourceInfo.Reference != null && column.Reference == null)
                             {
-                                typeMetadataUpdated = true;
+                                column.Reference = CloneReference(sourceInfo.Reference);
+                                referenceUpdated = true;
                             }
-                        }
 
-                        if (sourceInfo.IsNullable.HasValue)
-                        {
-                            var before = column.IsNullable;
-                            column.IsNullable ??= sourceInfo.IsNullable;
-                            if (before != column.IsNullable)
+                            if (sourceInfo.ReturnsJson.HasValue)
                             {
-                                typeMetadataUpdated = true;
+                                column.ReturnsJson ??= sourceInfo.ReturnsJson;
+                                jsonMetadataUpdated = true;
                             }
-                        }
 
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.UserTypeSchema))
-                        {
-                            var before = column.UserTypeSchemaName;
-                            column.UserTypeSchemaName ??= sourceInfo.UserTypeSchema;
-                            if (!string.Equals(before, column.UserTypeSchemaName, StringComparison.OrdinalIgnoreCase))
+                            if (sourceInfo.ReturnsJsonArray.HasValue)
                             {
-                                typeMetadataUpdated = true;
+                                column.ReturnsJsonArray ??= sourceInfo.ReturnsJsonArray;
+                                jsonMetadataUpdated = true;
                             }
-                        }
 
-                        if (!string.IsNullOrWhiteSpace(sourceInfo.UserTypeName))
-                        {
-                            var before = column.UserTypeName;
-                            column.UserTypeName ??= sourceInfo.UserTypeName;
-                            if (!string.Equals(before, column.UserTypeName, StringComparison.OrdinalIgnoreCase))
+                            if (sourceInfo.ReturnsUnknownJson.HasValue)
                             {
-                                typeMetadataUpdated = true;
+                                column.ReturnsUnknownJson ??= sourceInfo.ReturnsUnknownJson;
+                                jsonMetadataUpdated = true;
                             }
+
+                            if (sourceInfo.IsNestedJson.HasValue)
+                            {
+                                column.IsNestedJson ??= sourceInfo.IsNestedJson;
+                                jsonMetadataUpdated = true;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.SqlTypeName))
+                            {
+                                var before = column.SqlTypeName;
+                                column.SqlTypeName ??= sourceInfo.SqlTypeName;
+                                if (!string.Equals(before, column.SqlTypeName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.CastTargetType))
+                            {
+                                var before = column.CastTargetType;
+                                column.CastTargetType ??= sourceInfo.CastTargetType;
+                                if (!string.Equals(before, column.CastTargetType, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (sourceInfo.CastTargetLength.HasValue)
+                            {
+                                var before = column.CastTargetLength;
+                                column.CastTargetLength ??= sourceInfo.CastTargetLength;
+                                if (before != column.CastTargetLength)
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (sourceInfo.CastTargetPrecision.HasValue)
+                            {
+                                var before = column.CastTargetPrecision;
+                                column.CastTargetPrecision ??= sourceInfo.CastTargetPrecision;
+                                if (before != column.CastTargetPrecision)
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (sourceInfo.CastTargetScale.HasValue)
+                            {
+                                var before = column.CastTargetScale;
+                                column.CastTargetScale ??= sourceInfo.CastTargetScale;
+                                if (before != column.CastTargetScale)
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (sourceInfo.MaxLength.HasValue)
+                            {
+                                var before = column.MaxLength;
+                                column.MaxLength ??= sourceInfo.MaxLength;
+                                if (before != column.MaxLength)
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (sourceInfo.IsNullable.HasValue)
+                            {
+                                var before = column.IsNullable;
+                                column.IsNullable ??= sourceInfo.IsNullable;
+                                if (before != column.IsNullable)
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.UserTypeSchema))
+                            {
+                                var before = column.UserTypeSchemaName;
+                                column.UserTypeSchemaName ??= sourceInfo.UserTypeSchema;
+                                if (!string.Equals(before, column.UserTypeSchemaName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(sourceInfo.UserTypeName))
+                            {
+                                var before = column.UserTypeName;
+                                column.UserTypeName ??= sourceInfo.UserTypeName;
+                                if (!string.Equals(before, column.UserTypeName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    typeMetadataUpdated = true;
+                                }
+                            }
+
+                            ApplyUserTypeResolution(column, sourceInfo);
                         }
 
-                        ApplyUserTypeResolution(column, sourceInfo);
+                        if (resolved.IsFunction && column.Reference == null && !string.IsNullOrWhiteSpace(resolved.Schema) && !string.IsNullOrWhiteSpace(resolved.Name))
+                        {
+                            column.Reference = new ProcedureReferenceModel
+                            {
+                                Kind = ProcedureReferenceKind.Function,
+                                Schema = resolved.Schema,
+                                Name = resolved.Name
+                            };
+                        }
+                    }
+
+                    if (IsAliasDebugEnabled())
+                    {
+                        var referenceKind = column.Reference?.Kind.ToString() ?? "<null>";
+                        var referenceName = column.Reference?.Name ?? "<null>";
+                        var referenceSchema = column.Reference?.Schema ?? "<null>";
+                        Console.WriteLine(
+                            $"[alias-column] alias={tableOrAlias ?? "<null>"} sourceTable={column.SourceTable ?? "<null>"} sourceColumn={column.SourceColumn ?? "<null>"} refKind={referenceKind} refSchema={referenceSchema} refName={referenceName}");
                     }
 
                     var aliasResolutionApplied = schemaUpdated || tableUpdated || columnUpdated || referenceUpdated || jsonMetadataUpdated || typeMetadataUpdated;
@@ -4148,7 +4190,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                         return null;
                     }
 
-                    var columns = ResolveTableColumns(schema, name);
+                    var columns = ResolveTableColumns(schema, name, catalog);
                     var info = new TableAliasInfo
                     {
                         Catalog = catalog,
@@ -4394,6 +4436,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 return;
             }
 
+            if (IsAliasDebugEnabled())
+            {
+                Console.WriteLine($"[table-ref] type={reference.GetType().FullName}");
+            }
+
             if (TryHandleApplyReference(reference, scope, forceNullableColumns))
             {
                 return;
@@ -4426,7 +4473,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
                         if (cteColumns == null)
                         {
-                            var resolvedColumns = ResolveTableColumns(info.Schema, info.Name);
+                            var resolvedColumns = ResolveTableColumns(info.Schema, info.Name, info.Catalog);
                             if (resolvedColumns != null && resolvedColumns.Count > 0)
                             {
                                 info.Columns = CloneAliasColumns(resolvedColumns, forceNullableColumns);
@@ -4455,7 +4502,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                             Catalog = fnCatalog,
                             Schema = fnSchema ?? _defaultSchema,
                             Name = fnName,
-                            ForceNullableColumns = forceNullableColumns
+                            ForceNullableColumns = forceNullableColumns,
+                            IsFunction = true
                         };
 
                         var resolvedColumns = ResolveFunctionColumns(info.Schema, info.Name);
@@ -5978,7 +6026,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             return string.Concat(effectiveSchema, ".", effectiveName);
         }
 
-        private static Dictionary<string, ColumnSourceInfo>? ResolveTableColumns(string? schema, string name)
+        private Dictionary<string, ColumnSourceInfo>? ResolveTableColumns(string? schema, string name, string? catalog)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -5986,26 +6034,85 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             var table = TryLookupTable(schema, name);
-            if (table == null || table.Columns == null || table.Columns.Count == 0)
+            if (table != null && table.Columns != null && table.Columns.Count > 0)
+            {
+                var map = BuildColumnInfoMap(table);
+                if (map.Count > 0)
+                {
+                    return map;
+                }
+            }
+
+            if (_schemaMetadataProvider == null)
             {
                 return null;
             }
 
-            return BuildColumnInfoMap(table);
+            var effectiveSchema = string.IsNullOrWhiteSpace(schema) ? (_defaultSchema ?? "dbo") : schema;
+            var effectiveCatalog = string.IsNullOrWhiteSpace(catalog) ? _defaultCatalog : catalog;
+            var cacheKey = BuildTableCacheKey(effectiveCatalog, effectiveSchema, name);
+
+            if (!string.IsNullOrWhiteSpace(cacheKey) && _fallbackTableColumnCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached;
+            }
+
+            try
+            {
+                var metadata = _schemaMetadataProvider
+                    .GetTableColumnsAsync(effectiveSchema ?? "dbo", name, effectiveCatalog, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (metadata != null && metadata.Count > 0)
+                {
+                    var map = BuildColumnInfoMap(metadata, effectiveSchema ?? "dbo", name, effectiveCatalog);
+                    if (!string.IsNullOrWhiteSpace(cacheKey))
+                    {
+                        _fallbackTableColumnCache[cacheKey] = map;
+                    }
+
+                    return map;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_verboseParsing)
+                {
+                    Console.WriteLine($"[alias-resolver] Fallback metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(cacheKey))
+            {
+                _fallbackTableColumnCache[cacheKey] = new Dictionary<string, ColumnSourceInfo>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return null;
         }
 
-        private static Dictionary<string, ColumnSourceInfo>? ResolveAliasColumns(string? schema, string name)
+        private Dictionary<string, ColumnSourceInfo>? ResolveAliasColumns(TableAliasInfo aliasInfo)
         {
-            var tableColumns = ResolveTableColumns(schema, name);
+            if (aliasInfo == null)
+            {
+                return null;
+            }
+
+            if (aliasInfo.IsFunction)
+            {
+                return ResolveFunctionColumns(aliasInfo.Schema, aliasInfo.Name);
+            }
+
+            var tableColumns = ResolveTableColumns(aliasInfo.Schema, aliasInfo.Name, aliasInfo.Catalog ?? _defaultCatalog);
             if (tableColumns != null && tableColumns.Count > 0)
             {
                 return tableColumns;
             }
 
-            return ResolveFunctionColumns(schema, name);
+            return ResolveFunctionColumns(aliasInfo.Schema, aliasInfo.Name);
         }
 
-        private static Dictionary<string, ColumnSourceInfo>? ResolveFunctionColumns(string? schema, string name)
+        private Dictionary<string, ColumnSourceInfo>? ResolveFunctionColumns(string? schema, string name)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -6015,10 +6122,60 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             var key = BuildTableTypeKey(schema, name);
             if (!FunctionMetadataLookup.Value.TryGetValue(key, out var function) || function == null || function.Columns == null || function.Columns.Count == 0)
             {
-                return null;
+                return ResolveFunctionColumnsFromProvider(schema, name);
             }
 
             return BuildFunctionColumnInfoMap(function);
+        }
+
+        private Dictionary<string, ColumnSourceInfo>? ResolveFunctionColumnsFromProvider(string? schema, string name)
+        {
+            if (_schemaMetadataProvider == null)
+            {
+                return null;
+            }
+
+            var effectiveSchema = string.IsNullOrWhiteSpace(schema) ? (_defaultSchema ?? "dbo") : schema;
+            var effectiveCatalog = _defaultCatalog;
+            var cacheKey = BuildTableCacheKey(effectiveCatalog, effectiveSchema, name);
+
+            if (!string.IsNullOrWhiteSpace(cacheKey) && _fallbackFunctionColumnCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached.Count == 0 ? null : cached;
+            }
+
+            try
+            {
+                var columns = _schemaMetadataProvider
+                    .GetTableColumnsAsync(effectiveSchema ?? "dbo", name, effectiveCatalog, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (columns != null && columns.Count > 0)
+                {
+                    var map = BuildFunctionColumnInfoMapFromMetadata(columns, effectiveSchema ?? "dbo", name, effectiveCatalog);
+                    if (!string.IsNullOrWhiteSpace(cacheKey))
+                    {
+                        _fallbackFunctionColumnCache[cacheKey!] = map;
+                    }
+
+                    return map;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_verboseParsing)
+                {
+                    Console.WriteLine($"[alias-resolver] Fallback function metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(cacheKey))
+            {
+                _fallbackFunctionColumnCache[cacheKey!] = new Dictionary<string, ColumnSourceInfo>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return null;
         }
 
         private static Dictionary<string, ColumnSourceInfo> BuildColumnInfoMap(TableInfo table)
@@ -6055,6 +6212,64 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             return map;
+        }
+
+        private static Dictionary<string, ColumnSourceInfo> BuildColumnInfoMap(IReadOnlyList<ColumnMetadata> columns, string? schema, string name, string? catalog)
+        {
+            var map = new Dictionary<string, ColumnSourceInfo>(StringComparer.OrdinalIgnoreCase);
+            if (columns == null)
+            {
+                return map;
+            }
+
+            foreach (var column in columns)
+            {
+                if (column == null || string.IsNullOrWhiteSpace(column.Name))
+                {
+                    continue;
+                }
+
+                var sqlType = NormalizeResolvedSqlType(column.SqlTypeName, column.UserTypeSchema, column.UserTypeName);
+
+                map[column.Name] = new ColumnSourceInfo
+                {
+                    Catalog = string.IsNullOrWhiteSpace(column.Catalog) ? catalog : column.Catalog,
+                    Schema = schema,
+                    Table = name,
+                    Column = column.Name,
+                    SqlTypeName = sqlType,
+                    MaxLength = column.MaxLength,
+                    Precision = column.Precision,
+                    Scale = column.Scale,
+                    IsNullable = column.IsNullable,
+                    UserTypeSchema = column.UserTypeSchema,
+                    UserTypeName = column.UserTypeName
+                };
+            }
+
+            return map;
+        }
+
+        private static string BuildTableCacheKey(string? catalog, string? schema, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return string.Empty;
+            }
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(catalog))
+            {
+                parts.Add(catalog.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                parts.Add(schema.Trim());
+            }
+
+            parts.Add(name.Trim());
+            return string.Join('.', parts);
         }
 
         private static Dictionary<string, ColumnSourceInfo> BuildFunctionColumnInfoMap(FunctionInfo function)
@@ -6134,6 +6349,51 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                     IsNullable = isNullable,
                     UserTypeSchema = userTypeSchema,
                     UserTypeName = userTypeName
+                };
+            }
+
+            return map;
+        }
+
+        private static Dictionary<string, ColumnSourceInfo> BuildFunctionColumnInfoMapFromMetadata(IReadOnlyList<ColumnMetadata> columns, string schema, string name, string? catalog)
+        {
+            var map = new Dictionary<string, ColumnSourceInfo>(StringComparer.OrdinalIgnoreCase);
+            if (columns == null || columns.Count == 0)
+            {
+                return map;
+            }
+
+            var reference = new ProcedureReferenceModel
+            {
+                Kind = ProcedureReferenceKind.Function,
+                Schema = schema,
+                Catalog = catalog,
+                Name = name
+            };
+
+            foreach (var column in columns)
+            {
+                if (column == null || string.IsNullOrWhiteSpace(column.Name))
+                {
+                    continue;
+                }
+
+                var sqlType = NormalizeResolvedSqlType(column.SqlTypeName, column.UserTypeSchema, column.UserTypeName);
+
+                map[column.Name] = new ColumnSourceInfo
+                {
+                    Catalog = string.IsNullOrWhiteSpace(column.Catalog) ? catalog : column.Catalog,
+                    Schema = schema,
+                    Table = name,
+                    Column = column.Name,
+                    Reference = reference,
+                    SqlTypeName = sqlType,
+                    MaxLength = column.MaxLength,
+                    Precision = column.Precision,
+                    Scale = column.Scale,
+                    IsNullable = column.IsNullable,
+                    UserTypeSchema = column.UserTypeSchema,
+                    UserTypeName = column.UserTypeName
                 };
             }
 

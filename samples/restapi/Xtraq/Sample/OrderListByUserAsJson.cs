@@ -135,7 +135,7 @@ public static class OrderListByUserAsJsonExtensions
 	public static async Task<OrderListByUserAsJsonResult> OrderListByUserAsJsonAsync(this IXtraqDbContext db, OrderListByUserAsJsonInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await OrderListByUserAsJsonProcedure.ExecuteAsync(conn, input, cancellationToken).ConfigureAwait(false);
+		return await OrderListByUserAsJsonProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 }
@@ -145,8 +145,11 @@ public static class OrderListByUserAsJsonProcedure
 {
 	public const string Name = "[sample].[OrderListByUserAsJson]";
 	public static Task<OrderListByUserAsJsonResult> ExecuteAsync(DbConnection connection, OrderListByUserAsJsonInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(null, connection, input, cancellationToken);
+
+	public static Task<OrderListByUserAsJsonResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, OrderListByUserAsJsonInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<OrderListByUserAsJsonResult>(connection, OrderListByUserAsJsonPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<OrderListByUserAsJsonResult>(interceptorProvider, connection, OrderListByUserAsJsonPlan.Instance, input, cancellationToken);
 	}
 
 }

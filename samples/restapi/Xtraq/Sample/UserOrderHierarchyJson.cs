@@ -138,7 +138,7 @@ public static class UserOrderHierarchyJsonExtensions
 	public static async Task<UserOrderHierarchyJsonResult> UserOrderHierarchyJsonAsync(this IXtraqDbContext db, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await UserOrderHierarchyJsonProcedure.ExecuteAsync(conn, cancellationToken).ConfigureAwait(false);
+		return await UserOrderHierarchyJsonProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, cancellationToken).ConfigureAwait(false);
 	}
 
 }
@@ -148,8 +148,11 @@ public static class UserOrderHierarchyJsonProcedure
 {
 	public const string Name = "[sample].[UserOrderHierarchyJson]";
 	public static Task<UserOrderHierarchyJsonResult> ExecuteAsync(DbConnection connection, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(null, connection, cancellationToken);
+
+	public static Task<UserOrderHierarchyJsonResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<UserOrderHierarchyJsonResult>(connection, UserOrderHierarchyJsonPlan.Instance, null, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<UserOrderHierarchyJsonResult>(interceptorProvider, connection, UserOrderHierarchyJsonPlan.Instance, null, cancellationToken);
 	}
 
 }

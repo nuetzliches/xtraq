@@ -100,7 +100,7 @@ public static class UpdateUserBioExtensions
 	public static async Task<UpdateUserBioResult> UpdateUserBioAsync(this IXtraqDbContext db, UpdateUserBioInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await UpdateUserBioProcedure.ExecuteAsync(conn, input, cancellationToken).ConfigureAwait(false);
+		return await UpdateUserBioProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> without buffering it into the aggregate payload.</summary>
@@ -109,7 +109,7 @@ public static class UpdateUserBioExtensions
 		ArgumentNullException.ThrowIfNull(db);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
 		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		await UpdateUserBioProcedure.StreamResultResultSet1Async(connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
+		await UpdateUserBioProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(this IXtraqDbContext db, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
@@ -125,12 +125,18 @@ public static class UpdateUserBioProcedure
 {
 	public const string Name = "[sample].[UpdateUserBio]";
 	public static Task<UpdateUserBioResult> ExecuteAsync(DbConnection connection, UpdateUserBioInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(null, connection, input, cancellationToken);
+
+	public static Task<UpdateUserBioResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UpdateUserBioInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<UpdateUserBioResult>(connection, UpdateUserBioPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<UpdateUserBioResult>(interceptorProvider, connection, UpdateUserBioPlan.Instance, input, cancellationToken);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> using the supplied row callback.</summary>
-	public static async Task StreamResultResultSet1Async(DbConnection connection, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	public static Task StreamResultResultSet1Async(DbConnection connection, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+		=> StreamResultResultSet1Async(null, connection, input, onRowAsync, cancellationToken);
+
+	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(connection);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
@@ -148,13 +154,19 @@ public static class UpdateUserBioProcedure
 			}
 		}
 
-		await ProcedureExecutor.StreamResultSetAsync(connection, UpdateUserBioPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
+		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, UpdateUserBioPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(DbConnection connection, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+	}
+
+	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UpdateUserBioInput input, Func<UpdateUserBioResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		return StreamResultResultSet1Async(interceptorProvider, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 }

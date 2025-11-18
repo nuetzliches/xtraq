@@ -101,7 +101,7 @@ public static class SyncUserContactsExtensions
 	public static async Task<SyncUserContactsResult> SyncUserContactsAsync(this IXtraqDbContext db, SyncUserContactsInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await SyncUserContactsProcedure.ExecuteAsync(conn, input, cancellationToken).ConfigureAwait(false);
+		return await SyncUserContactsProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> without buffering it into the aggregate payload.</summary>
@@ -110,7 +110,7 @@ public static class SyncUserContactsExtensions
 		ArgumentNullException.ThrowIfNull(db);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
 		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		await SyncUserContactsProcedure.StreamResultResultSet1Async(connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
+		await SyncUserContactsProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(this IXtraqDbContext db, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
@@ -126,12 +126,18 @@ public static class SyncUserContactsProcedure
 {
 	public const string Name = "[sample].[SyncUserContacts]";
 	public static Task<SyncUserContactsResult> ExecuteAsync(DbConnection connection, SyncUserContactsInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(null, connection, input, cancellationToken);
+
+	public static Task<SyncUserContactsResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, SyncUserContactsInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<SyncUserContactsResult>(connection, SyncUserContactsPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<SyncUserContactsResult>(interceptorProvider, connection, SyncUserContactsPlan.Instance, input, cancellationToken);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> using the supplied row callback.</summary>
-	public static async Task StreamResultResultSet1Async(DbConnection connection, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	public static Task StreamResultResultSet1Async(DbConnection connection, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+		=> StreamResultResultSet1Async(null, connection, input, onRowAsync, cancellationToken);
+
+	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(connection);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
@@ -153,13 +159,19 @@ public static class SyncUserContactsProcedure
 			}
 		}
 
-		await ProcedureExecutor.StreamResultSetAsync(connection, SyncUserContactsPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
+		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, SyncUserContactsPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(DbConnection connection, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+	}
+
+	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, SyncUserContactsInput input, Func<SyncUserContactsResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		return StreamResultResultSet1Async(interceptorProvider, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 }
