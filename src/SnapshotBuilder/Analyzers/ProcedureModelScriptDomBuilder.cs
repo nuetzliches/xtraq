@@ -1200,9 +1200,13 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 identifierFallback = initialColumnRef.MultiPartIdentifier.Identifiers[^1].Value;
             }
 
+            var aliasValue = scalar.ColumnName?.Value;
+            var normalizedAlias = string.IsNullOrWhiteSpace(aliasValue) ? null : aliasValue.Trim();
+
             var column = new ProcedureResultColumn
             {
-                Name = scalar.ColumnName?.Value,
+                Name = normalizedAlias,
+                Alias = normalizedAlias,
                 RawExpression = scalar.Expression?.ToString()
             };
 
@@ -3754,6 +3758,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         {
             return new ProcedureResultColumn
             {
+                Name = source.Name,
+                Alias = source.Alias,
                 SourceCatalog = source.SourceCatalog,
                 SourceSchema = source.SourceSchema,
                 SourceTable = source.SourceTable,
@@ -3765,6 +3771,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 CastTargetScale = source.CastTargetScale,
                 MaxLength = source.MaxLength,
                 IsNullable = source.IsNullable,
+                UserTypeCatalogName = source.UserTypeCatalogName,
                 UserTypeSchemaName = source.UserTypeSchemaName,
                 UserTypeName = source.UserTypeName,
                 ReturnsJson = source.ReturnsJson,

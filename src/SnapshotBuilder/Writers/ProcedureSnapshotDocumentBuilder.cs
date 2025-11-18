@@ -1,6 +1,7 @@
 using Xtraq.Data.Models;
 using Xtraq.Services;
 using Xtraq.SnapshotBuilder.Models;
+using Xtraq.Utils;
 
 namespace Xtraq.SnapshotBuilder.Writers;
 
@@ -229,9 +230,34 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("Name", column.Name);
         }
 
+        if (!string.IsNullOrWhiteSpace(column.Alias))
+        {
+            writer.WriteString("Alias", column.Alias);
+        }
+
         SnapshotWriterUtilities.RegisterTableRef(requiredTableRefs, column);
 
         var typeRef = SnapshotWriterUtilities.BuildTypeRef(column);
+        var userTypeRef = column.UserTypeRef;
+        if (!string.IsNullOrWhiteSpace(userTypeRef))
+        {
+            var (catalogSegment, schemaSegment, nameSegment) = TypeRefUtilities.Split(userTypeRef);
+            var hasUserSchema = !string.IsNullOrWhiteSpace(schemaSegment);
+            var hasUserName = !string.IsNullOrWhiteSpace(nameSegment);
+            var isSystemSchema = hasUserSchema && string.Equals(schemaSegment, "sys", StringComparison.OrdinalIgnoreCase);
+
+            if (hasUserSchema && hasUserName && !isSystemSchema)
+            {
+                writer.WriteString("UserTypeRef", userTypeRef);
+                SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, userTypeRef);
+
+                if (!string.IsNullOrWhiteSpace(typeRef) && string.Equals(typeRef, userTypeRef, StringComparison.OrdinalIgnoreCase))
+                {
+                    typeRef = null;
+                }
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(typeRef) && column.ReturnsJson != true && column.IsNestedJson != true)
         {
             writer.WriteString("TypeRef", typeRef);

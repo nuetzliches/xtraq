@@ -1,3 +1,5 @@
+using Xtraq.Utils;
+
 namespace Xtraq.SnapshotBuilder.Models;
 
 /// <summary>
@@ -90,10 +92,19 @@ internal sealed class ProcedureResultSet
 /// </summary>
 internal sealed class ProcedureResultColumn
 {
+    private string? _userTypeCatalogName;
+    private string? _userTypeSchemaName;
+    private string? _userTypeName;
+
     /// <summary>
     /// Column name as it appears in the result set.
     /// </summary>
     public string? Name { get; set; }
+
+    /// <summary>
+    /// Explicit alias specified in the SQL projection when different from the inferred column name.
+    /// </summary>
+    public string? Alias { get; set; }
 
     /// <summary>
     /// Type of expression that produces this column (column reference, cast, function call, etc.).
@@ -230,12 +241,44 @@ internal sealed class ProcedureResultColumn
     /// <summary>
     /// Schema name of user-defined type when this column uses a custom type.
     /// </summary>
-    public string? UserTypeSchemaName { get; set; }
+    public string? UserTypeSchemaName
+    {
+        get => _userTypeSchemaName;
+        set => _userTypeSchemaName = NormalizeOptional(value);
+    }
 
     /// <summary>
     /// Name of user-defined type when this column uses a custom type.
     /// </summary>
-    public string? UserTypeName { get; set; }
+    public string? UserTypeName
+    {
+        get => _userTypeName;
+        set => _userTypeName = NormalizeOptional(value);
+    }
+
+    /// <summary>
+    /// Catalog name of the user-defined type when a three-part identifier is available.
+    /// </summary>
+    public string? UserTypeCatalogName
+    {
+        get => _userTypeCatalogName;
+        set => _userTypeCatalogName = NormalizeOptional(value);
+    }
+
+    /// <summary>
+    /// Fully qualified reference to the user-defined type (catalog.schema.name when available).
+    /// </summary>
+    public string? UserTypeRef
+    {
+        get => TypeRefUtilities.Combine(_userTypeCatalogName, _userTypeSchemaName, _userTypeName);
+        set
+        {
+            var (catalog, schema, name) = TypeRefUtilities.Split(value);
+            _userTypeCatalogName = NormalizeOptional(catalog);
+            _userTypeSchemaName = NormalizeOptional(schema);
+            _userTypeName = NormalizeOptional(name);
+        }
+    }
 
     /// <summary>
     /// Maximum length for variable-length data types (e.g., varchar(100)).
@@ -271,6 +314,17 @@ internal sealed class ProcedureResultColumn
     /// Indicates whether JSON expansion for this column is deferred to a later analysis phase.
     /// </summary>
     public bool? DeferredJsonExpansion { get; set; }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
 }
 
 /// <summary>

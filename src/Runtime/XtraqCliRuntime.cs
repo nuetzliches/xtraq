@@ -994,32 +994,58 @@ internal sealed class XtraqCliRuntime(
                     continue;
                 }
 
-                var normalized = parameter.NormalizedTypeReference;
-                if (string.IsNullOrWhiteSpace(normalized))
+                var candidates = new List<string?>
                 {
-                    var effectiveSchema = string.IsNullOrWhiteSpace(parameter.TableTypeSchema)
-                        ? procedure.Schema
-                        : parameter.TableTypeSchema;
-                    var effectiveCatalog = string.IsNullOrWhiteSpace(parameter.TableTypeCatalog) ? null : parameter.TableTypeCatalog;
-                    normalized = TableTypeRefFormatter.Normalize(
-                                    TableTypeRefFormatter.Combine(effectiveCatalog, effectiveSchema, parameter.TableTypeName))
-                                 ?? TableTypeRefFormatter.Normalize(
-                                    TableTypeRefFormatter.Combine(effectiveSchema, parameter.TableTypeName));
+                    parameter.NormalizedTypeReference,
+                    TableTypeRefFormatter.Combine(parameter.TableTypeCatalog, parameter.TableTypeSchema, parameter.TableTypeName)
+                };
+
+                if (!string.IsNullOrWhiteSpace(parameter.TableTypeSchema))
+                {
+                    candidates.Add(TableTypeRefFormatter.Combine(parameter.TableTypeSchema, parameter.TableTypeName));
+                }
+                else
+                {
+                    candidates.Add(TableTypeRefFormatter.Combine(procedure.Schema, parameter.TableTypeName));
                 }
 
-                if (!string.IsNullOrWhiteSpace(normalized))
+                var anyAdded = false;
+                foreach (var candidate in candidates)
                 {
-                    required.Add(normalized);
-                    var parts = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (parts.Length == 3)
-                    {
-                        required.Add(string.Join('.', parts[1], parts[2]));
-                    }
+                    anyAdded |= AddTableTypeReference(required, candidate);
+                }
+
+                if (!anyAdded)
+                {
+                    AddTableTypeReference(required, parameter.TableTypeName);
                 }
             }
         }
 
         return required;
+    }
+
+    private static bool AddTableTypeReference(ISet<string> collector, string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        var normalized = TableTypeRefFormatter.Normalize(candidate);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        var added = collector.Add(normalized);
+        var segments = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length == 3)
+        {
+            collector.Add(string.Join('.', segments[1], segments[2]));
+        }
+
+        return added;
     }
 
     private static IDictionary<string, string?>? BuildCliOverrides(ICommandOptions options)

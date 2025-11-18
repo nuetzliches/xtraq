@@ -329,6 +329,7 @@ internal sealed class SnapshotIndexWriter
             var entry = new IndexColumnEntry
             {
                 Name = column.Name,
+                Alias = column.Alias,
                 SqlTypeName = column.SqlTypeName,
                 IsNullable = column.IsNullable ?? false,
                 MaxLength = column.MaxLength ?? column.CastTargetLength,
@@ -350,8 +351,7 @@ internal sealed class SnapshotIndexWriter
                 FunctionRef = BuildFunctionRef(column),
 
                 // User-defined type references
-                UserTypeSchema = column.UserTypeSchemaName,
-                UserTypeName = column.UserTypeName
+                UserTypeRef = column.UserTypeRef
             };
 
             // Handle nested columns for complex types

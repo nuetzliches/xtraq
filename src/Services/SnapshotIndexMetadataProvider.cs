@@ -278,7 +278,7 @@ internal sealed class SnapshotIndexMetadataProvider : ISnapshotIndexMetadataProv
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(existing.UserTypeName) && !string.IsNullOrWhiteSpace(candidate.UserTypeName))
+        if (string.IsNullOrWhiteSpace(existing.UserTypeRef) && !string.IsNullOrWhiteSpace(candidate.UserTypeRef))
         {
             return true;
         }

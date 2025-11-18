@@ -438,6 +438,7 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
     {
         var normalizedType = NormalizeSqlTypeName(column.SqlTypeName);
         var name = !string.IsNullOrWhiteSpace(column.SourceColumn) ? column.SourceColumn! : column.Name ?? fallbackName;
+        var (userTypeSchema, userTypeName) = SnapshotWriterUtilities.SplitTypeRef(column.UserTypeRef);
 
         return new ColumnMetadata
         {
@@ -447,8 +448,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             MaxLength = column.MaxLength,
             Precision = column.Precision,
             Scale = column.Scale,
-            UserTypeSchema = column.UserTypeSchema,
-            UserTypeName = column.UserTypeName,
+            UserTypeSchema = userTypeSchema,
+            UserTypeName = userTypeName,
             IsFromSnapshot = true
         };
     }

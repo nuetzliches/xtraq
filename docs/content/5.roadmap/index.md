@@ -84,6 +84,14 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Document binder customization hooks for UDTT execution.
 - [x] Evaluate an analyzer that verifies `ITableType` usage matches expected schema parameters.
 
+## User Type Metadata Migration
+
+- [ ] Step 1: Replace `UserTypeSchema`/`UserTypeName` with a single `UserTypeRef`, back the resolver with three-part identifier support, and add a dedicated `Alias` field on result columns while keeping `SqlTypeName` populated with the normalized system type.
+  - [x] Guard snapshot emission so built-in system types (for example `sys.char`) are never persisted as `UserTypeRef` entries.
+  - [ ] Evaluate whether snapshot consumers need the raw source column name retained alongside the exposed alias (`Name`) and design a non-breaking way to surface both identifiers.
+- [ ] Step 2: Fix the table-type collector so shared UDTTs (for example `shared.AuditLogEntryTableType`) are still captured when referenced, ensuring snapshot diffs remain stable after the metadata change.
+- [x] Step 2: Fix the table-type collector so shared UDTTs (for example `shared.AuditLogEntryTableType`) are still captured when referenced, ensuring snapshot diffs remain stable after the metadata change.
+
 ## Cache Invalidation Reliability
 
 - [x] Persist the last observed `modify_date` from `SchemaInvalidationResult.NextReferenceTimestamp` instead of the flush timestamp so mid-run catalog changes are never skipped between runs.

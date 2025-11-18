@@ -171,3 +171,6 @@ FodyWeavers.xsd
 
 # Phyton
 .venv
+
+# Development
+tmp/

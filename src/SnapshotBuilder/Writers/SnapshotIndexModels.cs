@@ -95,6 +95,7 @@ internal sealed class IndexResultSetEntry
 internal sealed class IndexColumnEntry
 {
     public string? Name { get; set; }
+    public string? Alias { get; set; }
     public string? SqlTypeName { get; set; }
     public bool IsNullable { get; set; }
     public int? MaxLength { get; set; }
@@ -116,8 +117,7 @@ internal sealed class IndexColumnEntry
     public string? FunctionRef { get; set; }
 
     // User-defined type references
-    public string? UserTypeSchema { get; set; }
-    public string? UserTypeName { get; set; }
+    public string? UserTypeRef { get; set; }
 
     // Nested columns for complex types
     public List<IndexColumnEntry>? Columns { get; set; }
