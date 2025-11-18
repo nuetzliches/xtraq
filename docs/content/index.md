@@ -72,7 +72,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   title: Strongly typed artefacts
   icon: i-heroicons-cube-transparent
   ---
-  Generate inputs, outputs, and helpers that match SQL signatures across .NET 8 and .NET 10.
+  Generate inputs, outputs, and helpers that target .NET 10 by default while retaining .NET 8 compatibility.
   ::
 
   ::card

@@ -1,8 +1,11 @@
+using Xunit;
+
 namespace Xtraq.Tests;
 
 /// <summary>
 /// Validates that the enhanced schema metadata provider can operate in offline mode using the snapshot index.
 /// </summary>
+[Collection(DirectoryWorkspaceCollection.Name)]
 public sealed class EnhancedSchemaMetadataProviderTests
 {
     /// <summary>

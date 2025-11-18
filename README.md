@@ -5,7 +5,7 @@
 
 👉 Explore the full documentation on GitHub Pages: https://nuetzliches.github.io/xtraq/
 
-Xtraq turns SQL Server stored procedures into strongly typed, production-ready C# libraries.
+Xtraq turns SQL Server stored procedures into strongly typed, production-ready C# libraries. The CLI targets .NET 10.0 by default while staying multi-targeted for .NET 8.0 clients that need the current LTS.
 
 ## What Xtraq does
 
@@ -45,8 +45,8 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 
 ## Requirements
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (Preview)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — primary target framework for new generators and samples.
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — optional when you must build against the current LTS.
 
 ## License
 

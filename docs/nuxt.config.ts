@@ -101,13 +101,6 @@ export default defineNuxtConfig({
         title: 'On this page'
       }
     },
-    header: {
-      title: 'xtraq',
-      logo: {
-        light: '/xtraq-logo.svg',
-        dark: '/xtraq-logo.svg'
-      }
-    },
     seo: {
       title: 'xtraq',
       description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.'

@@ -4,7 +4,7 @@ This folder contains a lightweight ASP.NET Core minimal API that exercises the c
 
 ## Prerequisites
 
-- .NET 8 SDK or newer
+- .NET 10 SDK — the sample defaults to net10.0 but still multi-targets net8.0 for compatibility
 - Running SQL Server instance seeded with the scripts under `samples/sql` (the Docker setup in `samples/mssql` exposes a ready-made container on port 1433)
 
 ## Configure the connection

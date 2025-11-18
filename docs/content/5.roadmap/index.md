@@ -5,8 +5,8 @@ description: Tracking upcoming work and temporary deferrals.
 
 ## Test Matrix
 
-- [x] Re-enable CI execution for .NET 10 once integration test runtime stabilises. _(Matrix now covers net8.0 and net10.0 using the latest preview SDK while we wait for GA.)_
-- [x] Extend the publish pipeline so the global tool ships a net10.0 asset once the hosted runners expose a compatible SDK or we provide it explicitly. _(Workflow installs the preview SDK and packs multi-target assets.)_
+- [x] Re-enable CI execution for .NET 10 once integration test runtime stabilises. _(Matrix now covers net8.0 and net10.0 using the current GA SDK.)_
+- [x] Extend the publish pipeline so the global tool ships a net10.0 asset once the hosted runners expose a compatible SDK or we provide it explicitly. _(Workflow installs the GA SDK and packs multi-target assets.)_
 
 ## Default Target Framework
 
@@ -63,12 +63,12 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Telemetry
 
-- [ ] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Stage 1 underway: local hashed CLI telemetry channel, opt-out parity, and disclosure banner added 2025-11-18; decide on remote publishing and retention next.)_
+- [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `docs/content/4.meta/4.cli-telemetry-alignment.md`: keep telemetry local-only until a privacy-reviewed ingestion endpoint exists; coverage added in `CliTelemetryServiceTests`.)_
 
 ## Documentation Alignment
 
-- [ ] Highlight .NET 10.0 as the primary/default target framework across documentation and samples.
-- [ ] Remove the remaining .NET 8.0 examples from `docs/content/3.reference/1.api-integration.md` once replacement guidance is ready.
+- [x] Highlight .NET 10.0 as the primary/default target framework across documentation and samples. _(README, landing page, quickstart, and sample docs now call out net10.0 as the default with .NET 8.0 compatibility notes.)_
+- [x] Remove the remaining .NET 8.0 examples from `docs/content/3.reference/2.api-integration.md` now that the Minimal API section exclusively targets .NET 10.0.
 
 ## Table Types
 

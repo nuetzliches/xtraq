@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Xtraq.Execution;
+using Xunit;
 
 namespace Xtraq.Tests;
 
@@ -18,6 +19,7 @@ public interface IXtraqDbContext
     int CommandTimeout { get; }
 }
 
+[Collection(ProcedureExecutorCollection.Name)]
 public sealed class ProcedureExecutorInterceptorTests
 {
     [Xunit.Fact]

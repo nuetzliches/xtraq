@@ -34,11 +34,10 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Setup .NET 10 Preview SDK
+      - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-          dotnet-quality: preview
 
       - name: Restore dependencies
         run: dotnet restore src/Xtraq.csproj -p:PublishReadyToRun=false
