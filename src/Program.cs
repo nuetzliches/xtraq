@@ -90,8 +90,21 @@ public static class Program
                 }
             }
 
+            static void LoadEnvVariables(string path)
+            {
+                try
+                {
+                    Xtraq.Utils.EnvFileLoader.Apply(path);
+                }
+                catch
+                {
+                    // Ignore .env load failures and continue with existing environment variables.
+                }
+            }
+
             var cwd = Directory.GetCurrentDirectory();
             LoadSkipVarsFromEnv(Path.Combine(cwd, ".env"));
+            LoadEnvVariables(Path.Combine(cwd, ".env"));
 
             try
             {
@@ -99,6 +112,7 @@ public static class Program
                 if (!string.Equals(resolvedRoot, cwd, StringComparison.OrdinalIgnoreCase))
                 {
                     LoadSkipVarsFromEnv(Path.Combine(resolvedRoot, ".env"));
+                    LoadEnvVariables(Path.Combine(resolvedRoot, ".env"));
                 }
             }
             catch

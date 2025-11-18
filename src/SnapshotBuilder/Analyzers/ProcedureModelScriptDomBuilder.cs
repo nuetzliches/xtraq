@@ -6077,10 +6077,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
             catch (Exception ex)
             {
-                if (_verboseParsing)
-                {
-                    Console.WriteLine($"[alias-resolver] Fallback metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
-                }
+                LogVerbose($"[alias-resolver] Fallback metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
             }
 
             if (!string.IsNullOrWhiteSpace(cacheKey))
@@ -6164,10 +6161,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
             catch (Exception ex)
             {
-                if (_verboseParsing)
-                {
-                    Console.WriteLine($"[alias-resolver] Fallback function metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
-                }
+                LogVerbose($"[alias-resolver] Fallback function metadata lookup failed for {effectiveSchema}.{name}: {ex.Message}");
             }
 
             if (!string.IsNullOrWhiteSpace(cacheKey))
