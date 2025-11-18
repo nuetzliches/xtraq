@@ -1,10 +1,65 @@
-// https://nuxt.com/docs/api/configuration/nuxt-config
-const baseURL = process.env.NUXT_APP_BASE_URL || '/';
-const withBase = (path: string): string => {
-  const normalizedBase = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${normalizedBase}${normalizedPath}`;
-};
+// https://docus.dev/en/concepts/configuration
+
+const lucideClientBundleIcons = [
+  'lucide:alert-circle',
+  'lucide:arrow-down',
+  'lucide:arrow-left',
+  'lucide:arrow-right',
+  'lucide:arrow-up',
+  'lucide:arrow-up-right',
+  'lucide:book-open',
+  'lucide:box',
+  'lucide:circle-alert',
+  'lucide:circle-check',
+  'lucide:circle-question-mark',
+  'lucide:circle-x',
+  'lucide:chevron-down',
+  'lucide:chevron-left',
+  'lucide:chevron-right',
+  'lucide:chevron-up',
+  'lucide:chevrons-left',
+  'lucide:chevrons-right',
+  'lucide:code',
+  'lucide:copy',
+  'lucide:copy-check',
+  'lucide:eye',
+  'lucide:eye-off',
+  'lucide:file',
+  'lucide:folder',
+  'lucide:folder-open',
+  'lucide:hash',
+  'lucide:info',
+  'lucide:lightbulb',
+  'lucide:link',
+  'lucide:loader-circle',
+  'lucide:menu',
+  'lucide:minus',
+  'lucide:monitor',
+  'lucide:moon',
+  'lucide:package',
+  'lucide:panel-left-close',
+  'lucide:panel-left-open',
+  'lucide:pen',
+  'lucide:plus',
+  'lucide:rocket',
+  'lucide:rotate-ccw',
+  'lucide:search',
+  'lucide:shield-check',
+  'lucide:sliders-horizontal',
+  'lucide:square',
+  'lucide:star',
+  'lucide:sun',
+  'lucide:terminal',
+  'lucide:triangle-alert',
+  'lucide:upload',
+  'lucide:wand-sparkles',
+  'lucide:workflow',
+  'lucide:x'
+];
+
+const simpleIconsClientBundleIcons = [
+  'simple-icons:github'
+];
 
 export default defineNuxtConfig({
   extends: ['docus'],
@@ -21,20 +76,21 @@ export default defineNuxtConfig({
   eslint: {
     checker: false
   },
-  app: {
-    // Set via env NUXT_APP_BASE_URL="/xtraq/" for GitHub Pages; '/' for root hosting.
-    baseURL,
-    head: {
-      link: [
-        {
-          rel: 'icon',
-          type: 'image/svg+xml',
-          href: withBase('/favicon.svg')
-        }
-      ]
-    }
-  },
   css: ['~/assets/css/main.css'],
+  icon: {
+    provider: 'none',
+    serverBundle: {
+      collections: ['lucide', 'simple-icons']
+    },
+    clientBundle: {
+      icons: [
+        ...lucideClientBundleIcons, 
+        ...simpleIconsClientBundleIcons
+      ],
+      scan: true
+    },
+    fallbackToApi: false
+  },
   appConfig: {
     docus: {
       title: 'xtraq Documentation',
@@ -58,8 +114,8 @@ export default defineNuxtConfig({
       header: {
         title: 'xtraq',
         logo: {
-          light: '/xtraq-logo.svg',
-          dark: '/xtraq-logo.svg'
+          light: 'xtraq-logo.svg',
+          dark: 'xtraq-logo.svg'
         },
         showLinkIcon: true,
         actions: [
@@ -100,31 +156,6 @@ export default defineNuxtConfig({
       toc: {
         title: 'On this page'
       }
-    },
-    seo: {
-      title: 'xtraq',
-      description: 'Code generator for SQL Server stored procedures that creates strongly typed C# classes.'
-    }
-  },
-  content: {
-    build: {
-      markdown: {
-        highlight: {
-          theme: {
-            default: 'github-dark-default',
-            light: 'github-light-default'
-          },
-          langs: ['bash', 'csharp', 'json', 'jsonc', 'powershell', 'sql']
-        }
-      }
-    }
-  },
-  compatibilityDate: '2024-10-18',
-  nitro: {
-    prerender: {
-      routes: ['/'],
-      crawlLinks: true,
-      autoSubfolderIndex: false
     }
   }
 })

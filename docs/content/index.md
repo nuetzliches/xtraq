@@ -30,7 +30,7 @@ Install the CLI
 :::u-button
 ---
 color: neutral
-icon: simple-icons-github
+icon: i-simple-icons-github
 size: xl
 to: https://github.com/nuetzliches/xtraq
 variant: outline
@@ -62,7 +62,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: Stored procedure first
-  icon: i-heroicons-shield-check
+  icon: i-lucide-shield-check
   ---
   Respect existing database boundaries, permissions, and auditing while exposing a clean client surface.
   ::
@@ -70,7 +70,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: Strongly typed artefacts
-  icon: i-heroicons-cube-transparent
+  icon: i-lucide-box
   ---
   Generate inputs, outputs, and helpers that target .NET 10 by default while retaining .NET 8 compatibility.
   ::
@@ -78,7 +78,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: JSON aware by design
-  icon: i-heroicons-code-bracket
+  icon: i-lucide-code
   ---
   Capture nested JSON payloads, table-valued parameters, and multi-result sets without manual parsing.
   ::
@@ -86,7 +86,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: Fluent pipeline design
-  icon: i-heroicons-sparkles
+  icon: i-lucide-wand-sparkles
   to: /reference/api-integration
   ---
   Compose policies, transactions, and streaming helpers without losing strongly typed procedures.
@@ -95,7 +95,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: Transaction-aware orchestration
-  icon: i-heroicons-arrow-path-rounded-square
+  icon: i-lucide-workflow
   to: /reference/entity-framework-integration
   ---
   Reuse ambient EF connections or spin up savepoint-backed scopes with generated orchestrator wiring.
@@ -104,7 +104,7 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
   ::card
   ---
   title: Minimal API ready
-  icon: i-heroicons-adjustments-horizontal
+  icon: i-lucide-sliders-horizontal
   to: /reference/api-integration
   ---
   Attach generated route handlers and streaming endpoints without abandoning standard `MapGet`/`MapPost` flows.
@@ -120,7 +120,7 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   ::card
   ---
   title: Understand the workflow
-  icon: i-heroicons-question-mark-circle
+  icon: i-lucide-circle-question-mark
   to: /getting-started/what-is-xtraq
   ---
   Learn how snapshots, configuration, and generation combine to keep your client code deterministic.
@@ -129,7 +129,7 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   ::card
   ---
   title: Run the quickstart
-  icon: i-heroicons-rocket-launch
+  icon: i-lucide-rocket
   to: /getting-started/quickstart
   ---
   Scaffold a project, capture metadata, and generate artefacts ready to drop into your solution.
@@ -138,7 +138,7 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   ::card
   ---
   title: Explore the CLI
-  icon: i-heroicons-command-line
+  icon: i-lucide-terminal
   to: /cli
   ---
   Dive into every command, flag, and workflow for local development and CI/CD automation.
@@ -147,7 +147,7 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   ::card
   ---
   title: Browse the reference
-  icon: i-heroicons-book-open
+  icon: i-lucide-book-open
   to: /reference
   ---
   Dive into configuration, naming, and binding guides before customising your generator.
@@ -173,7 +173,7 @@ Join the community, track releases, and deploy the global tool from the platform
   ::card
   ---
   title: Install from NuGet
-  icon: i-simple-icons-nuget
+  icon: i-lucide-package
   to: https://www.nuget.org/packages/xtraq
   target: _blank
   ---
