@@ -5,7 +5,7 @@ namespace Xtraq.Execution;
 
 /// <summary>
 /// Logging interceptor capturing duration, success flag and optional error. Designed for lightweight structured logging without throwing.
-/// Register via <c>ProcedureExecutor.SetInterceptor(new LoggingProcedureInterceptor(logger));</c> during application startup.
+/// Register via <c>ProcedureExecutor.AddInterceptor(new LoggingProcedureInterceptor(logger));</c> during application startup.
 /// </summary>
 public sealed class LoggingProcedureInterceptor : IXtraqProcedureInterceptor
 {

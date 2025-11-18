@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 
 namespace Xtraq.Execution;
 
@@ -83,11 +85,45 @@ public sealed record ResultSetMapping(string Name, Func<DbDataReader, Cancellati
 /// </summary>
 public static class ProcedureExecutor
 {
-    private static IXtraqProcedureInterceptor _interceptor = new NoOpProcedureInterceptor();
+    private static readonly object InterceptorSync = new();
+    private static IXtraqProcedureInterceptor[] _globalInterceptors = Array.Empty<IXtraqProcedureInterceptor>();
 
-    /// <summary>Sets a global interceptor. Thread-safe overwrite; expected rarely (e.g. application startup).</summary>
+    /// <summary>Sets the global interceptor list, replacing previously registered instances.</summary>
     /// <param name="interceptor">The interceptor instance to observe procedure lifecycle events.</param>
-    public static void SetInterceptor(IXtraqProcedureInterceptor interceptor) => _interceptor = interceptor ?? new NoOpProcedureInterceptor();
+    public static void SetInterceptor(IXtraqProcedureInterceptor interceptor)
+    {
+        ArgumentNullException.ThrowIfNull(interceptor);
+
+        lock (InterceptorSync)
+        {
+            _globalInterceptors = new[] { interceptor };
+        }
+    }
+
+    /// <summary>Adds an additional global interceptor without replacing previously registered instances.</summary>
+    /// <param name="interceptor">The interceptor instance to append.</param>
+    public static void AddInterceptor(IXtraqProcedureInterceptor interceptor)
+    {
+        ArgumentNullException.ThrowIfNull(interceptor);
+
+        lock (InterceptorSync)
+        {
+            var snapshot = _globalInterceptors;
+            var newArray = new IXtraqProcedureInterceptor[snapshot.Length + 1];
+            Array.Copy(snapshot, newArray, snapshot.Length);
+            newArray[^1] = interceptor;
+            _globalInterceptors = newArray;
+        }
+    }
+
+    /// <summary>Clears all globally registered interceptors.</summary>
+    public static void ClearInterceptors()
+    {
+        lock (InterceptorSync)
+        {
+            _globalInterceptors = Array.Empty<IXtraqProcedureInterceptor>();
+        }
+    }
 
     /// <summary>
     /// Executes the provided procedure plan and returns the generated aggregate value.
@@ -98,7 +134,22 @@ public static class ProcedureExecutor
     /// <param name="state">Optional state object propagated to the interceptor and input binder.</param>
     /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
     /// <returns>The aggregate value produced by the execution pipeline.</returns>
-    public static async Task<TAggregate> ExecuteAsync<TAggregate>(DbConnection connection, ProcedureExecutionPlan plan, object? state = null, CancellationToken cancellationToken = default)
+    public static Task<TAggregate> ExecuteAsync<TAggregate>(DbConnection connection, ProcedureExecutionPlan plan, object? state = null, CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync<TAggregate>(null, connection, plan, state, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes the provided procedure plan using the supplied context-aware interceptors.
+    /// </summary>
+    /// <typeparam name="TAggregate">The aggregate type produced by the execution plan.</typeparam>
+    /// <param name="interceptorProvider">Optional interceptor provider supplying scoped interceptors.</param>
+    /// <param name="connection">The database connection used to execute the stored procedure.</param>
+    /// <param name="plan">The execution plan describing parameters, result sets, and aggregation.</param>
+    /// <param name="state">Optional state object propagated to the interceptor and input binder.</param>
+    /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
+    /// <returns>The aggregate value produced by the execution pipeline.</returns>
+    public static async Task<TAggregate> ExecuteAsync<TAggregate>(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, object? state = null, CancellationToken cancellationToken = default)
     {
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = plan.ProcedureName;
@@ -118,15 +169,13 @@ public static class ProcedureExecutor
             cmd.Parameters.Add(param);
         }
 
-        object? beforeState = null;
+        var interceptors = await InvokeBeforeAsync(interceptorProvider, plan.ProcedureName, cmd, state, cancellationToken).ConfigureAwait(false);
         var start = DateTime.UtcNow;
         try
         {
             if (connection.State != ConnectionState.Open) await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             // Bind input values (if any) before execution
             plan.InputBinder?.Invoke(cmd, state); // wrapper supplies state (input record) if available
-
-            beforeState = await _interceptor.OnBeforeExecuteAsync(plan.ProcedureName, cmd, state, cancellationToken).ConfigureAwait(false);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             var resultSetResults = new List<object>(plan.ResultSets.Count);
@@ -154,14 +203,21 @@ public static class ProcedureExecutor
             var rsArray = resultSetResults.ToArray();
             var aggregateObj = plan.AggregateFactory(true, null, outputObj, outputValues, rsArray);
             var duration = DateTime.UtcNow - start;
-            await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, true, null, duration, beforeState, aggregateObj, cancellationToken).ConfigureAwait(false);
+            await NotifyAfterAsync(interceptors, plan.ProcedureName, cmd, true, null, duration, aggregateObj, cancellationToken).ConfigureAwait(false);
             return (TAggregate)aggregateObj;
         }
         catch (Exception ex)
         {
             var aggregateObj = plan.AggregateFactory(false, ex.Message, null, new Dictionary<string, object?>(), Array.Empty<object>());
             var duration = DateTime.UtcNow - start;
-            try { await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, false, ex.Message, duration, beforeState, aggregateObj, cancellationToken).ConfigureAwait(false); } catch { /* swallow interceptor errors */ }
+            try
+            {
+                await NotifyAfterAsync(interceptors, plan.ProcedureName, cmd, false, ex.Message, duration, aggregateObj, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // swallow interceptor errors
+            }
             return (TAggregate)aggregateObj;
         }
     }
@@ -177,7 +233,23 @@ public static class ProcedureExecutor
     /// <param name="state">Optional state propagated to the input binder and interceptor pipeline.</param>
     /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
     /// <returns>The typed output payload produced by the plan's <see cref="ProcedureExecutionPlan.OutputFactory"/>, or <c>null</c> when the procedure does not emit output parameters.</returns>
-    public static async Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? state = null, CancellationToken cancellationToken = default)
+    public static Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? state = null, CancellationToken cancellationToken = default)
+    {
+        return StreamResultSetAsync(null, connection, plan, resultSetIndex, streamAction, state, cancellationToken);
+    }
+
+    /// <summary>
+    /// Streams a result set using the specified context-aware interceptors.
+    /// </summary>
+    /// <param name="interceptorProvider">Optional interceptor provider supplying scoped interceptors.</param>
+    /// <param name="connection">The open or closed database connection used to execute the stored procedure.</param>
+    /// <param name="plan">The execution plan describing parameters and materialisers for the stored procedure.</param>
+    /// <param name="resultSetIndex">Zero-based index of the result set to stream.</param>
+    /// <param name="streamAction">Delegate that processes the requested result set by consuming rows from the provided reader.</param>
+    /// <param name="state">Optional state propagated to the input binder and interceptor pipeline.</param>
+    /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
+    /// <returns>The typed output payload produced by the plan's <see cref="ProcedureExecutionPlan.OutputFactory"/>, or <c>null</c> when the procedure does not emit output parameters.</returns>
+    public static async Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? state = null, CancellationToken cancellationToken = default)
     {
         if (connection == null) throw new ArgumentNullException(nameof(connection));
         if (plan == null) throw new ArgumentNullException(nameof(plan));
@@ -201,7 +273,7 @@ public static class ProcedureExecutor
             cmd.Parameters.Add(param);
         }
 
-        object? beforeState = null;
+        var interceptors = await InvokeBeforeAsync(interceptorProvider, plan.ProcedureName, cmd, state, cancellationToken).ConfigureAwait(false);
         var start = DateTime.UtcNow;
         try
         {
@@ -211,8 +283,6 @@ public static class ProcedureExecutor
             }
 
             plan.InputBinder?.Invoke(cmd, state);
-
-            beforeState = await _interceptor.OnBeforeExecuteAsync(plan.ProcedureName, cmd, state, cancellationToken).ConfigureAwait(false);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
 
@@ -253,7 +323,7 @@ public static class ProcedureExecutor
 
             var outputObj = plan.OutputFactory?.Invoke(outputValues);
             var duration = DateTime.UtcNow - start;
-            await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, true, null, duration, beforeState, outputObj, cancellationToken).ConfigureAwait(false);
+            await NotifyAfterAsync(interceptors, plan.ProcedureName, cmd, true, null, duration, outputObj, cancellationToken).ConfigureAwait(false);
             return outputObj;
         }
         catch (Exception ex)
@@ -261,7 +331,7 @@ public static class ProcedureExecutor
             var duration = DateTime.UtcNow - start;
             try
             {
-                await _interceptor.OnAfterExecuteAsync(plan.ProcedureName, cmd, false, ex.Message, duration, beforeState, null, cancellationToken).ConfigureAwait(false);
+                await NotifyAfterAsync(interceptors, plan.ProcedureName, cmd, false, ex.Message, duration, null, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -270,5 +340,107 @@ public static class ProcedureExecutor
 
             throw;
         }
+    }
+
+    private static async Task<List<(IXtraqProcedureInterceptor Interceptor, object? State)>?> InvokeBeforeAsync(
+        IXtraqProcedureInterceptorProvider? interceptorProvider,
+        string procedureName,
+        DbCommand command,
+        object? state,
+        CancellationToken cancellationToken)
+    {
+        var interceptors = CollectInterceptors(interceptorProvider);
+        if (interceptors.Count == 0)
+        {
+            return null;
+        }
+
+        var results = new List<(IXtraqProcedureInterceptor, object?)>(interceptors.Count);
+        foreach (var interceptor in interceptors)
+        {
+            if (interceptor is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var beforeState = await interceptor.OnBeforeExecuteAsync(procedureName, command, state, cancellationToken).ConfigureAwait(false);
+                results.Add((interceptor, beforeState));
+            }
+            catch
+            {
+                // Skip this interceptor on failure to avoid affecting the execution pipeline.
+            }
+        }
+
+        return results.Count == 0 ? null : results;
+    }
+
+    private static async Task NotifyAfterAsync(
+        List<(IXtraqProcedureInterceptor Interceptor, object? State)>? interceptors,
+        string procedureName,
+        DbCommand command,
+        bool success,
+        string? error,
+        TimeSpan duration,
+        object? aggregate,
+        CancellationToken cancellationToken)
+    {
+        if (interceptors is null || interceptors.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (interceptor, beforeState) in interceptors)
+        {
+            try
+            {
+                await interceptor.OnAfterExecuteAsync(procedureName, command, success, error, duration, beforeState, aggregate, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore interceptor failures to avoid breaking the execution pipeline.
+            }
+        }
+    }
+
+    private static List<IXtraqProcedureInterceptor> CollectInterceptors(IXtraqProcedureInterceptorProvider? interceptorProvider)
+    {
+        var snapshot = Volatile.Read(ref _globalInterceptors);
+        var globalCount = snapshot.Length;
+
+        List<IXtraqProcedureInterceptor>? scoped = null;
+        if (interceptorProvider is not null)
+        {
+            var scopedInterceptors = interceptorProvider.GetInterceptors();
+            if (scopedInterceptors is { Count: > 0 })
+            {
+                scoped = new List<IXtraqProcedureInterceptor>(scopedInterceptors.Count);
+                for (var i = 0; i < scopedInterceptors.Count; i++)
+                {
+                    var interceptor = scopedInterceptors[i];
+                    if (interceptor is not null)
+                    {
+                        scoped.Add(interceptor);
+                    }
+                }
+            }
+        }
+
+        if (globalCount == 0 && (scoped is null || scoped.Count == 0))
+        {
+            return scoped ?? new List<IXtraqProcedureInterceptor>(capacity: 0);
+        }
+
+        if (scoped is null || scoped.Count == 0)
+        {
+            return new List<IXtraqProcedureInterceptor>(snapshot);
+        }
+
+        var combined = new List<IXtraqProcedureInterceptor>(globalCount + scoped.Count);
+        combined.AddRange(snapshot);
+        combined.AddRange(scoped);
+        return combined;
     }
 }

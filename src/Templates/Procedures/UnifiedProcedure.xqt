@@ -129,7 +129,7 @@ public static class {{ ProcedureTypeName }}Extensions
 	public static async Task<{{ UnifiedResultTypeName }}> {{ ProcedureTypeName }}Async(this IXtraqDbContext db{{#if HasInput}}, {{ InputTypeName }} input{{/if}}, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await {{ ProcedureTypeName }}Procedure.ExecuteAsync(conn{{#if HasInput}}, input{{/if}}, cancellationToken).ConfigureAwait(false);
+		return await {{ ProcedureTypeName }}Procedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn{{#if HasInput}}, input{{/if}}, cancellationToken).ConfigureAwait(false);
 	}
 
 {{#each ResultSets as resultSet}}{{#if resultSet.SupportsStreaming}}
@@ -140,10 +140,10 @@ public static class {{ ProcedureTypeName }}Extensions
 		ArgumentNullException.ThrowIfNull(onRowAsync);
 		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 		{{#if resultSet.HasOutput}}
-		var output = await {{ resultSet.ProcedureTypeName }}Procedure.{{ resultSet.StreamMethodName }}(connection{{#if resultSet.HasInput}}, input{{/if}}, onRowAsync, cancellationToken).ConfigureAwait(false);
+		var output = await {{ resultSet.ProcedureTypeName }}Procedure.{{ resultSet.StreamMethodName }}(db as IXtraqProcedureInterceptorProvider, connection{{#if resultSet.HasInput}}, input{{/if}}, onRowAsync, cancellationToken).ConfigureAwait(false);
 		return output;
 		{{else}}
-		await {{ resultSet.ProcedureTypeName }}Procedure.{{ resultSet.StreamMethodName }}(connection{{#if resultSet.HasInput}}, input{{/if}}, onRowAsync, cancellationToken).ConfigureAwait(false);
+		await {{ resultSet.ProcedureTypeName }}Procedure.{{ resultSet.StreamMethodName }}(db as IXtraqProcedureInterceptorProvider, connection{{#if resultSet.HasInput}}, input{{/if}}, onRowAsync, cancellationToken).ConfigureAwait(false);
 		{{/if}}
 	}
 
@@ -161,13 +161,19 @@ public static class {{ ProcedureTypeName }}Procedure
 {
 	public const string Name = "{{ ProcedureFullName }}";
 	public static Task<{{ UnifiedResultTypeName }}> ExecuteAsync(DbConnection connection{{#if HasInput}}, {{ InputTypeName }} input{{/if}}, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(null, connection{{#if HasInput}}, input{{/if}}, cancellationToken);
+
+	public static Task<{{ UnifiedResultTypeName }}> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection{{#if HasInput}}, {{ InputTypeName }} input{{/if}}, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<{{ UnifiedResultTypeName }}>(connection, {{ PlanTypeName }}.Instance, {{#if HasInput}}input{{else}}null{{/if}}, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<{{ UnifiedResultTypeName }}>(interceptorProvider, connection, {{ PlanTypeName }}.Instance, {{#if HasInput}}input{{else}}null{{/if}}, cancellationToken);
 	}
 
 {{#each ResultSets as resultSet}}{{#if resultSet.SupportsStreaming}}
 	/// <summary>Streams result set <c>{{ resultSet.Name }}</c> using the supplied row callback.</summary>
-	public static async Task{{#if resultSet.HasOutput}}<{{ resultSet.OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(DbConnection connection{{#if resultSet.HasInput}}, {{ resultSet.InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	public static Task{{#if resultSet.HasOutput}}<{{ resultSet.OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(DbConnection connection{{#if resultSet.HasInput}}, {{ resultSet.InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+		=> {{ resultSet.StreamMethodName }}(null, connection{{#if resultSet.HasInput}}, input{{/if}}, onRowAsync, cancellationToken);
+
+	public static async Task{{#if resultSet.HasOutput}}<{{ resultSet.OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection{{#if resultSet.HasInput}}, {{ resultSet.InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(connection);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
@@ -183,16 +189,22 @@ public static class {{ ProcedureTypeName }}Procedure
 		}
 
 {{#if resultSet.HasOutput}}
-		var output = await ProcedureExecutor.StreamResultSetAsync(connection, {{ resultSet.PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if resultSet.HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
+		var output = await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, {{ resultSet.PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if resultSet.HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
 		return ({{ resultSet.OutputTypeName }}?)output;
 {{else}}
-		await ProcedureExecutor.StreamResultSetAsync(connection, {{ resultSet.PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if resultSet.HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
+		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, {{ resultSet.PlanTypeName }}.Instance, {{ resultSet.StreamIndex }}, StreamCoreAsync, {{#if resultSet.HasInput}}input{{else}}null{{/if}}, cancellationToken).ConfigureAwait(false);
 {{/if}}	}
 
 	public static Task{{#if resultSet.HasOutput}}<{{ resultSet.OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(DbConnection connection{{#if resultSet.HasInput}}, {{ resultSet.InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return {{ resultSet.StreamMethodName }}(connection{{#if resultSet.HasInput}}, input{{/if}}, (row, ct) => onRowAsync(row), cancellationToken);
+		return {{ resultSet.StreamMethodName }}(null, connection{{#if resultSet.HasInput}}, input{{/if}}, (row, ct) => onRowAsync(row), cancellationToken);
+	}
+
+	public static Task{{#if resultSet.HasOutput}}<{{ resultSet.OutputTypeName }}?>{{/if}} {{ resultSet.StreamMethodName }}(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection{{#if resultSet.HasInput}}, {{ resultSet.InputTypeName }} input{{/if}}, Func<{{ resultSet.TypeName }}, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(onRowAsync);
+		return {{ resultSet.StreamMethodName }}(interceptorProvider, connection{{#if resultSet.HasInput}}, input{{/if}}, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 {{/if}}{{/each}}
