@@ -11,6 +11,7 @@ description: Tracking upcoming work and temporary deferrals.
 ## Test Debt
 
 - [x] Eliminate the CS8765 noise in `ProcedureExecutorInterceptorTests` by delegating parameter handling to `SqlCommand` and annotating the remaining overrides (`ConnectionString`, `CommandText`, `DbConnection`) with `[AllowNull]`, restoring warning-free builds on both target frameworks.
+- [x] Reset `XTRAQ_BUILD_PROCEDURES` when `--procedure` is omitted so consecutive CLI runs do not inherit stale per-procedure filters.
 
 ## Default Target Framework
 
@@ -111,3 +112,4 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 ## Next Steps
 
 - Evaluate analyzers or source generators that flag Minimal API routes missing generated scaffolding so teams can opt-in gradually without regressions.
+- [ ] Move the sample runtime scaffolding (`samples/restapi/Xtraq/*`) into a dedicated project reference so the REST API sample only tracks schema-specific artifacts under `samples/restapi/Xtraq/Sample` while all shared infrastructure flows through the `src/Xtraq.csproj` dependency.

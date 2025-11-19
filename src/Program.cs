@@ -228,10 +228,8 @@ public static class Program
             DirectoryUtils.SetBasePath(options.Path);
             CacheControl.ForceReload = options.NoCache;
 
-            if (!string.IsNullOrWhiteSpace(options.Procedure))
-            {
-                Environment.SetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES", options.Procedure);
-            }
+            var procedureFilter = string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure;
+            Environment.SetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES", procedureFilter);
 
             if (options.HasEntityFrameworkIntegrationOverride)
             {
