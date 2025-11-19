@@ -1,3 +1,4 @@
+using Xtraq.Configuration;
 using Xtraq.Utils;
 
 namespace Xtraq.SnapshotBuilder.Utils;
@@ -10,90 +11,131 @@ internal static class SnapshotRootLocator
 {
     internal static IEnumerable<string> EnumerateSnapshotRoots()
     {
-        var current = Directory.GetCurrentDirectory();
-        var candidates = new List<string?>
-        {
-            current,
-            Path.Combine(current, "debug"),
-            Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT")
-        };
-
-        try
-        {
-            var resolvedWorkingDirectory = DirectoryUtils.GetWorkingDirectory();
-            if (!string.IsNullOrWhiteSpace(resolvedWorkingDirectory))
-            {
-                candidates.Add(resolvedWorkingDirectory);
-            }
-        }
-        catch
-        {
-            // Ignore failures resolving the working directory; remaining candidates still apply.
-        }
-
-        var projectRootEnv = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
-        if (!string.IsNullOrWhiteSpace(projectRootEnv))
-        {
-            candidates.Add(projectRootEnv);
-        }
-
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in candidates)
+        foreach (var candidate in EnumerateCandidates())
         {
             if (string.IsNullOrWhiteSpace(candidate))
             {
                 continue;
             }
 
-            string fullPath;
-            try
-            {
-                fullPath = Path.GetFullPath(candidate);
-            }
-            catch
+            var normalized = NormalizeCandidate(candidate);
+            if (normalized is null)
             {
                 continue;
             }
 
-            if (!Directory.Exists(fullPath))
+            if (TryAddSnapshotRoot(normalized, roots))
             {
                 continue;
             }
 
-            if (TryAddSnapshotRoot(fullPath, roots))
+            if (Directory.Exists(normalized))
             {
-                continue;
-            }
-
-            try
-            {
-                foreach (var snapshotDir in Directory.EnumerateDirectories(fullPath, ".xtraq", SearchOption.AllDirectories))
+                var resolvedProjectRoot = SafeResolveProjectRoot(normalized);
+                if (!string.IsNullOrWhiteSpace(resolvedProjectRoot))
                 {
-                    var parent = Path.GetDirectoryName(snapshotDir);
-                    if (!string.IsNullOrWhiteSpace(parent))
-                    {
-                        TryAddSnapshotRoot(parent, roots);
-                    }
+                    TryAddSnapshotRoot(resolvedProjectRoot!, roots);
                 }
             }
-            catch
+        }
+
+        if (roots.Count == 0)
+        {
+            var fallback = NormalizeCandidate(ProjectRootResolver.ResolveCurrent());
+            if (fallback is not null)
             {
-                // Ignore traversal failures for individual candidates.
+                TryAddSnapshotRoot(fallback, roots);
             }
         }
 
         return roots;
 
+        static IEnumerable<string?> EnumerateCandidates()
+        {
+            yield return Safe(() => Directory.GetCurrentDirectory());
+            yield return Safe(static () => Path.Combine(Directory.GetCurrentDirectory(), "debug"));
+            yield return Safe(() => DirectoryUtils.GetWorkingDirectory());
+            yield return Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+            yield return Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
+        }
+
+        static string? Safe(Func<string> factory)
+        {
+            try
+            {
+                return factory();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        static string? NormalizeCandidate(string? candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return null;
+            }
+
+            try
+            {
+                var fullPath = Path.GetFullPath(candidate);
+                if (Path.GetFileName(fullPath).Equals(".xtraq", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parent = Path.GetDirectoryName(fullPath);
+                    return string.IsNullOrWhiteSpace(parent) ? null : parent;
+                }
+
+                return fullPath;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        static string? SafeResolveProjectRoot(string baseDirectory)
+        {
+            try
+            {
+                return TrackableConfigManager.ResolveProjectRoot(baseDirectory);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         static bool TryAddSnapshotRoot(string root, ISet<string> collector)
         {
-            if (!Directory.Exists(Path.Combine(root, ".xtraq")))
+            if (string.IsNullOrWhiteSpace(root))
             {
                 return false;
             }
 
-            collector.Add(root);
-            return true;
+            try
+            {
+                var normalized = Path.GetFullPath(root);
+                if (collector.Contains(normalized))
+                {
+                    return true;
+                }
+
+                if (Directory.Exists(Path.Combine(normalized, ".xtraq")))
+                {
+                    collector.Add(normalized);
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            return false;
         }
     }
 }
