@@ -8,6 +8,10 @@ description: Tracking upcoming work and temporary deferrals.
 - [x] Re-enable CI execution for .NET 10 once integration test runtime stabilises. _(Matrix now covers net8.0 and net10.0 using the current GA SDK.)_
 - [x] Extend the publish pipeline so the global tool ships a net10.0 asset once the hosted runners expose a compatible SDK or we provide it explicitly. _(Workflow installs the GA SDK and packs multi-target assets.)_
 
+## Test Debt
+
+- [x] Eliminate the CS8765 noise in `ProcedureExecutorInterceptorTests` by delegating parameter handling to `SqlCommand` and annotating the remaining overrides (`ConnectionString`, `CommandText`, `DbConnection`) with `[AllowNull]`, restoring warning-free builds on both target frameworks.
+
 ## Default Target Framework
 
 - [x] Update `src\Configuration\Constants.cs` and `src\Configuration\TargetFrameworkEnum.cs` to set .NET 10.0 as the default target framework for new projects and remove legacy frameworks from the enum. _(Default now targets net10.0; legacy entries trimmed to net8.0/net10.0 coverage.)_

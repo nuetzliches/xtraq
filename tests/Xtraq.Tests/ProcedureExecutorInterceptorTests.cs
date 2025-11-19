@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 using Xtraq.Execution;
 using Xunit;
 
@@ -134,6 +136,7 @@ public sealed class ProcedureExecutorInterceptorTests
     {
         private ConnectionState _state = ConnectionState.Closed;
 
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
 
         public override string Database => "Fake";
@@ -164,26 +167,28 @@ public sealed class ProcedureExecutorInterceptorTests
     private sealed class FakeCommand : DbCommand
     {
         private readonly FakeConnection _connection;
-        private readonly DbParameterCollection _parameters = new FakeParameterCollection();
+        private readonly SqlCommand _innerCommand = new();
 
         public FakeCommand(FakeConnection connection)
         {
             _connection = connection;
         }
 
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
 
         public override int CommandTimeout { get; set; } = 30;
 
         public override CommandType CommandType { get; set; } = CommandType.StoredProcedure;
 
+        [AllowNull]
         protected override DbConnection DbConnection
         {
             get => _connection;
             set => throw new NotSupportedException();
         }
 
-        protected override DbParameterCollection DbParameterCollection => _parameters;
+        protected override DbParameterCollection DbParameterCollection => _innerCommand.Parameters;
 
         protected override DbTransaction? DbTransaction { get; set; }
 
@@ -203,7 +208,7 @@ public sealed class ProcedureExecutorInterceptorTests
 
         public override void Prepare() { }
 
-        protected override DbParameter CreateDbParameter() => new FakeParameter();
+        protected override DbParameter CreateDbParameter() => _innerCommand.CreateParameter();
 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => new FakeReader();
 
@@ -213,108 +218,6 @@ public sealed class ProcedureExecutorInterceptorTests
         }
     }
 
-    private sealed class FakeParameter : DbParameter
-    {
-        public override DbType DbType { get; set; }
-
-        public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
-
-        public override bool IsNullable { get; set; }
-
-        public override string ParameterName { get; set; } = string.Empty;
-
-        public override string SourceColumn { get; set; } = string.Empty;
-
-        public override bool SourceColumnNullMapping { get; set; }
-
-        public override object? Value { get; set; }
-
-        public override int Size { get; set; }
-
-        public override DataRowVersion SourceVersion { get; set; } = DataRowVersion.Current;
-
-        public override void ResetDbType() => DbType = DbType.Object;
-    }
-
-    private sealed class FakeParameterCollection : DbParameterCollection
-    {
-        private readonly List<DbParameter> _parameters = new();
-
-        public override int Count => _parameters.Count;
-
-        public override object SyncRoot => _parameters;
-
-        public override int Add(object value)
-        {
-            _parameters.Add((DbParameter)value);
-            return _parameters.Count - 1;
-        }
-
-        public override void AddRange(Array values)
-        {
-            foreach (var value in values)
-            {
-                Add(value!);
-            }
-        }
-
-        public override void Clear() => _parameters.Clear();
-
-        public override bool Contains(object value) => _parameters.Contains((DbParameter)value);
-
-        public override bool Contains(string value) => _parameters.Exists(p => string.Equals(p.ParameterName, value, StringComparison.OrdinalIgnoreCase));
-
-        public override void CopyTo(Array array, int index) => _parameters.ToArray().CopyTo(array, index);
-
-        public override IEnumerator GetEnumerator() => _parameters.GetEnumerator();
-
-        public override int IndexOf(object value) => _parameters.IndexOf((DbParameter)value);
-
-        public override int IndexOf(string parameterName) => _parameters.FindIndex(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
-
-        public override void Insert(int index, object value) => _parameters.Insert(index, (DbParameter)value);
-
-        public override void Remove(object value) => _parameters.Remove((DbParameter)value);
-
-        public override void RemoveAt(int index) => _parameters.RemoveAt(index);
-
-        public override void RemoveAt(string parameterName)
-        {
-            var index = IndexOf(parameterName);
-            if (index >= 0)
-            {
-                _parameters.RemoveAt(index);
-            }
-        }
-
-        protected override DbParameter GetParameter(int index) => _parameters[index];
-
-        protected override DbParameter GetParameter(string parameterName)
-        {
-            var index = IndexOf(parameterName);
-            if (index < 0)
-            {
-                throw new IndexOutOfRangeException();
-            }
-
-            return _parameters[index];
-        }
-
-        protected override void SetParameter(int index, DbParameter value) => _parameters[index] = value;
-
-        protected override void SetParameter(string parameterName, DbParameter value)
-        {
-            var index = IndexOf(parameterName);
-            if (index >= 0)
-            {
-                _parameters[index] = value;
-            }
-            else
-            {
-                Add(value);
-            }
-        }
-    }
 
     private sealed class FakeReader : DbDataReader
     {
