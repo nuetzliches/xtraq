@@ -1,4 +1,5 @@
 using Xtraq.Data;
+using Xtraq.Data.Models;
 using Xtraq.Services;
 using Xtraq.SnapshotBuilder.Metadata;
 using Xtraq.SnapshotBuilder.Models;
@@ -62,7 +63,6 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
         var proceduresRoot = Path.Combine(schemaRoot, "procedures");
         Directory.CreateDirectory(proceduresRoot);
 
-        var updated = new List<ProcedureAnalysisResult>(analyzedProcedures.Count);
         var verbose = options.Verbose;
         var degreeOfParallelism = options.MaxDegreeOfParallelism > 0
             ? options.MaxDegreeOfParallelism
@@ -74,12 +74,12 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
             MaxDegreeOfParallelism = Math.Max(1, degreeOfParallelism)
         };
 
-        var writeResults = new ConcurrentBag<ProcedureWriteRecord>();
+        var writePlans = new ConcurrentBag<ProcedureWritePlan>();
         var requiredTypeRefs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
         var requiredTableRefs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(
-            analyzedProcedures.Select((item, index) => (item, index)),
+            analyzedProcedures.Select(static (item, index) => (item, index)),
             parallelOptions,
             async (entry, ct) =>
             {
@@ -100,7 +100,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                 var localTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var localTableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                var jsonBytes = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
+                ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
                     descriptor,
                     item.Parameters,
                     item.Procedure,
@@ -108,25 +108,12 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                     localTableRefs,
                     _jsonEnhancementService);
 
-                var writeOutcome = await WriteArtifactAsync(filePath, jsonBytes, ct).ConfigureAwait(false);
-                if (writeOutcome.Wrote && verbose)
-                {
-                    _console.Verbose($"[snapshot-write] wrote {fileName}");
-                }
-
-                var result = new ProcedureAnalysisResult
-                {
-                    Descriptor = descriptor,
-                    Procedure = item.Procedure,
-                    WasReusedFromCache = item.WasReusedFromCache,
-                    SourceLastModifiedUtc = item.SourceLastModifiedUtc,
-                    SnapshotFile = fileName,
-                    SnapshotHash = writeOutcome.Hash,
-                    Parameters = item.Parameters,
-                    Dependencies = item.Dependencies
-                };
-
-                writeResults.Add(new ProcedureWriteRecord(index, result, writeOutcome.Wrote));
+                writePlans.Add(new ProcedureWritePlan(
+                    index,
+                    item,
+                    descriptor,
+                    fileName,
+                    filePath));
 
                 foreach (var typeRef in localTypeRefs)
                 {
@@ -145,21 +132,82 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                 }
             }).ConfigureAwait(false);
 
-        var orderedWrites = writeResults
-            .OrderBy(static record => record.Index)
+        var orderedPlans = writePlans
+            .OrderBy(static plan => plan.Index)
             .ToList();
-
-        var filesWritten = orderedWrites.Count(static record => record.Wrote);
-        var filesUnchanged = orderedWrites.Count - filesWritten;
-        updated.AddRange(orderedWrites.Select(static record => record.Result));
 
         var schemaArtifacts = await _schemaArtifactWriter.WriteAsync(
             schemaRoot,
             options,
-            updated,
+            analyzedProcedures,
             new HashSet<string>(requiredTypeRefs.Keys, StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(requiredTableRefs.Keys, StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
+
+        var updated = new List<ProcedureAnalysisResult>(orderedPlans.Count);
+        var filesWritten = 0;
+        var filesUnchanged = 0;
+
+        foreach (var plan in orderedPlans)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var descriptor = plan.Descriptor;
+            var parameters = plan.Source.Parameters ?? Array.Empty<StoredProcedureInput>();
+            var procedure = plan.Source.Procedure;
+            var localTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var localTableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var content = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
+                descriptor,
+                parameters,
+                procedure,
+                localTypeRefs,
+                localTableRefs,
+                _jsonEnhancementService);
+
+            foreach (var typeRef in localTypeRefs)
+            {
+                if (!string.IsNullOrWhiteSpace(typeRef))
+                {
+                    requiredTypeRefs.TryAdd(typeRef, 0);
+                }
+            }
+
+            foreach (var tableRef in localTableRefs)
+            {
+                if (!string.IsNullOrWhiteSpace(tableRef))
+                {
+                    requiredTableRefs.TryAdd(tableRef, 0);
+                }
+            }
+
+            var writeOutcome = await WriteArtifactAsync(plan.FilePath, content, cancellationToken).ConfigureAwait(false);
+            if (writeOutcome.Wrote)
+            {
+                filesWritten++;
+                if (verbose)
+                {
+                    _console.Verbose($"[snapshot-write] wrote {plan.FileName}");
+                }
+            }
+            else
+            {
+                filesUnchanged++;
+            }
+
+            updated.Add(new ProcedureAnalysisResult
+            {
+                Descriptor = descriptor,
+                Procedure = procedure,
+                WasReusedFromCache = plan.Source.WasReusedFromCache,
+                SourceLastModifiedUtc = plan.Source.SourceLastModifiedUtc,
+                SnapshotFile = plan.FileName,
+                SnapshotHash = writeOutcome.Hash,
+                Parameters = plan.Source.Parameters ?? Array.Empty<StoredProcedureInput>(),
+                Dependencies = plan.Source.Dependencies ?? Array.Empty<ProcedureDependency>()
+            });
+        }
 
         filesWritten += schemaArtifacts.FilesWritten;
         filesUnchanged += schemaArtifacts.FilesUnchanged;
@@ -212,5 +260,10 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
         return new ArtifactWriteOutcome(shouldWrite, hash);
     }
 
-    private sealed record ProcedureWriteRecord(int Index, ProcedureAnalysisResult Result, bool Wrote);
+    private sealed record ProcedureWritePlan(
+        int Index,
+        ProcedureAnalysisResult Source,
+        ProcedureDescriptor Descriptor,
+        string FileName,
+        string FilePath);
 }

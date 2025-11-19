@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "0159E7B2E16611D4",
+  "Fingerprint": "FF2143A495B496FF",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -9,7 +9,7 @@
     "ProcedureTotal": 10,
     "ProcedureSkipped": 0,
     "ProcedureLoaded": 10,
-    "UdttTotal": 3,
+    "UdttTotal": 2,
     "TableTotal": 4,
     "ViewTotal": 0,
     "UserDefinedTypeTotal": 2,
@@ -20,7 +20,7 @@
       "Schema": "sample",
       "Name": "ImportOrders",
       "File": "sample.ImportOrders.json",
-      "Hash": "F6D786579F09F180",
+      "Hash": "988558AF64BACABD",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -31,6 +31,7 @@
           "Columns": [
             {
               "Name": "ImportedOrders",
+              "Alias": "ImportedOrders",
               "SqlTypeName": "int",
               "IsNullable": false,
               "MaxLength": null,
@@ -46,8 +47,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": null,
               "Columns": null
             }
           ]
@@ -58,7 +58,7 @@
       "Schema": "sample",
       "Name": "OrderListAsJson",
       "File": "sample.OrderListAsJson.json",
-      "Hash": "D86ECB0DC3731523",
+      "Hash": "CA997477BD2A59DA",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -69,6 +69,7 @@
           "Columns": [
             {
               "Name": "OrdersJson",
+              "Alias": "OrdersJson",
               "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": -1,
@@ -84,8 +85,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": null,
               "Columns": null
             }
           ]
@@ -96,7 +96,7 @@
       "Schema": "sample",
       "Name": "OrderListByUserAsJson",
       "File": "sample.OrderListByUserAsJson.json",
-      "Hash": "33F92C8EBE9F7F74",
+      "Hash": "2A76C22BB013C7A7",
       "ResultSets": [
         {
           "ReturnsJson": true,
@@ -107,9 +107,10 @@
           "Columns": [
             {
               "Name": "OrderId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -122,12 +123,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "OrderNumber",
+              "Alias": null,
               "SqlTypeName": "nvarchar(40)",
               "IsNullable": false,
               "MaxLength": 40,
@@ -143,12 +144,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Status",
+              "Alias": null,
               "SqlTypeName": "nvarchar(50)",
               "IsNullable": false,
               "MaxLength": 50,
@@ -164,12 +165,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "TotalAmount",
+              "Alias": null,
               "SqlTypeName": "decimal(18,2)",
               "IsNullable": false,
               "MaxLength": 9,
@@ -185,12 +186,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.decimal",
               "Columns": null
             },
             {
               "Name": "Currency",
+              "Alias": null,
               "SqlTypeName": "char(3)",
               "IsNullable": false,
               "MaxLength": 3,
@@ -206,15 +207,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.char",
               "Columns": null
             },
             {
               "Name": "PlacedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": false,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -227,15 +228,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "RequiredAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -248,12 +249,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "Payments",
+              "Alias": "Payments",
               "SqlTypeName": "nvarchar(max)",
               "IsNullable": true,
               "MaxLength": null,
@@ -269,14 +270,14 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": null,
               "Columns": [
                 {
                   "Name": "PaymentId",
+                  "Alias": null,
                   "SqlTypeName": "uniqueidentifier",
                   "IsNullable": false,
-                  "MaxLength": 16,
+                  "MaxLength": null,
                   "Precision": null,
                   "Scale": null,
                   "SourceSchema": "sample",
@@ -289,12 +290,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.uniqueidentifier",
                   "Columns": null
                 },
                 {
                   "Name": "Gateway",
+                  "Alias": null,
                   "SqlTypeName": "nvarchar(50)",
                   "IsNullable": false,
                   "MaxLength": 50,
@@ -310,12 +311,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.nvarchar",
                   "Columns": null
                 },
                 {
                   "Name": "Amount",
+                  "Alias": null,
                   "SqlTypeName": "decimal(18,4)",
                   "IsNullable": false,
                   "MaxLength": 9,
@@ -331,15 +332,15 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.decimal",
                   "Columns": null
                 },
                 {
                   "Name": "CapturedAtUtc",
+                  "Alias": null,
                   "SqlTypeName": "datetime2(3)",
                   "IsNullable": true,
-                  "MaxLength": 7,
+                  "MaxLength": null,
                   "Precision": null,
                   "Scale": null,
                   "SourceSchema": "sample",
@@ -352,12 +353,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.datetime2",
                   "Columns": null
                 },
                 {
                   "Name": "FailureReason",
+                  "Alias": null,
                   "SqlTypeName": "nvarchar(400)",
                   "IsNullable": true,
                   "MaxLength": 400,
@@ -373,8 +374,7 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.nvarchar",
                   "Columns": null
                 }
               ]
@@ -398,6 +398,7 @@
           "Columns": [
             {
               "Name": "Status",
+              "Alias": null,
               "SqlTypeName": "nvarchar(50)",
               "IsNullable": false,
               "MaxLength": 50,
@@ -413,15 +414,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnOrderTotalsByStatus",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Orders",
+              "Alias": null,
               "SqlTypeName": "bigint",
               "IsNullable": true,
-              "MaxLength": 8,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -434,12 +435,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnOrderTotalsByStatus",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.bigint",
               "Columns": null
             },
             {
               "Name": "TotalAmount",
+              "Alias": null,
               "SqlTypeName": "decimal(38,38)",
               "IsNullable": true,
               "MaxLength": 17,
@@ -455,12 +456,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnOrderTotalsByStatus",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.decimal",
               "Columns": null
             },
             {
               "Name": "AverageAmount",
+              "Alias": null,
               "SqlTypeName": "decimal(38,38)",
               "IsNullable": true,
               "MaxLength": 17,
@@ -476,15 +477,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnOrderTotalsByStatus",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.decimal",
               "Columns": null
             },
             {
               "Name": "LastPlacedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(7)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -497,8 +498,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnOrderTotalsByStatus",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             }
           ]
@@ -509,7 +509,7 @@
       "Schema": "sample",
       "Name": "SyncUserContacts",
       "File": "sample.SyncUserContacts.json",
-      "Hash": "E2E616ACB00F6520",
+      "Hash": "8699EF24B9B57275",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -520,6 +520,7 @@
           "Columns": [
             {
               "Name": "MergeAction",
+              "Alias": "MergeAction",
               "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": 10,
@@ -535,12 +536,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": null,
               "Columns": null
             },
             {
               "Name": "ContactId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
               "MaxLength": 4,
@@ -556,12 +557,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
               "MaxLength": 4,
@@ -577,13 +578,13 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "Email",
-              "SqlTypeName": "nvarchar",
+              "Alias": null,
+              "SqlTypeName": "nvarchar(320)",
               "IsNullable": false,
               "MaxLength": 320,
               "Precision": null,
@@ -598,13 +599,13 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "DisplayName",
-              "SqlTypeName": "nvarchar",
+              "Alias": null,
+              "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
               "Precision": null,
@@ -619,12 +620,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Preferred",
+              "Alias": null,
               "SqlTypeName": "bit",
               "IsNullable": false,
               "MaxLength": 1,
@@ -640,12 +641,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.bit",
               "Columns": null
             },
             {
               "Name": "LastInteractionUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2",
               "IsNullable": true,
               "MaxLength": 7,
@@ -661,12 +662,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "UpdatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2",
               "IsNullable": true,
               "MaxLength": 7,
@@ -682,8 +683,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             }
           ]
@@ -694,7 +694,7 @@
       "Schema": "sample",
       "Name": "UpdateUserBio",
       "File": "sample.UpdateUserBio.json",
-      "Hash": "164F4C5F811F36B9",
+      "Hash": "6E65891D18C25212",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -705,9 +705,10 @@
           "Columns": [
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -720,12 +721,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "DisplayName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -741,13 +742,13 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Bio",
-              "SqlTypeName": "sample.userbiotype",
+              "Alias": null,
+              "SqlTypeName": "nvarchar(4000)",
               "IsNullable": true,
               "MaxLength": 4000,
               "Precision": null,
@@ -762,15 +763,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": "sample",
-              "UserTypeName": "UserBioType",
+              "UserTypeRef": "sample.UserBioType",
               "Columns": null
             },
             {
               "Name": "UpdatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -783,8 +784,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             }
           ]
@@ -795,7 +795,7 @@
       "Schema": "sample",
       "Name": "UserDetailsWithOrders",
       "File": "sample.UserDetailsWithOrders.json",
-      "Hash": "CD926F95273D4F68",
+      "Hash": "C763FDCF0F2676BB",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -806,9 +806,10 @@
           "Columns": [
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -821,12 +822,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "Alias",
+              "Alias": null,
               "SqlTypeName": "nvarchar(120)",
               "IsNullable": true,
               "MaxLength": 120,
@@ -842,12 +843,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "DisplayName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -863,12 +864,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Email",
+              "Alias": null,
               "SqlTypeName": "nvarchar(320)",
               "IsNullable": true,
               "MaxLength": 320,
@@ -884,15 +885,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "IsActive",
+              "Alias": null,
               "SqlTypeName": "bit",
               "IsNullable": false,
-              "MaxLength": 1,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -905,12 +906,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.bit",
               "Columns": null
             },
             {
               "Name": "PreferredLocale",
+              "Alias": null,
               "SqlTypeName": "nvarchar(10)",
               "IsNullable": false,
               "MaxLength": 10,
@@ -926,15 +927,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "CreatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": false,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -947,15 +948,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "UpdatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -968,13 +969,13 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "Metadata",
-              "SqlTypeName": "sample.jsondocument",
+              "Alias": null,
+              "SqlTypeName": "nvarchar(max)",
               "IsNullable": true,
               "MaxLength": null,
               "Precision": null,
@@ -989,8 +990,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": "sample",
-              "UserTypeName": "JsonDocument",
+              "UserTypeRef": "sample.JsonDocument",
               "Columns": null
             }
           ]
@@ -1004,9 +1004,10 @@
           "Columns": [
             {
               "Name": "OrderId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1019,12 +1020,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "OrderNumber",
+              "Alias": null,
               "SqlTypeName": "nvarchar(40)",
               "IsNullable": false,
               "MaxLength": 40,
@@ -1040,12 +1041,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Status",
+              "Alias": null,
               "SqlTypeName": "nvarchar(50)",
               "IsNullable": false,
               "MaxLength": 50,
@@ -1061,12 +1062,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "TotalAmount",
+              "Alias": null,
               "SqlTypeName": "decimal(18,2)",
               "IsNullable": false,
               "MaxLength": 9,
@@ -1082,12 +1083,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.decimal",
               "Columns": null
             },
             {
               "Name": "Currency",
+              "Alias": null,
               "SqlTypeName": "char(3)",
               "IsNullable": false,
               "MaxLength": 3,
@@ -1103,15 +1104,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.char",
               "Columns": null
             },
             {
               "Name": "PlacedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": false,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1124,15 +1125,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "RequiredAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1145,15 +1146,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "HasOutstandingBalance",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1166,8 +1167,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             }
           ]
@@ -1178,7 +1178,7 @@
       "Schema": "sample",
       "Name": "UserFind",
       "File": "sample.UserFind.json",
-      "Hash": "3C863D739087C4BA",
+      "Hash": "7C0A8A10BCE66A2C",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1189,9 +1189,10 @@
           "Columns": [
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1204,12 +1205,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "Alias",
+              "Alias": null,
               "SqlTypeName": "nvarchar(120)",
               "IsNullable": true,
               "MaxLength": 120,
@@ -1225,12 +1226,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "DisplayName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -1246,12 +1247,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Email",
+              "Alias": null,
               "SqlTypeName": "nvarchar(320)",
               "IsNullable": true,
               "MaxLength": 320,
@@ -1267,15 +1268,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "IsActive",
+              "Alias": null,
               "SqlTypeName": "bit",
               "IsNullable": false,
-              "MaxLength": 1,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1288,12 +1289,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.bit",
               "Columns": null
             },
             {
               "Name": "PreferredLocale",
+              "Alias": null,
               "SqlTypeName": "nvarchar(10)",
               "IsNullable": false,
               "MaxLength": 10,
@@ -1309,15 +1310,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "CreatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": false,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1330,15 +1331,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "UpdatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1351,12 +1352,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "PreferredContactEmail",
+              "Alias": "PreferredContactEmail",
               "SqlTypeName": "nvarchar(320)",
               "IsNullable": false,
               "MaxLength": 320,
@@ -1372,12 +1373,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnUserPreferredContact",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "PreferredContactDisplayName",
+              "Alias": "PreferredContactDisplayName",
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -1393,8 +1394,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": "sample.fnUserPreferredContact",
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             }
           ]
@@ -1416,9 +1416,10 @@
           "Columns": [
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1431,12 +1432,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "Alias",
+              "Alias": null,
               "SqlTypeName": "nvarchar(120)",
               "IsNullable": true,
               "MaxLength": 120,
@@ -1452,12 +1453,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "DisplayName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -1473,12 +1474,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Email",
+              "Alias": null,
               "SqlTypeName": "nvarchar(320)",
               "IsNullable": true,
               "MaxLength": 320,
@@ -1494,15 +1495,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "IsActive",
+              "Alias": null,
               "SqlTypeName": "bit",
               "IsNullable": false,
-              "MaxLength": 1,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1515,12 +1516,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.bit",
               "Columns": null
             },
             {
               "Name": "PreferredLocale",
+              "Alias": null,
               "SqlTypeName": "nvarchar(10)",
               "IsNullable": false,
               "MaxLength": 10,
@@ -1536,15 +1537,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "CreatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": false,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1557,15 +1558,15 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "UpdatedAtUtc",
+              "Alias": null,
               "SqlTypeName": "datetime2(3)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1578,12 +1579,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.datetime2",
               "Columns": null
             },
             {
               "Name": "SearchName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(321)",
               "IsNullable": false,
               "MaxLength": 321,
@@ -1599,8 +1600,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             }
           ]
@@ -1611,7 +1611,7 @@
       "Schema": "sample",
       "Name": "UserOrderHierarchyJson",
       "File": "sample.UserOrderHierarchyJson.json",
-      "Hash": "BFE4CAB85F84366E",
+      "Hash": "02AEEEA5E59449E6",
       "ResultSets": [
         {
           "ReturnsJson": true,
@@ -1622,9 +1622,10 @@
           "Columns": [
             {
               "Name": "UserId",
+              "Alias": null,
               "SqlTypeName": "int",
               "IsNullable": false,
-              "MaxLength": 4,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -1637,12 +1638,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.int",
               "Columns": null
             },
             {
               "Name": "Alias",
+              "Alias": null,
               "SqlTypeName": "nvarchar(120)",
               "IsNullable": true,
               "MaxLength": 120,
@@ -1658,12 +1659,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "DisplayName",
+              "Alias": null,
               "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
@@ -1679,12 +1680,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Email",
+              "Alias": null,
               "SqlTypeName": "nvarchar(320)",
               "IsNullable": true,
               "MaxLength": 320,
@@ -1700,12 +1701,12 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": "sys.nvarchar",
               "Columns": null
             },
             {
               "Name": "Orders",
+              "Alias": "Orders",
               "SqlTypeName": "nvarchar(max)",
               "IsNullable": true,
               "MaxLength": null,
@@ -1721,14 +1722,14 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeSchema": null,
-              "UserTypeName": null,
+              "UserTypeRef": null,
               "Columns": [
                 {
                   "Name": "OrderId",
+                  "Alias": null,
                   "SqlTypeName": "int",
                   "IsNullable": false,
-                  "MaxLength": 4,
+                  "MaxLength": null,
                   "Precision": null,
                   "Scale": null,
                   "SourceSchema": "sample",
@@ -1741,12 +1742,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.int",
                   "Columns": null
                 },
                 {
                   "Name": "OrderNumber",
+                  "Alias": null,
                   "SqlTypeName": "nvarchar(40)",
                   "IsNullable": false,
                   "MaxLength": 40,
@@ -1762,12 +1763,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.nvarchar",
                   "Columns": null
                 },
                 {
                   "Name": "Status",
+                  "Alias": null,
                   "SqlTypeName": "nvarchar(50)",
                   "IsNullable": false,
                   "MaxLength": 50,
@@ -1783,12 +1784,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.nvarchar",
                   "Columns": null
                 },
                 {
                   "Name": "TotalAmount",
+                  "Alias": null,
                   "SqlTypeName": "decimal(18,2)",
                   "IsNullable": false,
                   "MaxLength": 9,
@@ -1804,12 +1805,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.decimal",
                   "Columns": null
                 },
                 {
                   "Name": "Currency",
+                  "Alias": null,
                   "SqlTypeName": "char(3)",
                   "IsNullable": false,
                   "MaxLength": 3,
@@ -1825,15 +1826,15 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.char",
                   "Columns": null
                 },
                 {
                   "Name": "PlacedAtUtc",
+                  "Alias": null,
                   "SqlTypeName": "datetime2(3)",
                   "IsNullable": false,
-                  "MaxLength": 7,
+                  "MaxLength": null,
                   "Precision": null,
                   "Scale": null,
                   "SourceSchema": "sample",
@@ -1846,12 +1847,12 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": "sys.datetime2",
                   "Columns": null
                 },
                 {
                   "Name": "Payments",
+                  "Alias": "Payments",
                   "SqlTypeName": "nvarchar(max)",
                   "IsNullable": true,
                   "MaxLength": null,
@@ -1867,14 +1868,14 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeSchema": null,
-                  "UserTypeName": null,
+                  "UserTypeRef": null,
                   "Columns": [
                     {
                       "Name": "PaymentId",
+                      "Alias": null,
                       "SqlTypeName": "uniqueidentifier",
                       "IsNullable": false,
-                      "MaxLength": 16,
+                      "MaxLength": null,
                       "Precision": null,
                       "Scale": null,
                       "SourceSchema": "sample",
@@ -1887,12 +1888,12 @@
                       "JsonElementClrType": null,
                       "JsonElementSqlType": null,
                       "FunctionRef": null,
-                      "UserTypeSchema": null,
-                      "UserTypeName": null,
+                      "UserTypeRef": "sys.uniqueidentifier",
                       "Columns": null
                     },
                     {
                       "Name": "Gateway",
+                      "Alias": null,
                       "SqlTypeName": "nvarchar(50)",
                       "IsNullable": false,
                       "MaxLength": 50,
@@ -1908,12 +1909,12 @@
                       "JsonElementClrType": null,
                       "JsonElementSqlType": null,
                       "FunctionRef": null,
-                      "UserTypeSchema": null,
-                      "UserTypeName": null,
+                      "UserTypeRef": "sys.nvarchar",
                       "Columns": null
                     },
                     {
                       "Name": "Amount",
+                      "Alias": null,
                       "SqlTypeName": "decimal(18,4)",
                       "IsNullable": false,
                       "MaxLength": 9,
@@ -1929,15 +1930,15 @@
                       "JsonElementClrType": null,
                       "JsonElementSqlType": null,
                       "FunctionRef": null,
-                      "UserTypeSchema": null,
-                      "UserTypeName": null,
+                      "UserTypeRef": "sys.decimal",
                       "Columns": null
                     },
                     {
                       "Name": "CapturedAtUtc",
+                      "Alias": null,
                       "SqlTypeName": "datetime2(3)",
                       "IsNullable": true,
-                      "MaxLength": 7,
+                      "MaxLength": null,
                       "Precision": null,
                       "Scale": null,
                       "SourceSchema": "sample",
@@ -1950,8 +1951,7 @@
                       "JsonElementClrType": null,
                       "JsonElementSqlType": null,
                       "FunctionRef": null,
-                      "UserTypeSchema": null,
-                      "UserTypeName": null,
+                      "UserTypeRef": "sys.datetime2",
                       "Columns": null
                     }
                   ]
@@ -1968,19 +1968,13 @@
       "Schema": "sample",
       "Name": "OrderImportTableType",
       "File": "sample.OrderImportTableType.json",
-      "Hash": "A4D6C0558B7ADDA5"
+      "Hash": "8185E69B90F70DF7"
     },
     {
       "Schema": "sample",
       "Name": "UserContactTableType",
       "File": "sample.UserContactTableType.json",
       "Hash": "844EE12493A7DE16"
-    },
-    {
-      "Schema": "shared",
-      "Name": "AuditLogEntryTableType",
-      "File": "shared.AuditLogEntryTableType.json",
-      "Hash": "F7FF2E1D58FB6BFF"
     }
   ],
   "UserDefinedTypes": [
@@ -2020,14 +2014,14 @@
       "Schema": "sample",
       "Name": "Orders",
       "File": "sample.Orders.json",
-      "Hash": "0663C6BA15AE26F1"
+      "Hash": "77C1CC9A915CD533"
     },
     {
       "Catalog": null,
       "Schema": "sample",
       "Name": "Payments",
       "File": "sample.Payments.json",
-      "Hash": "A7EC1DC1E15BAE6C"
+      "Hash": "47D8CD48795A88FE"
     },
     {
       "Catalog": null,
@@ -2041,7 +2035,7 @@
       "Schema": "sample",
       "Name": "Users",
       "File": "sample.Users.json",
-      "Hash": "9A13715D5D934DAA"
+      "Hash": "4A2F4EA18CE4D470"
     }
   ]
 }

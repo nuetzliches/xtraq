@@ -1,6 +1,7 @@
 using Xtraq.Data.Models;
 using Xtraq.Services;
 using Xtraq.SnapshotBuilder.Models;
+using Xtraq.SnapshotBuilder.Utils;
 using Xtraq.Utils;
 
 namespace Xtraq.SnapshotBuilder.Writers;
@@ -308,7 +309,40 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("JsonElementSqlType", column.JsonElementSqlType);
         }
 
-        var sqlTypeName = DeriveSqlTypeName(column, typeRef);
+        var normalizedCandidate = SnapshotWriterUtilities.NormalizeSqlTypeName(column.SqlTypeName);
+        if (string.IsNullOrWhiteSpace(normalizedCandidate))
+        {
+            normalizedCandidate = SnapshotWriterUtilities.NormalizeSqlTypeName(column.CastTargetType);
+        }
+
+        var attemptedUserTypeResolution = false;
+        string? sqlTypeName = null;
+
+        if (!string.IsNullOrWhiteSpace(column.UserTypeRef))
+        {
+            var candidate = normalizedCandidate;
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                candidate = SnapshotWriterUtilities.NormalizeSqlTypeName(column.UserTypeRef);
+            }
+
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                attemptedUserTypeResolution = true;
+                sqlTypeName = TryResolveUserDefinedType(column, candidate);
+
+                if (string.IsNullOrWhiteSpace(sqlTypeName))
+                {
+                    var fallbackCandidate = SnapshotWriterUtilities.NormalizeSqlTypeName(column.UserTypeRef);
+                    if (!string.IsNullOrWhiteSpace(fallbackCandidate) && !string.Equals(fallbackCandidate, candidate, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sqlTypeName = TryResolveUserDefinedType(column, fallbackCandidate);
+                    }
+                }
+            }
+        }
+
+        sqlTypeName ??= DeriveSqlTypeName(column, typeRef, normalizedCandidate, allowUserTypeResolution: !attemptedUserTypeResolution);
         if (!string.IsNullOrWhiteSpace(sqlTypeName))
         {
             writer.WriteString("SqlTypeName", sqlTypeName);
@@ -395,7 +429,7 @@ internal static class ProcedureSnapshotDocumentBuilder
         return false;
     }
 
-    private static string? DeriveSqlTypeName(ProcedureResultColumn column, string? typeRef)
+    private static string? DeriveSqlTypeName(ProcedureResultColumn column, string? typeRef, string? normalizedCandidate = null, bool allowUserTypeResolution = true)
     {
         if (column == null)
         {
@@ -409,7 +443,11 @@ internal static class ProcedureSnapshotDocumentBuilder
 
         if (!string.IsNullOrWhiteSpace(typeRef))
         {
-            return null;
+            var (schema, _) = SnapshotWriterUtilities.SplitTypeRef(typeRef);
+            if (string.Equals(schema, "sys", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
         }
 
         static string? NormalizeCandidate(string? raw)
@@ -422,10 +460,27 @@ internal static class ProcedureSnapshotDocumentBuilder
             return SnapshotWriterUtilities.NormalizeSqlTypeName(raw);
         }
 
-        var candidate = NormalizeCandidate(column.SqlTypeName);
+        static bool IsSchemaQualified(string value)
+            => value.IndexOf('.') >= 0 || value.IndexOf('[') >= 0;
+
+        var candidate = normalizedCandidate ?? NormalizeCandidate(column.SqlTypeName);
         if (!string.IsNullOrWhiteSpace(candidate))
         {
-            return candidate;
+            if (allowUserTypeResolution)
+            {
+                var resolved = TryResolveUserDefinedType(column, candidate);
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    return resolved;
+                }
+            }
+
+            if (allowUserTypeResolution || !IsSchemaQualified(candidate))
+            {
+                return candidate;
+            }
+
+            candidate = null;
         }
 
         candidate = NormalizeCandidate(column.CastTargetType);
@@ -482,6 +537,143 @@ internal static class ProcedureSnapshotDocumentBuilder
         }
 
         return null;
+    }
+
+    private static string? TryResolveUserDefinedType(ProcedureResultColumn column, string normalizedCandidate)
+    {
+        if (column == null)
+        {
+            return null;
+        }
+
+        var debugEnabled = EnvironmentHelper.IsTrue("XTRAQ_DEBUG_USER_TYPE_RESOLUTION");
+
+        var typeRef = column.UserTypeRef;
+        if (string.IsNullOrWhiteSpace(typeRef))
+        {
+            typeRef = column.SqlTypeName;
+        }
+
+        if (string.IsNullOrWhiteSpace(typeRef))
+        {
+            typeRef = normalizedCandidate;
+        }
+
+        var parts = SnapshotWriterUtilities.SplitTypeRefParts(typeRef);
+        if (string.IsNullOrWhiteSpace(parts.Schema) || string.Equals(parts.Schema, "sys", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var length = column.MaxLength ?? column.CastTargetLength;
+        var precision = column.CastTargetPrecision;
+        var scale = column.CastTargetScale;
+
+        foreach (var resolver in EnumerateTypeMetadataResolvers())
+        {
+            try
+            {
+                var resolved = resolver.Resolve(typeRef, length, precision, scale);
+                if (!resolved.HasValue)
+                {
+                    if (debugEnabled)
+                    {
+                        Console.WriteLine($"[writer-type-resolve] miss typeRef={typeRef} candidate={normalizedCandidate}");
+                    }
+                    continue;
+                }
+
+                var formattedType = resolved.Value.SqlType;
+                if (!string.IsNullOrWhiteSpace(formattedType))
+                {
+                    column.SqlTypeName = formattedType;
+                    if (!column.MaxLength.HasValue && resolved.Value.MaxLength.HasValue)
+                    {
+                        column.MaxLength = resolved.Value.MaxLength;
+                    }
+
+                    if (!column.IsNullable.HasValue && resolved.Value.IsNullable.HasValue)
+                    {
+                        column.IsNullable = resolved.Value.IsNullable;
+                    }
+
+                    if (debugEnabled)
+                    {
+                        Console.WriteLine($"[writer-type-resolve] hit typeRef={typeRef} sqlType={formattedType}");
+                    }
+                    return formattedType;
+                }
+
+                var baseType = SnapshotWriterUtilities.NormalizeSqlTypeName(resolved.Value.BaseSqlType);
+                if (string.IsNullOrWhiteSpace(baseType))
+                {
+                    if (debugEnabled)
+                    {
+                        Console.WriteLine($"[writer-type-resolve] empty-base typeRef={typeRef}");
+                    }
+                    continue;
+                }
+
+                column.SqlTypeName = baseType;
+
+                if (!column.MaxLength.HasValue && resolved.Value.MaxLength.HasValue)
+                {
+                    column.MaxLength = resolved.Value.MaxLength;
+                }
+
+                if (!column.IsNullable.HasValue && resolved.Value.IsNullable.HasValue)
+                {
+                    column.IsNullable = resolved.Value.IsNullable;
+                }
+
+                if (debugEnabled)
+                {
+                    Console.WriteLine($"[writer-type-resolve] base-hit typeRef={typeRef} baseType={baseType}");
+                }
+                return baseType;
+            }
+            catch
+            {
+                if (debugEnabled)
+                {
+                    Console.WriteLine($"[writer-type-resolve] error typeRef={typeRef}");
+                }
+                // Ignore resolver failures and continue probing remaining roots.
+            }
+        }
+
+        if (debugEnabled)
+        {
+            Console.WriteLine($"[writer-type-resolve] exhausted typeRef={typeRef}");
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<Xtraq.Metadata.TypeMetadataResolver> EnumerateTypeMetadataResolvers()
+    {
+        var yielded = false;
+
+        foreach (var root in SnapshotRootLocator.EnumerateSnapshotRoots())
+        {
+            Xtraq.Metadata.TypeMetadataResolver? resolver;
+            try
+            {
+                resolver = SnapshotTypeResolverCache.Get(root);
+            }
+            catch
+            {
+                continue;
+            }
+
+            yielded = true;
+            yield return resolver;
+        }
+
+        if (!yielded)
+        {
+            yield return new Xtraq.Metadata.TypeMetadataResolver();
+        }
     }
 
     private static bool LooksLikeBooleanCase(string rawExpression)

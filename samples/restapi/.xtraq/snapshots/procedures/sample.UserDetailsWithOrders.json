@@ -52,7 +52,9 @@
         },
         {
           "Name": "Metadata",
-          "TypeRef": "sample.JsonDocument"
+          "UserTypeRef": "sample.JsonDocument",
+          "SqlTypeName": "nvarchar(max)",
+          "IsNullable": true
         }
       ]
     },

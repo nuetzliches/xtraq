@@ -2,6 +2,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Xtraq.Metadata;
 using Xtraq.Schema;
 using Xtraq.SnapshotBuilder.Models;
+using Xtraq.SnapshotBuilder.Utils;
 using Xtraq.Utils;
 using ProcedureReferenceModel = Xtraq.SnapshotBuilder.Models.ProcedureReference;
 using ScriptDomParameterModifier = Microsoft.SqlServer.TransactSql.ScriptDom.ParameterModifier;
@@ -5754,11 +5755,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         {
             var resolvers = new List<TypeMetadataResolver>();
 
-            foreach (var root in EnumerateTableTypeRoots())
+            foreach (var root in SnapshotRootLocator.EnumerateSnapshotRoots())
             {
                 try
                 {
-                    resolvers.Add(new TypeMetadataResolver(root));
+                    resolvers.Add(SnapshotTypeResolverCache.Get(root));
                 }
                 catch
                 {
@@ -5778,7 +5779,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         {
             var map = new Dictionary<string, FunctionInfo>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var root in EnumerateTableTypeRoots())
+            foreach (var root in SnapshotRootLocator.EnumerateSnapshotRoots())
             {
                 try
                 {
@@ -5950,7 +5951,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         {
             var map = new Dictionary<string, TableTypeInfo>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var root in EnumerateTableTypeRoots())
+            foreach (var root in SnapshotRootLocator.EnumerateSnapshotRoots())
             {
                 try
                 {
@@ -5976,95 +5977,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             return map;
-        }
-
-        private static IEnumerable<string> EnumerateTableTypeRoots()
-        {
-            var current = Directory.GetCurrentDirectory();
-            var candidates = new List<string?>
-            {
-                current,
-                Path.Combine(current, "debug"),
-                Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT")
-            };
-
-            try
-            {
-                var resolvedWorkingDirectory = DirectoryUtils.GetWorkingDirectory();
-                if (!string.IsNullOrWhiteSpace(resolvedWorkingDirectory))
-                {
-                    candidates.Add(resolvedWorkingDirectory);
-                }
-            }
-            catch
-            {
-                // Ignore failures resolving the working directory; remaining candidates still apply.
-            }
-
-            var projectRootEnv = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
-            if (!string.IsNullOrWhiteSpace(projectRootEnv))
-            {
-                candidates.Add(projectRootEnv);
-            }
-
-            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var candidate in candidates)
-            {
-                if (string.IsNullOrWhiteSpace(candidate))
-                {
-                    continue;
-                }
-
-                string fullPath;
-                try
-                {
-                    fullPath = Path.GetFullPath(candidate);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (!Directory.Exists(fullPath))
-                {
-                    continue;
-                }
-
-                if (TryAddSnapshotRoot(fullPath, roots))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    foreach (var snapshotDir in Directory.EnumerateDirectories(fullPath, ".xtraq", SearchOption.AllDirectories))
-                    {
-                        var parent = Path.GetDirectoryName(snapshotDir);
-                        if (!string.IsNullOrWhiteSpace(parent))
-                        {
-                            TryAddSnapshotRoot(parent, roots);
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore traversal failures for individual candidates.
-                }
-            }
-
-            return roots;
-
-            static bool TryAddSnapshotRoot(string root, ISet<string> collector)
-            {
-                if (!Directory.Exists(Path.Combine(root, ".xtraq")))
-                {
-                    return false;
-                }
-
-                collector.Add(root);
-                return true;
-            }
         }
 
         private static string BuildTableTypeKey(string? schema, string? name)
@@ -6445,7 +6357,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         private static TableInfo? TryLookupTable(string? schema, string name)
         {
             var effectiveSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
-            foreach (var root in EnumerateTableTypeRoots())
+            foreach (var root in SnapshotRootLocator.EnumerateSnapshotRoots())
             {
                 try
                 {
