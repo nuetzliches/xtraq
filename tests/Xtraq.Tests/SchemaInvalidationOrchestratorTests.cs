@@ -28,6 +28,9 @@ public sealed class SchemaInvalidationOrchestratorTests
         var cache = new FakeCacheManager();
         var changeDetection = new FakeChangeDetectionService();
         var procedureRef = new SchemaObjectRef(SchemaObjectType.StoredProcedure, "dbo", "CleanupArtifacts");
+        var dependentViewRef = new SchemaObjectRef(SchemaObjectType.View, "dbo", "vw_CleanupArtifactsMonitor");
+
+        await cache.SetDependenciesAsync(dependentViewRef, new[] { procedureRef });
 
         changeDetection.EnqueueChangeSet(
             SchemaObjectType.StoredProcedure,
@@ -43,7 +46,9 @@ public sealed class SchemaInvalidationOrchestratorTests
         var result = await orchestrator.AnalyzeAndInvalidateAsync(cancellationToken: CancellationToken.None);
 
         Assert.Contains(procedureRef, cache.RemovedObjects);
-        Assert.Contains(result.InvalidatedObjects, candidate => SchemaEquals(candidate, procedureRef));
+        Assert.Contains(result.RemovedObjects, candidate => SchemaEquals(candidate, procedureRef));
+        Assert.DoesNotContain(result.InvalidatedObjects, candidate => SchemaEquals(candidate, procedureRef));
+        Assert.Contains(result.InvalidatedObjects, candidate => SchemaEquals(candidate, dependentViewRef));
         Assert.True(cache.FlushInvoked);
     }
 

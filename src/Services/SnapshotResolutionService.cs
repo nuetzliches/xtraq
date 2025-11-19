@@ -268,6 +268,7 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
                 Schemas = effectiveSchemas?.ToArray() ?? Array.Empty<string>(),
                 ModifiedCount = result.ModifiedObjects.Count,
                 DependencyCount = result.InvalidatedObjects.Count,
+                RemovedCount = result.RemovedObjects.Count,
                 SkippedCount = result.SkippedObjects.Count,
                 Batches = result.RefreshPlan
                     .Select(batch => new SchemaRefreshPlanBatchDocument
@@ -302,6 +303,7 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
         public IReadOnlyList<string> Schemas { get; init; } = Array.Empty<string>();
         public int ModifiedCount { get; init; }
         public int DependencyCount { get; init; }
+        public int RemovedCount { get; init; }
         public int SkippedCount { get; init; }
         public IReadOnlyList<SchemaRefreshPlanBatchDocument> Batches { get; init; } = Array.Empty<SchemaRefreshPlanBatchDocument>();
     }

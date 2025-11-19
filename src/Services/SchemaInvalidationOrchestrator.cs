@@ -46,6 +46,11 @@ internal sealed class SchemaInvalidationResult
     public IReadOnlyList<SchemaObjectRef> InvalidatedObjects { get; set; } = Array.Empty<SchemaObjectRef>();
 
     /// <summary>
+    /// Objects that were deleted from the catalog since the last refresh.
+    /// </summary>
+    public IReadOnlyList<SchemaObjectRef> RemovedObjects { get; set; } = Array.Empty<SchemaObjectRef>();
+
+    /// <summary>
     /// All objects that need to be refreshed (modified + invalidated).
     /// </summary>
     public IReadOnlyList<SchemaObjectRef> ObjectsToRefresh =>
@@ -174,6 +179,7 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         var result = new SchemaInvalidationResult();
         var modifiedObjects = new List<SchemaObjectRef>();
         var invalidatedObjects = new HashSet<SchemaObjectRef>();
+        var removedObjects = new List<SchemaObjectRef>();
         var schemaFilterSet = schemaFilter is { Count: > 0 }
             ? new HashSet<string>(schemaFilter, StringComparer.OrdinalIgnoreCase)
             : null;
@@ -182,7 +188,7 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         var objectTypes = Enum.GetValues<SchemaObjectType>();
         foreach (var objectType in objectTypes)
         {
-            await ProcessObjectTypeAsync(objectType, schemaFilter, modifiedObjects, invalidatedObjects, cancellationToken)
+            await ProcessObjectTypeAsync(objectType, schemaFilter, modifiedObjects, invalidatedObjects, removedObjects, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -192,6 +198,7 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
 
         result.ModifiedObjects = modifiedObjects;
         result.InvalidatedObjects = invalidatedObjects.ToList();
+        result.RemovedObjects = removedObjects.ToList();
 
         var (plan, skipped) = BuildRefreshPlan(modifiedObjects, invalidatedObjects, schemaFilterSet);
         result.RefreshPlan = plan;
@@ -203,9 +210,12 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         await _cacheManager.FlushAsync(cancellationToken).ConfigureAwait(false);
         await _changeDetection.FlushIndexAsync(cancellationToken).ConfigureAwait(false);
 
-        if (result.ObjectsToRefresh.Count > 0)
+        if (result.ObjectsToRefresh.Count > 0 || result.RemovedObjects.Count > 0)
         {
-            _console.Output($"[schema-invalidation] {modifiedObjects.Count} modified, {invalidatedObjects.Count} invalidated objects");
+            var removedSummary = result.RemovedObjects.Count > 0
+                ? $", {result.RemovedObjects.Count} removed"
+                : string.Empty;
+            _console.Output($"[schema-invalidation] {modifiedObjects.Count} modified, {invalidatedObjects.Count} invalidated objects{removedSummary}");
         }
 
         if (result.SkippedObjects.Count > 0)
@@ -239,6 +249,7 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
         IReadOnlyList<string>? schemaFilter,
         List<SchemaObjectRef> modifiedObjects,
         HashSet<SchemaObjectRef> invalidatedObjects,
+        List<SchemaObjectRef> removedObjects,
         CancellationToken cancellationToken)
     {
         try
@@ -283,9 +294,10 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
             {
                 foreach (var removedObject in changeSet.Removed)
                 {
-                    await _cacheManager.RemoveAsync(removedObject, cancellationToken).ConfigureAwait(false);
-                    invalidatedObjects.Add(removedObject);
                     await _cacheManager.InvalidateDependentsAsync(removedObject).ConfigureAwait(false);
+                    await CollectInvalidatedDependentsAsync(removedObject, invalidatedObjects, cancellationToken).ConfigureAwait(false);
+                    await _cacheManager.RemoveAsync(removedObject, cancellationToken).ConfigureAwait(false);
+                    removedObjects.Add(removedObject);
                 }
             }
         }
@@ -439,7 +451,9 @@ internal static class SchemaInvalidationExtensions
 
         // Check for critical dependencies
         var criticalTypes = new[] { SchemaObjectType.UserDefinedTableType, SchemaObjectType.UserDefinedDataType };
-        var hasCriticalChanges = result.ModifiedObjects.Any(obj => criticalTypes.Contains(obj.Type));
+        var hasCriticalChanges = result.ModifiedObjects
+            .Concat(result.RemovedObjects)
+            .Any(obj => criticalTypes.Contains(obj.Type));
 
         return hasCriticalChanges;
     }

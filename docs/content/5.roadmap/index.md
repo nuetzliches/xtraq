@@ -103,6 +103,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Detect dropped schema objects (procedures, functions, UDTTs) and remove their cache entries plus generated artifacts; add regression coverage for drop scenarios.
 - [x] Extend dependency capture beyond `sys.sql_expression_dependencies` so UDTT parameter usage and other metadata-only relationships invalidate dependent procedures correctly. _(UDTT dependencies now flow through `SchemaChangeDetectionService.AppendUserDefinedTableTypeDependenciesAsync`, with coverage in `SchemaInvalidationOrchestratorTests.AnalyzeAndInvalidateAsync_WhenUdttModified_InvalidatesDependentProcedure`.)_
 - [x] Add integration tests around chained invalidations to prove the breadth-first traversal covers transitive dependencies across cached warm runs. _(Validated via `SchemaInvalidationOrchestratorTests.AnalyzeAndInvalidateAsync_WhenDependencyChainChanges_InvalidatesTransitiveDependents`.)_
+- [x] Stop scheduling dropped schema objects for refresh so warm runs no longer attempt to snapshot deleted artifacts; track them separately via `SchemaInvalidationResult.RemovedObjects` and extend the refresh plan document with removal counts.
 
 ## Schema Change Detection Resilience
 
