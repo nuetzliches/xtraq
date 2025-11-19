@@ -236,6 +236,11 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("Alias", column.Alias);
         }
 
+        if (!string.IsNullOrWhiteSpace(column.SourceColumn))
+        {
+            writer.WriteString("SourceColumn", column.SourceColumn);
+        }
+
         SnapshotWriterUtilities.RegisterTableRef(requiredTableRefs, column);
 
         var typeRef = SnapshotWriterUtilities.BuildTypeRef(column);

@@ -558,7 +558,12 @@ internal sealed class StoredProcedureContentModel
     }
     internal sealed class ResultColumn
     {
+        private string? _userTypeCatalogName;
+        private string? _userTypeSchemaName;
+        private string? _userTypeName;
+
         public string Name { get; set; } = string.Empty;
+        public string? Alias { get; set; }
         public ResultColumnExpressionKind? ExpressionKind { get; set; }
         public string? SourceSchema { get; set; }
         public string? SourceTable { get; set; }
@@ -577,11 +582,36 @@ internal sealed class StoredProcedureContentModel
         // if IsNestedJson=true these flags/columns describe the nested JSON structure under this column
         public bool? ReturnsJson { get; set; }
         public bool? ReturnsJsonArray { get; set; }
+        public bool? ReturnsUnknownJson { get; set; }
         // Removed redundant flag on column level
         public string? JsonRootProperty { get; set; }
+        public bool? JsonIncludeNullValues { get; set; }
+        public string? JsonElementClrType { get; set; }
+        public string? JsonElementSqlType { get; set; }
         public IReadOnlyList<ResultColumn>? Columns { get; set; } = Array.Empty<ResultColumn>();
-        public string? UserTypeSchemaName { get; set; }
-        public string? UserTypeName { get; set; }
+        public string? UserTypeSchemaName
+        {
+            get => _userTypeSchemaName;
+            set => _userTypeSchemaName = NormalizeOptional(value);
+        }
+
+        public string? UserTypeName
+        {
+            get => _userTypeName;
+            set => _userTypeName = NormalizeOptional(value);
+        }
+
+        public string? UserTypeRef
+        {
+            get => TypeRefUtilities.Combine(_userTypeCatalogName, _userTypeSchemaName, _userTypeName);
+            set
+            {
+                var (catalog, schema, name) = TypeRefUtilities.Split(value);
+                _userTypeCatalogName = NormalizeOptional(catalog);
+                _userTypeSchemaName = NormalizeOptional(schema);
+                _userTypeName = NormalizeOptional(name);
+            }
+        }
         public int? MaxLength { get; set; }
         public bool? IsAmbiguous { get; set; }
         // AST-only function call metadata (no heuristics). Populated when ExpressionKind == FunctionCall or JsonQuery.
@@ -596,6 +626,17 @@ internal sealed class StoredProcedureContentModel
         // Reference information that supports deferred JSON expansion
         public ColumnReferenceInfo? Reference { get; set; }
         public bool? DeferredJsonExpansion { get; set; }
+
+        private static string? NormalizeOptional(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            return trimmed.Length == 0 ? null : trimmed;
+        }
     }
     internal sealed class ColumnReferenceInfo
     {

@@ -18,15 +18,18 @@
       "Columns": [
         {
           "Name": "UserId",
+          "SourceColumn": "UserId",
           "TypeRef": "sys.int"
         },
         {
           "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 200
         },
         {
           "Name": "Bio",
+          "SourceColumn": "Bio",
           "UserTypeRef": "sample.UserBioType",
           "SqlTypeName": "nvarchar(4000)",
           "IsNullable": true,
@@ -34,6 +37,7 @@
         },
         {
           "Name": "UpdatedAtUtc",
+          "SourceColumn": "UpdatedAtUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true
         }

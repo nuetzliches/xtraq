@@ -687,7 +687,11 @@ internal sealed class SnapshotResultSet
 internal sealed class SnapshotResultColumn
 {
     public string Name { get; set; } = string.Empty;
+    public string? Alias { get; set; }
+    public string? SourceColumn { get; set; }
     public string? TypeRef { get; set; }
+    public string? UserTypeRef { get; set; }
+    public string? SqlTypeName { get; set; }
     public bool? IsNullable { get; set; }
     public int? MaxLength { get; set; }
     // Precision and scale for decimal/numeric (or time/datetime2 when needed). Zero/null entries are pruned.
@@ -699,11 +703,16 @@ internal sealed class SnapshotResultColumn
     public bool? IsNestedJson { get; set; }
     public bool? ReturnsJson { get; set; }
     public bool? ReturnsJsonArray { get; set; }
+    public bool? ReturnsUnknownJson { get; set; }
     public string? JsonRootProperty { get; set; }
+    public bool? JsonIncludeNullValues { get; set; }
+    public string? JsonElementClrType { get; set; }
+    public string? JsonElementSqlType { get; set; }
     public List<SnapshotResultColumn> Columns { get; set; } = new(); // renamed from JsonColumns in v7
     // Deferred function expansion: persist reference & flag
     public SnapshotColumnReference? Reference { get; set; }
     public bool? DeferredJsonExpansion { get; set; }
+    public string? FunctionRef { get; set; }
 }
 
 internal sealed class SnapshotColumnReference

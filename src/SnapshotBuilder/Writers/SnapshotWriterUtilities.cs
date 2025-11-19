@@ -80,6 +80,16 @@ internal static class SnapshotWriterUtilities
             return null;
         }
 
+        if (!string.IsNullOrWhiteSpace(column.UserTypeRef))
+        {
+            var parts = SplitTypeRefParts(column.UserTypeRef);
+            var normalized = BuildTypeRef(parts.Catalog, parts.Schema, parts.Name);
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                return normalized;
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(column.UserTypeSchemaName) && !string.IsNullOrWhiteSpace(column.UserTypeName))
         {
             return BuildTypeRef(column.SourceCatalog, column.UserTypeSchemaName, column.UserTypeName);

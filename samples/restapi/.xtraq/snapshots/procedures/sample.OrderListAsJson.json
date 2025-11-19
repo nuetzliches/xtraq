@@ -14,6 +14,7 @@
         {
           "Name": "OrdersJson",
           "Alias": "OrdersJson",
+          "SourceColumn": "@Result",
           "TypeRef": "sys.nvarchar"
         }
       ]

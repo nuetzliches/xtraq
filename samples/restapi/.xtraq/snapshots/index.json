@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "6577D4ADCA4E53FE",
+  "Fingerprint": "FBC1311950FB8E33",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -58,7 +58,7 @@
       "Schema": "sample",
       "Name": "OrderListAsJson",
       "File": "sample.OrderListAsJson.json",
-      "Hash": "CA997477BD2A59DA",
+      "Hash": "BBD4EFC011AEC217",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -96,7 +96,7 @@
       "Schema": "sample",
       "Name": "OrderListByUserAsJson",
       "File": "sample.OrderListByUserAsJson.json",
-      "Hash": "2A76C22BB013C7A7",
+      "Hash": "FAC8794AABC473EF",
       "ResultSets": [
         {
           "ReturnsJson": true,
@@ -387,7 +387,7 @@
       "Schema": "sample",
       "Name": "OrderStatusReport",
       "File": "sample.OrderStatusReport.json",
-      "Hash": "1C725AFED7BA2163",
+      "Hash": "031E37B79F36EB18",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -509,7 +509,7 @@
       "Schema": "sample",
       "Name": "SyncUserContacts",
       "File": "sample.SyncUserContacts.json",
-      "Hash": "8699EF24B9B57275",
+      "Hash": "86FD50D45561B1DC",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -694,7 +694,7 @@
       "Schema": "sample",
       "Name": "UpdateUserBio",
       "File": "sample.UpdateUserBio.json",
-      "Hash": "6E65891D18C25212",
+      "Hash": "DFE6C1E31ACCC14B",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -795,7 +795,7 @@
       "Schema": "sample",
       "Name": "UserDetailsWithOrders",
       "File": "sample.UserDetailsWithOrders.json",
-      "Hash": "C763FDCF0F2676BB",
+      "Hash": "1D5CBA2EA7EA47DA",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1178,7 +1178,7 @@
       "Schema": "sample",
       "Name": "UserFind",
       "File": "sample.UserFind.json",
-      "Hash": "7C0A8A10BCE66A2C",
+      "Hash": "84703155DE702623",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1405,7 +1405,7 @@
       "Schema": "sample",
       "Name": "UserList",
       "File": "sample.UserList.json",
-      "Hash": "CB100FAEC6F0E538",
+      "Hash": "F28ABB9B93E3428B",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1611,7 +1611,7 @@
       "Schema": "sample",
       "Name": "UserOrderHierarchyJson",
       "File": "sample.UserOrderHierarchyJson.json",
-      "Hash": "02AEEEA5E59449E6",
+      "Hash": "143242C206E73126",
       "ResultSets": [
         {
           "ReturnsJson": true,

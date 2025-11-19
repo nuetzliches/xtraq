@@ -43,66 +43,69 @@ END;";
     [Fact]
     public void MergeOutput_UsesTargetTableMetadata()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), "xtraq-tests", Guid.NewGuid().ToString("N"));
-        var tablesDir = Path.Combine(tempRoot, ".xtraq", "snapshots", "tables");
-        Directory.CreateDirectory(tablesDir);
-        File.WriteAllText(Path.Combine(tablesDir, "sample.UserContacts.json"), TableMetadata);
-
-        var previousSnapshotRoot = Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
-        var previousProjectRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
-
-        try
+        lock (SnapshotTestLock.Gate)
         {
-            Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", tempRoot);
-            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", tempRoot);
+            var tempRoot = Path.Combine(Path.GetTempPath(), "xtraq-tests", Guid.NewGuid().ToString("N"));
+            var tablesDir = Path.Combine(tempRoot, ".xtraq", "snapshots", "tables");
+            Directory.CreateDirectory(tablesDir);
+            File.WriteAllText(Path.Combine(tablesDir, "sample.UserContacts.json"), TableMetadata);
 
-            var builder = new ProcedureModelScriptDomBuilder();
-            var request = new ProcedureAstBuildRequest(MergeProcedure, "sample", null, false);
-            var model = builder.Build(request);
+            var previousSnapshotRoot = Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
+            var previousProjectRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
 
-            Assert.NotNull(model);
-            var resultSet = Assert.Single(model!.ResultSets);
-            Assert.Equal(8, resultSet.Columns.Count);
-
-            var contactId = resultSet.Columns.Single(c => string.Equals(c.Name, "ContactId", StringComparison.Ordinal));
-            Assert.Equal("int", contactId.SqlTypeName);
-            Assert.False(contactId.IsNullable ?? true);
-
-            var userId = resultSet.Columns.Single(c => string.Equals(c.Name, "UserId", StringComparison.Ordinal));
-            Assert.Equal("int", userId.SqlTypeName);
-            Assert.False(userId.IsNullable ?? true);
-
-            var email = resultSet.Columns.Single(c => string.Equals(c.Name, "Email", StringComparison.Ordinal));
-            Assert.Equal("nvarchar(320)", email.SqlTypeName);
-            Assert.False(email.IsNullable ?? true);
-            Assert.Equal(320, email.MaxLength);
-
-            var preferred = resultSet.Columns.Single(c => string.Equals(c.Name, "Preferred", StringComparison.Ordinal));
-            Assert.Equal("bit", preferred.SqlTypeName);
-            Assert.False(preferred.IsNullable ?? true);
-
-            var lastInteraction = resultSet.Columns.Single(c => string.Equals(c.Name, "LastInteractionUtc", StringComparison.Ordinal));
-            Assert.Equal("datetime2(3)", lastInteraction.SqlTypeName);
-            Assert.True(lastInteraction.IsNullable ?? false);
-
-            var updatedAt = resultSet.Columns.Single(c => string.Equals(c.Name, "UpdatedAtUtc", StringComparison.Ordinal));
-            Assert.Equal("datetime2(3)", updatedAt.SqlTypeName);
-            Assert.True(updatedAt.IsNullable ?? false);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", previousSnapshotRoot);
-            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", previousProjectRoot);
             try
             {
-                if (Directory.Exists(tempRoot))
-                {
-                    Directory.Delete(tempRoot, true);
-                }
+                Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", tempRoot);
+                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", tempRoot);
+
+                var builder = new ProcedureModelScriptDomBuilder();
+                var request = new ProcedureAstBuildRequest(MergeProcedure, "sample", null, false);
+                var model = builder.Build(request);
+
+                Assert.NotNull(model);
+                var resultSet = Assert.Single(model!.ResultSets);
+                Assert.Equal(8, resultSet.Columns.Count);
+
+                var contactId = resultSet.Columns.Single(c => string.Equals(c.Name, "ContactId", StringComparison.Ordinal));
+                Assert.Equal("int", contactId.SqlTypeName);
+                Assert.False(contactId.IsNullable ?? true);
+
+                var userId = resultSet.Columns.Single(c => string.Equals(c.Name, "UserId", StringComparison.Ordinal));
+                Assert.Equal("int", userId.SqlTypeName);
+                Assert.False(userId.IsNullable ?? true);
+
+                var email = resultSet.Columns.Single(c => string.Equals(c.Name, "Email", StringComparison.Ordinal));
+                Assert.Equal("nvarchar(320)", email.SqlTypeName);
+                Assert.False(email.IsNullable ?? true);
+                Assert.Equal(320, email.MaxLength);
+
+                var preferred = resultSet.Columns.Single(c => string.Equals(c.Name, "Preferred", StringComparison.Ordinal));
+                Assert.Equal("bit", preferred.SqlTypeName);
+                Assert.False(preferred.IsNullable ?? true);
+
+                var lastInteraction = resultSet.Columns.Single(c => string.Equals(c.Name, "LastInteractionUtc", StringComparison.Ordinal));
+                Assert.Equal("datetime2(3)", lastInteraction.SqlTypeName);
+                Assert.True(lastInteraction.IsNullable ?? false);
+
+                var updatedAt = resultSet.Columns.Single(c => string.Equals(c.Name, "UpdatedAtUtc", StringComparison.Ordinal));
+                Assert.Equal("datetime2(3)", updatedAt.SqlTypeName);
+                Assert.True(updatedAt.IsNullable ?? false);
             }
-            catch
+            finally
             {
-                // Best-effort cleanup only.
+                Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", previousSnapshotRoot);
+                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", previousProjectRoot);
+                try
+                {
+                    if (Directory.Exists(tempRoot))
+                    {
+                        Directory.Delete(tempRoot, true);
+                    }
+                }
+                catch
+                {
+                    // Best-effort cleanup only.
+                }
             }
         }
     }

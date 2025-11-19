@@ -46,6 +46,19 @@ internal sealed class SchemaManager(
     public async Task<List<SchemaModel>> ListAsync(SchemaSelectionContext? context, bool noCache = false, CancellationToken cancellationToken = default)
     {
         context ??= new SchemaSelectionContext();
+
+        SchemaSnapshot? expandedSnapshot = null;
+        var userDefinedTypeLookup = new Dictionary<string, SnapshotUserDefinedType>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            expandedSnapshot = expandedSnapshotService.LoadExpanded();
+            userDefinedTypeLookup = BuildUserDefinedTypeLookup(expandedSnapshot);
+        }
+        catch
+        {
+            expandedSnapshot = null;
+            userDefinedTypeLookup = new Dictionary<string, SnapshotUserDefinedType>(StringComparer.OrdinalIgnoreCase);
+        }
         // Ensure AST parser can resolve table column types for CTE type propagation into nested JSON
         if (StoredProcedureContentModel.ResolveTableColumnType == null)
         {
@@ -76,55 +89,46 @@ internal sealed class SchemaManager(
         }
 
         // Provide UDT resolver from expanded snapshot (UserDefinedTypes)
-        if (StoredProcedureContentModel.ResolveUserDefinedType == null)
+        if (StoredProcedureContentModel.ResolveUserDefinedType == null && userDefinedTypeLookup.Count > 0)
         {
             try
             {
-                var expanded = expandedSnapshotService.LoadExpanded();
-                var udtMap = new Dictionary<string, Services.SnapshotUserDefinedType>(StringComparer.OrdinalIgnoreCase);
-                foreach (var u in expanded?.UserDefinedTypes ?? new List<Services.SnapshotUserDefinedType>())
-                {
-                    if (!string.IsNullOrWhiteSpace(u?.Schema) && !string.IsNullOrWhiteSpace(u?.Name))
-                    {
-                        udtMap[$"{u.Schema}.{u.Name}"] = u;
-                        udtMap[u.Name] = u; // allow name-only match for common UDT schemas
-                        if (!string.IsNullOrWhiteSpace(u.Catalog))
-                        {
-                            var catalogKey = string.Concat(u.Catalog, ".", u.Schema, ".", u.Name);
-                            udtMap[catalogKey] = u;
-                        }
-                    }
-                }
+                var udtMap = userDefinedTypeLookup;
                 StoredProcedureContentModel.ResolveUserDefinedType = (schema, name) =>
                 {
                     try
                     {
-                        if (string.IsNullOrWhiteSpace(name)) return (string.Empty, null, null, null, null);
-                        var key1 = schema + "." + name;
-                        if (udtMap.TryGetValue(key1, out var udt) || udtMap.TryGetValue(name, out udt))
+                        var normalizedName = NormalizeTypeSegment(name);
+                        if (string.IsNullOrWhiteSpace(normalizedName))
+                        {
+                            return (string.Empty, null, null, null, null);
+                        }
+
+                        var normalizedSchema = NormalizeTypeSegment(schema);
+                        var udt = FindUserDefinedType(udtMap, normalizedSchema, normalizedName);
+                        if (udt != null)
                         {
                             var baseType = udt.BaseSqlTypeName;
                             int? maxLen = udt.MaxLength;
                             int? prec = udt.Precision;
                             int? scale = udt.Scale;
                             bool? isNull = udt.IsNullable;
-                            // Honor underscore variant semantics: NOT NULL
-                            if (!string.IsNullOrWhiteSpace(name) && name.StartsWith("_")) isNull = false;
+
+                            if (normalizedName.StartsWith("_", StringComparison.Ordinal))
+                            {
+                                isNull = false;
+                            }
+
                             return (baseType, maxLen, prec, scale, isNull);
                         }
-                        // Fallback: strip leading underscore from UDT name if present (e.g., core._id -> core.id)
-                        if (name.StartsWith("_"))
+
+                        if (normalizedName.StartsWith("_", StringComparison.Ordinal))
                         {
-                            var trimmed = name.TrimStart('_');
-                            var key2 = schema + "." + trimmed;
-                            if (udtMap.TryGetValue(key2, out var udt2) || udtMap.TryGetValue(trimmed, out udt2))
+                            var trimmed = normalizedName.TrimStart('_');
+                            var underscored = FindUserDefinedType(udtMap, normalizedSchema, trimmed);
+                            if (underscored != null)
                             {
-                                var baseType = udt2.BaseSqlTypeName;
-                                int? maxLen = udt2.MaxLength;
-                                int? prec = udt2.Precision;
-                                int? scale = udt2.Scale;
-                                bool? isNull = false; // underscore -> NOT NULL
-                                return (baseType, maxLen, prec, scale, isNull);
+                                return (underscored.BaseSqlTypeName, underscored.MaxLength, underscored.Precision, underscored.Scale, false);
                             }
                         }
                     }
@@ -136,23 +140,23 @@ internal sealed class SchemaManager(
         }
 
         // Provide scalar function return type resolver from expanded snapshot (Functions)
-        if (StoredProcedureContentModel.ResolveScalarFunctionReturnType == null)
+        if (StoredProcedureContentModel.ResolveScalarFunctionReturnType == null && expandedSnapshot?.Functions?.Count > 0)
         {
             try
             {
-                var expanded = expandedSnapshotService.LoadExpanded();
                 var fnMap = new Dictionary<string, (string SqlType, int? MaxLen, bool? IsNull)>(StringComparer.OrdinalIgnoreCase);
-                foreach (var fn in expanded?.Functions ?? new List<Services.SnapshotFunction>())
+                foreach (var fn in expandedSnapshot.Functions)
                 {
                     if (fn?.IsTableValued == true) continue; // only scalar
                     if (string.IsNullOrWhiteSpace(fn?.Schema) || string.IsNullOrWhiteSpace(fn?.Name)) continue;
                     if (string.IsNullOrWhiteSpace(fn.ReturnSqlType)) continue;
                     var key = $"{fn.Schema}.{fn.Name}";
-                    // Use ReturnSqlType as-is (collector may already include precision/scale or length)
                     var resolvedType = fn.ReturnSqlType;
                     fnMap[key] = (resolvedType, fn.ReturnMaxLength, fn.ReturnIsNullable);
-                    // also allow name-only lookup for common schemas
-                    if (!fnMap.ContainsKey(fn.Name)) fnMap[fn.Name] = (resolvedType, fn.ReturnMaxLength, fn.ReturnIsNullable);
+                    if (!fnMap.ContainsKey(fn.Name))
+                    {
+                        fnMap[fn.Name] = (resolvedType, fn.ReturnMaxLength, fn.ReturnIsNullable);
+                    }
                 }
                 StoredProcedureContentModel.ResolveScalarFunctionReturnType = (schema, name) =>
                 {
@@ -374,27 +378,41 @@ internal sealed class SchemaManager(
                                     return new StoredProcedureContentModel.ResultColumn();
                                 }
 
-                                var (schema, name) = SplitTypeRef(c.TypeRef);
+                                var resolvedUserTypeRef = NormalizeTypeRef(c.UserTypeRef);
+                                var fallbackTypeRef = NormalizeTypeRef(c.TypeRef);
+                                var typeRefToUse = !string.IsNullOrWhiteSpace(resolvedUserTypeRef)
+                                    ? resolvedUserTypeRef
+                                    : fallbackTypeRef;
+
+                                var (_, schema, name) = TypeRefUtilities.Split(typeRefToUse);
                                 var isSystemType = IsSystemSchema(schema);
 
                                 var column = new StoredProcedureContentModel.ResultColumn
                                 {
                                     Name = c.Name,
-                                    SqlTypeName = BuildSqlTypeName(schema, name),
+                                    Alias = string.IsNullOrWhiteSpace(c.Alias) ? null : c.Alias,
+                                    SourceColumn = string.IsNullOrWhiteSpace(c.SourceColumn) ? null : c.SourceColumn,
+                                    SqlTypeName = string.IsNullOrWhiteSpace(c.SqlTypeName) ? null : c.SqlTypeName,
                                     IsNullable = c.IsNullable,
                                     MaxLength = c.MaxLength,
                                     IsNestedJson = c.IsNestedJson,
                                     ReturnsJson = c.ReturnsJson,
                                     ReturnsJsonArray = c.ReturnsJsonArray,
+                                    ReturnsUnknownJson = c.ReturnsUnknownJson,
                                     JsonRootProperty = c.JsonRootProperty,
+                                    JsonIncludeNullValues = c.JsonIncludeNullValues,
+                                    JsonElementClrType = c.JsonElementClrType,
+                                    JsonElementSqlType = c.JsonElementSqlType,
                                     DeferredJsonExpansion = c.DeferredJsonExpansion
                                 };
 
                                 if (!isSystemType)
                                 {
-                                    column.UserTypeSchemaName = schema;
-                                    column.UserTypeName = name;
+                                    column.UserTypeRef = typeRefToUse;
+                                    ApplyUserTypeMetadata(column, typeRefToUse, userDefinedTypeLookup);
                                 }
+
+                                column.SqlTypeName ??= BuildSqlTypeName(schema, name);
 
                                 if (c.Columns != null && c.Columns.Count > 0)
                                 {
@@ -409,6 +427,19 @@ internal sealed class SchemaManager(
                                         Schema = c.Reference.Schema,
                                         Name = c.Reference.Name
                                     };
+                                }
+                                else if (!string.IsNullOrWhiteSpace(c.FunctionRef))
+                                {
+                                    var (refSchema, refName) = SplitTypeRef(c.FunctionRef);
+                                    if (!string.IsNullOrWhiteSpace(refName))
+                                    {
+                                        column.Reference = new StoredProcedureContentModel.ColumnReferenceInfo
+                                        {
+                                            Kind = "Function",
+                                            Schema = refSchema ?? string.Empty,
+                                            Name = refName
+                                        };
+                                    }
                                 }
 
                                 return column;
@@ -761,6 +792,17 @@ internal sealed class SchemaManager(
         return (schema, name);
     }
 
+    private static string? NormalizeTypeRef(string? typeRef)
+    {
+        if (string.IsNullOrWhiteSpace(typeRef))
+        {
+            return null;
+        }
+
+        var trimmed = typeRef.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
     private static string? BuildSqlTypeName(string? schema, string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -784,6 +826,174 @@ internal sealed class SchemaManager(
         }
 
         return string.Equals(schema, "sys", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<string, SnapshotUserDefinedType> BuildUserDefinedTypeLookup(SchemaSnapshot? snapshot)
+    {
+        var map = new Dictionary<string, SnapshotUserDefinedType>(StringComparer.OrdinalIgnoreCase);
+        if (snapshot?.UserDefinedTypes == null)
+        {
+            return map;
+        }
+
+        foreach (var udt in snapshot.UserDefinedTypes)
+        {
+            if (udt == null)
+            {
+                continue;
+            }
+
+            var schema = NormalizeTypeSegment(udt.Schema);
+            var name = NormalizeTypeSegment(udt.Name);
+            if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            AddUserTypeKey(map, BuildUserTypeKey(null, schema, name), udt, overwrite: true);
+            AddUserTypeKey(map, BuildUserTypeKey(udt.Catalog, schema, name), udt, overwrite: true);
+            AddUserTypeKey(map, BuildUserTypeKey(null, null, name), udt, overwrite: false);
+        }
+
+        return map;
+    }
+
+    private static void AddUserTypeKey(Dictionary<string, SnapshotUserDefinedType> lookup, string? key, SnapshotUserDefinedType udt, bool overwrite)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return;
+        }
+
+        if (!overwrite && lookup.ContainsKey(key))
+        {
+            return;
+        }
+
+        lookup[key] = udt;
+    }
+
+    private static string? BuildUserTypeKey(string? catalog, string? schema, string? name)
+    {
+        var normalizedName = NormalizeTypeSegment(name);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return null;
+        }
+
+        var segments = new List<string>(3);
+        var normalizedCatalog = NormalizeTypeSegment(catalog);
+        var normalizedSchema = NormalizeTypeSegment(schema);
+
+        if (!string.IsNullOrWhiteSpace(normalizedCatalog))
+        {
+            segments.Add(normalizedCatalog);
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedSchema))
+        {
+            segments.Add(normalizedSchema);
+        }
+
+        segments.Add(normalizedName);
+        return string.Join('.', segments);
+    }
+
+    private static string? NormalizeTypeSegment(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private static SnapshotUserDefinedType? FindUserDefinedType(IReadOnlyDictionary<string, SnapshotUserDefinedType> lookup, string? schema, string? name)
+    {
+        if (lookup == null || lookup.Count == 0 || string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var schemaKey = BuildUserTypeKey(null, schema, name);
+        if (!string.IsNullOrWhiteSpace(schemaKey) && lookup.TryGetValue(schemaKey, out var schemaMatch))
+        {
+            return schemaMatch;
+        }
+
+        var nameKey = BuildUserTypeKey(null, null, name);
+        if (!string.IsNullOrWhiteSpace(nameKey) && lookup.TryGetValue(nameKey, out var nameMatch))
+        {
+            return nameMatch;
+        }
+
+        return null;
+    }
+
+    private static SnapshotUserDefinedType? FindUserDefinedType(IReadOnlyDictionary<string, SnapshotUserDefinedType> lookup, string? typeRef)
+    {
+        if (lookup == null || lookup.Count == 0 || string.IsNullOrWhiteSpace(typeRef))
+        {
+            return null;
+        }
+
+        var (catalog, schema, name) = TypeRefUtilities.Split(typeRef);
+        var directKey = BuildUserTypeKey(catalog, schema, name);
+        if (!string.IsNullOrWhiteSpace(directKey) && lookup.TryGetValue(directKey, out var direct))
+        {
+            return direct;
+        }
+
+        return FindUserDefinedType(lookup, schema, name);
+    }
+
+    private static void ApplyUserTypeMetadata(StoredProcedureContentModel.ResultColumn column, string? typeRef, IReadOnlyDictionary<string, SnapshotUserDefinedType> lookup)
+    {
+        if (column == null || string.IsNullOrWhiteSpace(typeRef) || lookup == null || lookup.Count == 0)
+        {
+            return;
+        }
+
+        var userType = FindUserDefinedType(lookup, typeRef);
+        if (userType == null)
+        {
+            return;
+        }
+
+        var (_, schema, name) = TypeRefUtilities.Split(typeRef);
+        var normalizedBaseType = NormalizeSystemTypeName(userType.BaseSqlTypeName);
+        if (!string.IsNullOrWhiteSpace(normalizedBaseType) && (string.IsNullOrWhiteSpace(column.SqlTypeName) || (!string.IsNullOrWhiteSpace(schema) && !IsSystemSchema(schema))))
+        {
+            column.SqlTypeName = normalizedBaseType;
+        }
+
+        if (!column.MaxLength.HasValue && userType.MaxLength.HasValue)
+        {
+            column.MaxLength = userType.MaxLength;
+        }
+
+        if (!column.IsNullable.HasValue && userType.IsNullable.HasValue)
+        {
+            column.IsNullable = userType.IsNullable;
+        }
+
+        if (!string.IsNullOrWhiteSpace(name) && name.StartsWith("_", StringComparison.Ordinal))
+        {
+            column.IsNullable = false;
+        }
+    }
+
+    private static string? NormalizeSystemTypeName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed.ToLowerInvariant();
     }
 
     /// <summary>

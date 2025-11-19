@@ -16,38 +16,46 @@
         {
           "Name": "MergeAction",
           "Alias": "MergeAction",
+          "SourceColumn": "$action",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 10
         },
         {
           "Name": "ContactId",
+          "SourceColumn": "ContactId",
           "TypeRef": "sys.int"
         },
         {
           "Name": "UserId",
+          "SourceColumn": "UserId",
           "TypeRef": "sys.int"
         },
         {
           "Name": "Email",
+          "SourceColumn": "Email",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 320
         },
         {
           "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 200
         },
         {
           "Name": "Preferred",
+          "SourceColumn": "Preferred",
           "TypeRef": "sys.bit"
         },
         {
           "Name": "LastInteractionUtc",
+          "SourceColumn": "LastInteractionUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true
         },
         {
           "Name": "UpdatedAtUtc",
+          "SourceColumn": "UpdatedAtUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true
         }

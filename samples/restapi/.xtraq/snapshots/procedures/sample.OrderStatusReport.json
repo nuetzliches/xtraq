@@ -22,18 +22,21 @@
       "Columns": [
         {
           "Name": "Status",
+          "SourceColumn": "Status",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 50,
           "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "Orders",
+          "SourceColumn": "Orders",
           "TypeRef": "sys.bigint",
           "IsNullable": true,
           "FunctionRef": "sample.fnOrderTotalsByStatus"
         },
         {
           "Name": "TotalAmount",
+          "SourceColumn": "TotalAmount",
           "TypeRef": "sys.decimal",
           "IsNullable": true,
           "MaxLength": 17,
@@ -41,6 +44,7 @@
         },
         {
           "Name": "AverageAmount",
+          "SourceColumn": "AverageAmount",
           "TypeRef": "sys.decimal",
           "IsNullable": true,
           "MaxLength": 17,
@@ -48,6 +52,7 @@
         },
         {
           "Name": "LastPlacedAtUtc",
+          "SourceColumn": "LastPlacedAtUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true,
           "FunctionRef": "sample.fnOrderTotalsByStatus"

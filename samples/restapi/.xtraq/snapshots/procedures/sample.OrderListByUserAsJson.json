@@ -15,34 +15,41 @@
       "Columns": [
         {
           "Name": "OrderId",
+          "SourceColumn": "OrderId",
           "TypeRef": "sys.int"
         },
         {
           "Name": "OrderNumber",
+          "SourceColumn": "OrderNumber",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 40
         },
         {
           "Name": "Status",
+          "SourceColumn": "Status",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 50
         },
         {
           "Name": "TotalAmount",
+          "SourceColumn": "TotalAmount",
           "TypeRef": "sys.decimal",
           "MaxLength": 9
         },
         {
           "Name": "Currency",
+          "SourceColumn": "Currency",
           "TypeRef": "sys.char",
           "MaxLength": 3
         },
         {
           "Name": "PlacedAtUtc",
+          "SourceColumn": "PlacedAtUtc",
           "TypeRef": "sys.datetime2"
         },
         {
           "Name": "RequiredAtUtc",
+          "SourceColumn": "RequiredAtUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true
         },
@@ -55,25 +62,30 @@
           "Columns": [
             {
               "Name": "PaymentId",
+              "SourceColumn": "PaymentId",
               "TypeRef": "sys.uniqueidentifier"
             },
             {
               "Name": "Gateway",
+              "SourceColumn": "Gateway",
               "TypeRef": "sys.nvarchar",
               "MaxLength": 50
             },
             {
               "Name": "Amount",
+              "SourceColumn": "Amount",
               "TypeRef": "sys.decimal",
               "MaxLength": 9
             },
             {
               "Name": "CapturedAtUtc",
+              "SourceColumn": "CapturedAtUtc",
               "TypeRef": "sys.datetime2",
               "IsNullable": true
             },
             {
               "Name": "FailureReason",
+              "SourceColumn": "FailureReason",
               "TypeRef": "sys.nvarchar",
               "IsNullable": true,
               "MaxLength": 400

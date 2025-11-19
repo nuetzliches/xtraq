@@ -13,46 +13,55 @@
       "Columns": [
         {
           "Name": "UserId",
+          "SourceColumn": "UserId",
           "TypeRef": "sys.int"
         },
         {
           "Name": "Alias",
+          "SourceColumn": "Alias",
           "TypeRef": "sys.nvarchar",
           "IsNullable": true,
           "MaxLength": 120
         },
         {
           "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 200
         },
         {
           "Name": "Email",
+          "SourceColumn": "Email",
           "TypeRef": "sys.nvarchar",
           "IsNullable": true,
           "MaxLength": 320
         },
         {
           "Name": "IsActive",
+          "SourceColumn": "IsActive",
           "TypeRef": "sys.bit"
         },
         {
           "Name": "PreferredLocale",
+          "SourceColumn": "PreferredLocale",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 10
         },
         {
           "Name": "CreatedAtUtc",
+          "SourceColumn": "CreatedAtUtc",
           "TypeRef": "sys.datetime2"
         },
         {
           "Name": "UpdatedAtUtc",
+          "SourceColumn": "UpdatedAtUtc",
           "TypeRef": "sys.datetime2",
           "IsNullable": true
         },
         {
           "Name": "PreferredContactEmail",
           "Alias": "PreferredContactEmail",
+          "SourceColumn": "Email",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 320,
           "FunctionRef": "sample.fnUserPreferredContact"
@@ -60,6 +69,7 @@
         {
           "Name": "PreferredContactDisplayName",
           "Alias": "PreferredContactDisplayName",
+          "SourceColumn": "DisplayName",
           "TypeRef": "sys.nvarchar",
           "MaxLength": 200,
           "FunctionRef": "sample.fnUserPreferredContact"
