@@ -2220,6 +2220,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 column.IsNullable ??= true;
 
                 TryInferJsonArrayMetadata(column, functionCall);
+                ApplyJsonQueryParameterMetadata(column, functionCall?.Parameters);
             }
 
             if (functionCall.CallTarget is MultiPartIdentifierCallTarget fnTarget && fnTarget.MultiPartIdentifier != null && fnTarget.MultiPartIdentifier.Identifiers.Count > 0)
@@ -2763,6 +2764,53 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             AssignJsonElementMetadata(column, itemColumn, itemMetadata);
 
             itemColumn.IsAmbiguous = null;
+        }
+
+        private void ApplyJsonQueryParameterMetadata(ProcedureResultColumn column, IList<ScalarExpression>? parameters)
+        {
+            if (parameters == null || parameters.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var parameter in parameters)
+            {
+                ApplyJsonQueryParameterMetadata(column, parameter);
+            }
+        }
+
+        private void ApplyJsonQueryParameterMetadata(ProcedureResultColumn column, ScalarExpression? parameter)
+        {
+            if (column == null || parameter == null)
+            {
+                return;
+            }
+
+            if (parameter is ParenthesisExpression parenthesis)
+            {
+                ApplyJsonQueryParameterMetadata(column, parenthesis.Expression);
+                return;
+            }
+
+            if (parameter is ScalarSubquery scalarSubquery)
+            {
+                var previousKind = column.ExpressionKind;
+                try
+                {
+                    PopulateScalarSubquery(column, scalarSubquery);
+                }
+                finally
+                {
+                    column.ExpressionKind = previousKind;
+                }
+
+                if (column.Columns.Count > 0)
+                {
+                    column.ReturnsUnknownJson = false;
+                }
+
+                return;
+            }
         }
 
         private static void AssignJsonElementMetadata(ProcedureResultColumn container, ProcedureResultColumn elementColumn, ColumnSourceInfo itemMetadata)

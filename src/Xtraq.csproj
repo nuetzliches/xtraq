@@ -19,7 +19,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>xtraq</ToolCommandName>
     <PackageId>xtraq</PackageId>
-    <Version>1.0.0-alpha.10</Version>
+    <Version>1.0.0-alpha.11</Version>
     <Authors>Xtraq Team</Authors>
     <Description>Xtraq CLI Tool with auto-update capabilities</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

@@ -125,13 +125,14 @@ internal static class ProcedureModelJsonAnalyzer
 
                     if (info.IsJsonFunction)
                     {
-                        if (column.Reference != null &&
-                            column.Reference.Kind == ProcedureReferenceKind.Function &&
-                            !string.Equals(column.Reference.Name, "JSON_QUERY", StringComparison.OrdinalIgnoreCase))
+                        if (HasStructuredJsonMetadata(column) ||
+                            (column.Reference != null &&
+                             column.Reference.Kind == ProcedureReferenceKind.Function &&
+                             !string.Equals(column.Reference.Name, "JSON_QUERY", StringComparison.OrdinalIgnoreCase)))
                         {
                             column.ReturnsUnknownJson = false;
                         }
-                        else
+                        else if (!column.ReturnsUnknownJson.HasValue)
                         {
                             column.ReturnsUnknownJson = true;
                         }
@@ -165,6 +166,11 @@ internal static class ProcedureModelJsonAnalyzer
         }
 
         return trimmed;
+    }
+
+    private static bool HasStructuredJsonMetadata(ProcedureResultColumn? column)
+    {
+        return column?.Columns != null && column.Columns.Count > 0;
     }
 
     private sealed class JsonVisitor : TSqlFragmentVisitor
