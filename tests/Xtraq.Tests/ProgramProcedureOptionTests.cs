@@ -1,4 +1,5 @@
 using System;
+using Xtraq.Cli.Hosting;
 using Xunit;
 
 namespace Xtraq.Tests;
@@ -11,7 +12,7 @@ public sealed class ProgramProcedureOptionTests
     [InlineData("   ")]
     public void TryNormalizeProcedureFilter_WithEmptyValue_ReturnsTrue(string? input)
     {
-        var success = Program.TryNormalizeProcedureFilter(input, out var normalized, out var error);
+        var success = CliHostUtilities.TryNormalizeProcedureFilter(input, out var normalized, out var error);
 
         Assert.True(success);
         Assert.Null(normalized);
@@ -21,7 +22,7 @@ public sealed class ProgramProcedureOptionTests
     [Fact]
     public void TryNormalizeProcedureFilter_DeduplicatesAndTrims()
     {
-        var success = Program.TryNormalizeProcedureFilter("dbo.GetOrders, dbo.GetOrders , sales.Process_*", out var normalized, out var error);
+        var success = CliHostUtilities.TryNormalizeProcedureFilter("dbo.GetOrders, dbo.GetOrders , sales.Process_*", out var normalized, out var error);
 
         Assert.True(success);
         Assert.Equal("dbo.GetOrders,sales.Process_*", normalized);
@@ -31,7 +32,7 @@ public sealed class ProgramProcedureOptionTests
     [Fact]
     public void TryNormalizeProcedureFilter_AllowsWildcardsAndHyphen()
     {
-        var success = Program.TryNormalizeProcedureFilter("workflow-state.Get?Report", out var normalized, out var error);
+        var success = CliHostUtilities.TryNormalizeProcedureFilter("workflow-state.Get?Report", out var normalized, out var error);
 
         Assert.True(success);
         Assert.Equal("workflow-state.Get?Report", normalized);
@@ -44,7 +45,7 @@ public sealed class ProgramProcedureOptionTests
     [InlineData("dbo.[proc]")]
     public void TryNormalizeProcedureFilter_InvalidTokensFail(string input)
     {
-        var success = Program.TryNormalizeProcedureFilter(input, out var normalized, out var error);
+        var success = CliHostUtilities.TryNormalizeProcedureFilter(input, out var normalized, out var error);
 
         Assert.False(success);
         Assert.Null(normalized);

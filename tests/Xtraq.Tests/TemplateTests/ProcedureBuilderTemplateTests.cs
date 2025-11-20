@@ -346,10 +346,34 @@ public static class BuilderHarness
             typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly
         };
 
-        return assemblies
-            .Select(asm => asm.Location)
+        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static asm => !asm.IsDynamic && !string.IsNullOrWhiteSpace(asm.Location))
+            .Select(static asm => asm.Location);
+
+        var paths = assemblies
+            .Select(static asm => asm.Location)
+            .Concat(loadedAssemblies)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(path => MetadataReference.CreateFromFile(path));
+            .Where(static path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .ToList();
+
+        if (!paths.Any(static path => path.EndsWith("Xtraq.dll", StringComparison.OrdinalIgnoreCase)))
+        {
+            var solutionRoot = GetSolutionRoot();
+            var fallback = Directory.GetFiles(solutionRoot, "Xtraq.dll", SearchOption.AllDirectories)
+                .FirstOrDefault(static candidate => candidate.Contains(Path.Combine("bin", "Release"), StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(fallback) && File.Exists(fallback))
+            {
+                paths.Add(fallback);
+            }
+        }
+
+        if (!paths.Any(static path => path.EndsWith("Xtraq.dll", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("Unable to resolve Xtraq assembly path for template compilation.");
+        }
+
+        return paths.Select(static path => MetadataReference.CreateFromFile(path));
     }
 
     private static string GetSolutionRoot()

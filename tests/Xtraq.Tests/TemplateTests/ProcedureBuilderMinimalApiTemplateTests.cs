@@ -1,6 +1,7 @@
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Xtraq.Cli;
 using Xtraq.Engine;
 using Xunit;
 
@@ -182,6 +183,12 @@ namespace TestNamespace
         foreach (var path in entries)
         {
             references.Add(MetadataReference.CreateFromFile(path));
+        }
+
+        var xtraqAssemblyPath = typeof(CommandOptions).Assembly.Location;
+        if (!string.IsNullOrWhiteSpace(xtraqAssemblyPath))
+        {
+            references.Add(MetadataReference.CreateFromFile(xtraqAssemblyPath));
         }
 
         return references;
