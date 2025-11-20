@@ -10,6 +10,12 @@ internal class Column
     [SqlFieldName("catalog_name")]
     public string? CatalogName { get; set; }
 
+    [SqlFieldName("schema_name")]
+    public string? SchemaName { get; set; }
+
+    [SqlFieldName("table_name")]
+    public string? TableName { get; set; }
+
     [SqlFieldName("is_nullable")]
     public bool IsNullable { get; set; }
 

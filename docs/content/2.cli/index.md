@@ -21,14 +21,12 @@ description: Overview of xtraq command-line interface and global options. The xt
 
 ## Telemetry
 
-Xtraq now mirrors the .NET CLI telemetry model:
+Telemetry **strictly opt-in**. Nothing is recorded unless you pass `--telemetry`.
 
-- Every command writes an anonymised usage event to `.xtraq/telemetry/cli-usage.jsonl` (plus consent + machine markers) unless telemetry is explicitly disabled.
-- Set one of `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `XTRAQ_CLI_TELEMETRY_OPTOUT=1`, or `XTRAQ_TELEMETRY_OPTOUT=1`, or run in CI mode, to skip event collection entirely.
-- A first-run disclosure banner explains the data flow and is recorded in `.xtraq/telemetry/cli-telemetry-consent.json`. The full rollout plan lives in [CLI Telemetry Alignment](/meta/cli-telemetry-alignment).
-- The `--telemetry` switch adds the high-fidelity database report used for troubleshooting query plans in addition to the default anonymised CLI event.
-
-CLI telemetry currently stays local; we will document any remote publishing before enabling it.
+- Append `--telemetry` to `snapshot`, `build`, or the default entry point to capture database query traces, build statistics, and a CLI command summary.
+- Reports land in `.xtraq/telemetry` as timestamped JSON files (`cli-command-*.json`, `snapshot-*.json`, `build-*.json`, and optional summaries) that stay on disk until you delete them.
+- No environment variables or consent banners are involved anymore—omit the switch and the directory remains untouched.
+- Telemetry files never leave your machine unless you share them manually. See [CLI Telemetry Alignment](/meta/cli-telemetry-alignment) for the current rollout plan.
 
 ## Core Commands
 

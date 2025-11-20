@@ -92,6 +92,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
     private readonly ConcurrentDictionary<string, SnapshotFunction?> _snapshotFunctionCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _functionColumnsSemaphore = new(1, 1);
     private Dictionary<string, IReadOnlyList<ColumnMetadata>>? _functionColumnsCache;
+    private readonly ConcurrentDictionary<string, Dictionary<string, List<Column>>> _catalogColumnCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _catalogColumnLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -187,9 +189,19 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         {
             return snapshotColumns;
         }
+        var indexColumns = await LoadColumnsFromSnapshotIndexAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+        if (indexColumns.Count > 0)
+        {
+            return indexColumns;
+        }
+
+        return await LoadColumnsFromLiveFallbacksAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ColumnMetadata>> LoadColumnsFromSnapshotIndexAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
+    {
         var resultMap = new Dictionary<string, ColumnMetadata>(StringComparer.OrdinalIgnoreCase);
 
-        // Try snapshot index first
         try
         {
             var indexColumns = await _snapshotIndexProvider.GetTableColumnsMetadataAsync(schema, tableName, cancellationToken).ConfigureAwait(false);
@@ -198,21 +210,25 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
                 var qualifiedSchema = BuildQualifiedSchema(catalog!, schema);
                 indexColumns = await _snapshotIndexProvider.GetTableColumnsMetadataAsync(qualifiedSchema, tableName, cancellationToken).ConfigureAwait(false);
             }
-            if (indexColumns != null && indexColumns.Count > 0)
-            {
-                foreach (var indexColumn in indexColumns)
-                {
-                    var mapped = MapIndexColumn(indexColumn, indexColumn.SourceColumn ?? indexColumn.Name ?? string.Empty);
-                    if (!string.IsNullOrWhiteSpace(mapped.Name))
-                    {
-                        resultMap[mapped.Name] = mapped;
-                    }
-                }
 
-                if (resultMap.Count > 0)
+            if (indexColumns == null || indexColumns.Count == 0)
+            {
+                return Array.Empty<ColumnMetadata>();
+            }
+
+            foreach (var indexColumn in indexColumns)
+            {
+                var mapped = MapIndexColumn(indexColumn, indexColumn.SourceColumn ?? indexColumn.Name ?? string.Empty);
+                if (!string.IsNullOrWhiteSpace(mapped.Name))
                 {
-                    _console.Verbose($"[enhanced-schema] Seeded {resultMap.Count} column(s) for {schema}.{tableName} from snapshot index");
+                    resultMap[mapped.Name] = mapped;
                 }
+            }
+
+            if (resultMap.Count > 0)
+            {
+                _console.Verbose($"[enhanced-schema] Seeded {resultMap.Count} column(s) for {schema}.{tableName} from snapshot index");
+                return resultMap.Values.ToList();
             }
         }
         catch (Exception ex)
@@ -220,32 +236,41 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             _console.Verbose($"[enhanced-schema] Snapshot index table lookup failed for {schema}.{tableName}: {ex.Message}");
         }
 
-        // Fallback to database query
-        if (_dbContext != null)
-        {
-            try
-            {
-                var dbColumns = await GetTableColumnsFromDatabaseAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
-                foreach (var column in dbColumns)
-                {
-                    if (!string.IsNullOrWhiteSpace(column?.Name))
-                    {
-                        resultMap[column.Name] = column;
-                    }
-                }
+        return Array.Empty<ColumnMetadata>();
+    }
 
-                if (dbColumns.Count > 0)
-                {
-                    _console.Verbose($"[enhanced-schema] Added {dbColumns.Count} column(s) for {schema}.{tableName} from database metadata");
-                }
-            }
-            catch (Exception ex)
-            {
-                _console.Verbose($"[enhanced-schema] Database table lookup failed for {schema}.{tableName}: {ex.Message}");
-            }
+    private async Task<IReadOnlyList<ColumnMetadata>> LoadColumnsFromLiveFallbacksAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
+    {
+        if (_dbContext == null)
+        {
+            _console.Verbose($"[enhanced-schema] Live metadata unavailable for {schema}.{tableName} because no DbContext was provided");
+            return Array.Empty<ColumnMetadata>();
         }
 
-        if (resultMap.Count == 0 && _dbContext != null)
+        var resultMap = new Dictionary<string, ColumnMetadata>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var dbColumns = await GetTableColumnsFromLiveSourcesAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+            foreach (var column in dbColumns)
+            {
+                if (!string.IsNullOrWhiteSpace(column?.Name))
+                {
+                    resultMap[column.Name] = column;
+                }
+            }
+
+            if (dbColumns.Count > 0)
+            {
+                _console.Verbose($"[enhanced-schema] Added {dbColumns.Count} column(s) for {schema}.{tableName} from database metadata");
+            }
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[enhanced-schema] Database table lookup failed for {schema}.{tableName}: {ex.Message}");
+        }
+
+        if (resultMap.Count == 0)
         {
             var functionColumns = await GetFunctionColumnsFromDatabaseAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
             foreach (var column in functionColumns)
@@ -281,11 +306,11 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
 
         if (resultMap.Count > 0)
         {
-            _console.Verbose($"[enhanced-schema] Aggregated {resultMap.Count} column(s) for {schema}.{tableName}");
+            _console.Verbose($"[enhanced-schema] Aggregated {resultMap.Count} column(s) for {schema}.{tableName} from live sources");
             return resultMap.Values.ToList();
         }
 
-        _console.Verbose($"[enhanced-schema] No columns found for {schema}.{tableName} from any source");
+        _console.Verbose($"[enhanced-schema] No columns found for {schema}.{tableName} from live sources");
         return Array.Empty<ColumnMetadata>();
     }
 
@@ -609,7 +634,7 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
 
     private async Task<ColumnMetadata?> ResolveFromDatabaseAsync(string schema, string tableName, string columnName, string? catalog, CancellationToken cancellationToken)
     {
-        var columns = await GetTableColumnsFromDatabaseAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+        var columns = await GetTableColumnsFromLiveSourcesAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
         var match = columns.FirstOrDefault(c => c != null &&
             !string.IsNullOrWhiteSpace(c.Name) &&
             string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
@@ -627,32 +652,35 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         return null;
     }
 
-    private async Task<IReadOnlyList<ColumnMetadata>> GetTableColumnsFromDatabaseAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ColumnMetadata>> GetTableColumnsFromLiveSourcesAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
     {
         if (_dbContext == null)
         {
             return Array.Empty<ColumnMetadata>();
         }
 
+        var normalizedSchema = NormalizeOptional(schema);
+        var normalizedTable = NormalizeOptional(tableName);
+        if (string.IsNullOrWhiteSpace(normalizedSchema) || string.IsNullOrWhiteSpace(normalizedTable))
+        {
+            return Array.Empty<ColumnMetadata>();
+        }
+
+        var fallbackCatalog = NormalizeOptional(catalog);
+
         try
         {
-            List<Column> dbColumns;
-            if (!string.IsNullOrWhiteSpace(catalog))
-            {
-                dbColumns = await _dbContext.TableColumnsListAsync(catalog!, schema, tableName, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
-            }
-            else
-            {
-                dbColumns = await _dbContext.TableColumnsListAsync(schema, tableName, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
-            }
+            var cachedColumns = await GetColumnsFromCatalogCacheAsync(normalizedSchema!, normalizedTable!, fallbackCatalog, cancellationToken).ConfigureAwait(false);
+            var sourceColumns = cachedColumns.Count > 0
+                ? cachedColumns
+                : await LoadTableColumnsDirectAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
 
-            if (dbColumns.Count == 0)
+            if (sourceColumns.Count == 0)
             {
                 return Array.Empty<ColumnMetadata>();
             }
 
-            var fallbackCatalog = NormalizeOptional(catalog);
-            return dbColumns
+            return sourceColumns
                 .Where(static column => column != null && !string.IsNullOrWhiteSpace(column.Name))
                 .Select(column => MapDatabaseColumn(column, fallbackCatalog))
                 .ToList();
@@ -903,6 +931,112 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             _console.Verbose($"[enhanced-schema] Snapshot table lookup failed for {schema}.{tableName}: {ex.Message}");
             return Array.Empty<ColumnMetadata>();
         }
+    }
+
+    private async Task<List<Column>> GetColumnsFromCatalogCacheAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
+    {
+        var cache = await GetOrLoadCatalogColumnsAsync(schema, catalog, cancellationToken).ConfigureAwait(false);
+        if (cache.TryGetValue(tableName, out var columns))
+        {
+            return columns;
+        }
+
+        return new List<Column>();
+    }
+
+    private async Task<Dictionary<string, List<Column>>> GetOrLoadCatalogColumnsAsync(string schema, string? catalog, CancellationToken cancellationToken)
+    {
+        var schemaKey = schema.Trim();
+        var cacheKey = BuildCatalogSchemaKey(schemaKey, catalog);
+        if (_catalogColumnCache.TryGetValue(cacheKey, out var existing))
+        {
+            return existing;
+        }
+
+        var gate = _catalogColumnLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_catalogColumnCache.TryGetValue(cacheKey, out existing))
+            {
+                return existing;
+            }
+
+            var loaded = await LoadCatalogColumnsAsync(schemaKey, catalog, cancellationToken).ConfigureAwait(false);
+            _catalogColumnCache[cacheKey] = loaded;
+            return loaded;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<Dictionary<string, List<Column>>> LoadCatalogColumnsAsync(string schema, string? catalog, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, List<Column>>(StringComparer.OrdinalIgnoreCase);
+        if (_dbContext == null)
+        {
+            return result;
+        }
+
+        try
+        {
+            var schemaFilter = new List<string> { schema };
+            var columns = await _dbContext.TableColumnsCatalogAsync(catalog, schemaFilter, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
+            if (columns.Count == 0)
+            {
+                return result;
+            }
+
+            foreach (var column in columns)
+            {
+                if (column == null || string.IsNullOrWhiteSpace(column.TableName) || string.IsNullOrWhiteSpace(column.Name))
+                {
+                    continue;
+                }
+
+                var tableKey = column.TableName.Trim();
+                if (!result.TryGetValue(tableKey, out var tableColumns))
+                {
+                    tableColumns = new List<Column>();
+                    result[tableKey] = tableColumns;
+                }
+
+                tableColumns.Add(column);
+            }
+
+            _console.Verbose($"[enhanced-schema] Cached {result.Count} table(s) for schema '{schema}'{(string.IsNullOrWhiteSpace(catalog) ? string.Empty : $" in catalog '{catalog}'")}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[enhanced-schema] Catalog column lookup failed for schema '{schema}'{(string.IsNullOrWhiteSpace(catalog) ? string.Empty : $" in catalog '{catalog}'")}: {ex.Message}");
+            return result;
+        }
+    }
+
+    private static string BuildCatalogSchemaKey(string schema, string? catalog)
+    {
+        var catalogKey = NormalizeOptional(catalog);
+        return string.IsNullOrWhiteSpace(catalogKey)
+            ? schema
+            : string.Concat(catalogKey, "|", schema);
+    }
+
+    private async Task<List<Column>> LoadTableColumnsDirectAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
+    {
+        if (_dbContext == null)
+        {
+            return new List<Column>();
+        }
+
+        if (string.IsNullOrWhiteSpace(catalog))
+        {
+            return await _dbContext.TableColumnsListAsync(schema, tableName, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
+        }
+
+        return await _dbContext.TableColumnsListAsync(catalog, schema, tableName, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
     }
 
     private async Task<IReadOnlyList<ColumnMetadata>> GetSystemColumnsAsync(string schema, string tableName, CancellationToken cancellationToken)

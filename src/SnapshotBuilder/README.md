@@ -238,14 +238,14 @@ Despite processing the same 557 procedures, the collector now issues only
 | `Collector.Dependencies`     | 1       | 0.091        |
 | `Collector.StoredProcedures` | 1       | 0.154        |
 
-The dominant operations (`QueryModifyDateAsync`,
-`QueryUserDefinedTypeModifyDateAsync`, and `QueryTableTypeModifyDateAsync`) execute once
-per unique dependency recorded in `procedures.json`. By caching the resolved
-`modify_date` within `DatabaseDependencyMetadataProvider`, warm snapshot runs avoid the 30× query
-amplification previously caused by repeating lookups for shared artefacts (for example
-`core.Context` and `internal.CrudResultThrowError`). The cache still suppresses the
-`Collector.Tables` hot spot observed during cold snapshot runs while keeping dependency checks
-deterministic.
+The previous hot spots (`QueryModifyDateAsync`,
+`QueryUserDefinedTypeModifyDateAsync`, and `QueryTableTypeModifyDateAsync`) executed once
+per dependency instance in `procedures.json`. The revamped dependency loader now issues a
+single catalog scan per `ProcedureDependencyKind` (`LoadCatalogAsync`) and materialises the
+results in memory. `DatabaseDependencyMetadataProvider` reuses that snapshot for every
+subsequent lookup, eliminating per-object roundtrips for shared artefacts (for example
+`core.Context` and `internal.CrudResultThrowError`) while preserving the deterministic
+dependency checks and the muted `Collector.Tables` profile observed during cold runs.
 
 Capture new telemetry snapshots whenever cache semantics or dependency tracking change
 and keep this section in sync with the observed behaviour.

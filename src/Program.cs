@@ -203,6 +203,25 @@ public static class Program
         var projectOption = new Option<string?>("--project-path", "Project root path (.env file or directory). Defaults to current directory when omitted.");
         projectOption.AddAlias("--project");
         projectOption.AddAlias("-p");
+        projectOption.AddValidator(result =>
+        {
+            if (result.IsImplicit)
+            {
+                return;
+            }
+
+            if (result.Tokens.Count == 0)
+            {
+                result.ErrorMessage = "Option '-p|--project' requires a path argument.";
+                return;
+            }
+
+            var invalidToken = result.Tokens.FirstOrDefault(token => token.Value.StartsWith("-", StringComparison.Ordinal));
+            if (invalidToken is not null)
+            {
+                result.ErrorMessage = "Option '-p|--project' requires a path argument.";
+            }
+        });
 
         var root = new RootCommand("Xtraq CLI")
         {

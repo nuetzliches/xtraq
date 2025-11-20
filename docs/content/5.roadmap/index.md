@@ -68,7 +68,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Telemetry
 
-- [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `docs/content/4.meta/4.cli-telemetry-alignment.md`: keep telemetry local-only until a privacy-reviewed ingestion endpoint exists; coverage added in `CliTelemetryServiceTests`.)_
+- [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `docs/content/4.meta/4.cli-telemetry-alignment.md`: telemetry now requires `--telemetry`, produces local-only JSON reports, and remains offline until a privacy-reviewed ingestion endpoint exists. Tests cover the opt-in behavior.)_
 
 ## Documentation Alignment
 
@@ -109,6 +109,10 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 
 - [x] Stop calling `ToUniversalTime()` on SQL Server `modify_date` values (Kind == Unspecified) to avoid skew when the CLI host runs in a different time zone than the database server; normalise using explicit kind handling. _(Handled via `SchemaChangeDetectionService.NormalizeSqlTimestamp`, which standardises timestamps without applying local offsets.)_
 - [x] Introduce regression tests that simulate time zone offsets and verify delta windows still surface the expected object set. _(Covered by `SchemaChangeDetectionServiceTests`, which assert that unspecified timestamps keep their tick values while local timestamps still convert to UTC.)_
+
+## Procedure Content Analyzer
+
+- [x] Replace per-dependency `modify_date` lookups with catalog-wide scans so SQL Server is queried only once per object type while the analyzer filters dependencies in memory. _(DatabaseDependencyMetadataProvider now hydrates in-memory snapshots via `LoadCatalogAsync` and reuses them across dependency resolution.)_
 
 ## Next Steps
 

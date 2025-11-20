@@ -56,19 +56,14 @@ internal sealed class CliTelemetryService : ICliTelemetryService
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true
     };
 
     private readonly IConsoleService _console;
     private readonly object _sync = new();
     private bool _initialized;
-    private bool _enabled;
-    private bool _disclosureRecorded;
     private string _telemetryDirectory = string.Empty;
-    private string _usageLogPath = string.Empty;
-    private string _consentMarkerPath = string.Empty;
-    private string _machineIdPath = string.Empty;
-    private string? _machineId;
 
     /// <summary>
     /// Initialises a new instance of the <see cref="CliTelemetryService"/> class.
@@ -84,20 +79,24 @@ internal sealed class CliTelemetryService : ICliTelemetryService
     {
         ArgumentNullException.ThrowIfNull(telemetryEvent);
 
-        Initialize();
-
-        if (!_enabled)
+        if (!telemetryEvent.TelemetryOptionEnabled)
         {
+            _console.Verbose("telemetry: cli usage capture skipped (requires --telemetry).");
             return;
         }
 
+        Initialize();
+
         try
         {
-            await EnsureDisclosureAsync(cancellationToken).ConfigureAwait(false);
             var envelope = BuildPayload(telemetryEvent);
             Directory.CreateDirectory(_telemetryDirectory);
+            var fileName = $"cli-command-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.json";
+            var filePath = Path.Combine(_telemetryDirectory, fileName);
             var payload = JsonSerializer.Serialize(envelope, SerializerOptions);
-            await AppendLineAsync(_usageLogPath, payload, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(filePath, payload, cancellationToken).ConfigureAwait(false);
+            var relativePath = Path.Combine(".xtraq", "telemetry", fileName).Replace('\\', '/');
+            _console.Verbose($"telemetry: cli command recorded path={relativePath}");
         }
         catch (Exception ex)
         {
@@ -142,201 +141,8 @@ internal sealed class CliTelemetryService : ICliTelemetryService
             }
 
             _telemetryDirectory = Path.Combine(baseDirectory, "telemetry");
-            _usageLogPath = Path.Combine(_telemetryDirectory, "cli-usage.jsonl");
-            _consentMarkerPath = Path.Combine(_telemetryDirectory, "cli-telemetry-consent.json");
-            _machineIdPath = Path.Combine(_telemetryDirectory, "machine-id");
-
-            _enabled = EvaluateTelemetryEnabled();
             _initialized = true;
         }
-    }
-
-    /// <summary>
-    /// Determines whether telemetry should remain enabled based on environment hints.
-    /// </summary>
-    /// <returns><c>true</c> when telemetry may execute, otherwise <c>false</c>.</returns>
-    private static bool EvaluateTelemetryEnabled()
-    {
-        if (IsTelemetryOptOut(Environment.GetEnvironmentVariable("DOTNET_CLI_TELEMETRY_OPTOUT")))
-        {
-            return false;
-        }
-
-        if (IsTelemetryOptOut(Environment.GetEnvironmentVariable("XTRAQ_CLI_TELEMETRY_OPTOUT")))
-        {
-            return false;
-        }
-
-        if (IsTelemetryOptOut(Environment.GetEnvironmentVariable("XTRAQ_TELEMETRY_OPTOUT")))
-        {
-            return false;
-        }
-
-        if (DetectCiEnvironment())
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Checks whether a supplied environment variable value requests telemetry opt-out.
-    /// </summary>
-    /// <param name="value">Raw environment variable value.</param>
-    /// <returns><c>true</c> when telemetry should be disabled.</returns>
-    private static bool IsTelemetryOptOut(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var normalized = value.Trim();
-        return normalized.Equals("1", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("y", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("on", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Detects whether the CLI is executing inside a recognised CI environment.
-    /// </summary>
-    /// <returns><c>true</c> when a CI flag is detected.</returns>
-    private static bool DetectCiEnvironment()
-    {
-        var ciVariables = new[]
-        {
-            "CI",
-            "TF_BUILD",
-            "GITHUB_ACTIONS",
-            "APPVEYOR",
-            "TRAVIS",
-            "CIRCLECI",
-            "TEAMCITY_VERSION",
-            "CI_PIPELINE_ID",
-            "JENKINS_URL",
-            "GITLAB_CI",
-            "CODEBUILD_BUILD_ID",
-            "BITBUCKET_BUILD_NUMBER"
-        };
-
-        foreach (var variable in ciVariables)
-        {
-            if (IsEnvironmentFlagSet(Environment.GetEnvironmentVariable(variable)))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Determines whether an environment variable should be treated as an affirmative flag.
-    /// </summary>
-    /// <param name="value">Raw environment value.</param>
-    /// <returns><c>true</c> when the flag is set.</returns>
-    private static bool IsEnvironmentFlagSet(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        if (bool.TryParse(value, out var parsed))
-        {
-            return parsed;
-        }
-
-        return value.Equals("1", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("y", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("on", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Ensures that the telemetry disclosure message is printed once per environment and persisted.
-    /// </summary>
-    /// <param name="cancellationToken">Token used to observe cancellation while persisting the consent marker.</param>
-    private async Task EnsureDisclosureAsync(CancellationToken cancellationToken)
-    {
-        if (_disclosureRecorded)
-        {
-            return;
-        }
-
-        var shouldNotify = false;
-
-        lock (_sync)
-        {
-            if (_disclosureRecorded)
-            {
-                return;
-            }
-
-            shouldNotify = !File.Exists(_consentMarkerPath);
-            _disclosureRecorded = true;
-        }
-
-        if (shouldNotify && !ShouldSuppressDisclosureMessage())
-        {
-            _console.Output("Telemetry\n---------\nXtraq collects anonymised usage data to improve the CLI. Set XTRAQ_CLI_TELEMETRY_OPTOUT=1 or DOTNET_CLI_TELEMETRY_OPTOUT=1 to opt out. More details: https://xtraq.dev/meta/cli-telemetry");
-        }
-
-        try
-        {
-            Directory.CreateDirectory(_telemetryDirectory);
-            var optOutMap = CollectOptOutVariables();
-            var consent = new CliTelemetryConsent
-            {
-                Version = 1,
-                NotifiedUtc = DateTimeOffset.UtcNow,
-                TelemetryEnabled = _enabled,
-                CiDetected = DetectCiEnvironment(),
-                OptOutVariables = optOutMap
-            };
-            var content = JsonSerializer.Serialize(consent, SerializerOptions);
-            await File.WriteAllTextAsync(_consentMarkerPath, content, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _console.Verbose($"[telemetry] failed to persist consent marker reason={ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Determines whether the disclosure banner should be suppressed based on environment configuration.
-    /// </summary>
-    /// <returns><c>true</c> when the banner should be hidden.</returns>
-    private static bool ShouldSuppressDisclosureMessage()
-    {
-        if (IsEnvironmentFlagSet(Environment.GetEnvironmentVariable("DOTNET_NOLOGO")))
-        {
-            return true;
-        }
-
-        if (IsEnvironmentFlagSet(Environment.GetEnvironmentVariable("XTRAQ_NOLOGO")))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Collects opt-out environment variables for auditing.
-    /// </summary>
-    /// <returns>Dictionary describing which opt-out variables were set.</returns>
-    private static Dictionary<string, bool> CollectOptOutVariables()
-    {
-        return new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["DOTNET_CLI_TELEMETRY_OPTOUT"] = IsTelemetryOptOut(Environment.GetEnvironmentVariable("DOTNET_CLI_TELEMETRY_OPTOUT")),
-            ["XTRAQ_CLI_TELEMETRY_OPTOUT"] = IsTelemetryOptOut(Environment.GetEnvironmentVariable("XTRAQ_CLI_TELEMETRY_OPTOUT")),
-            ["XTRAQ_TELEMETRY_OPTOUT"] = IsTelemetryOptOut(Environment.GetEnvironmentVariable("XTRAQ_TELEMETRY_OPTOUT"))
-        };
     }
 
     /// <summary>
@@ -352,73 +158,28 @@ internal sealed class CliTelemetryService : ICliTelemetryService
         var procedureFilterHash = string.IsNullOrWhiteSpace(telemetryEvent.ProcedureFilter)
             ? null
             : HashString(telemetryEvent.ProcedureFilter);
-        var machineHash = HashString(EnsureMachineId());
 
         return new CliTelemetryEnvelope
         {
-            SchemaVersion = 1,
+            SchemaVersion = 2,
             TimestampUtc = DateTimeOffset.UtcNow,
             Command = telemetryEvent.CommandName,
             Version = telemetryEvent.CliVersion,
             Success = telemetryEvent.Success,
             DurationMs = Convert.ToInt64(Math.Round(telemetryEvent.Duration.TotalMilliseconds, MidpointRounding.AwayFromZero)),
-            MachineId = machineHash,
             RuntimeIdentifier = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
             OperatingSystem = Environment.OSVersion.VersionString,
-            CiDetected = telemetryEvent.CiMode || DetectCiEnvironment(),
-            ProjectRootHash = projectHash,
-            ProcedureFilterHash = procedureFilterHash,
-            TelemetrySwitchEnabled = telemetryEvent.TelemetryOptionEnabled,
             CiMode = telemetryEvent.CiMode,
             Verbose = telemetryEvent.VerboseOptionEnabled,
             NoCache = telemetryEvent.NoCacheOptionEnabled,
             EntityFramework = telemetryEvent.EntityFrameworkOptionEnabled,
             RefreshSnapshot = telemetryEvent.RefreshSnapshotRequested,
+            ProjectRootHash = projectHash,
+            ProcedureFilterHash = procedureFilterHash,
             Metadata = telemetryEvent.AdditionalMetadata
         };
     }
 
-    /// <summary>
-    /// Ensures a persistent, non-identifying machine identifier exists.
-    /// </summary>
-    /// <returns>Stable machine identifier string.</returns>
-    private string EnsureMachineId()
-    {
-        if (!string.IsNullOrEmpty(_machineId))
-        {
-            return _machineId!;
-        }
-
-        lock (_sync)
-        {
-            if (!string.IsNullOrEmpty(_machineId))
-            {
-                return _machineId!;
-            }
-
-            if (File.Exists(_machineIdPath))
-            {
-                var persisted = File.ReadAllText(_machineIdPath).Trim();
-                if (!string.IsNullOrWhiteSpace(persisted))
-                {
-                    _machineId = persisted;
-                    return _machineId!;
-                }
-            }
-
-            var generated = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-            Directory.CreateDirectory(_telemetryDirectory);
-            File.WriteAllText(_machineIdPath, generated);
-            _machineId = generated;
-            return _machineId!;
-        }
-    }
-
-    /// <summary>
-    /// Computes a SHA256 hash for the provided value and returns the hex representation.
-    /// </summary>
-    /// <param name="value">Value to hash.</param>
-    /// <returns>Uppercase hexadecimal hash string.</returns>
     private static string HashString(string value)
     {
         using var sha = SHA256.Create();
@@ -427,23 +188,6 @@ internal sealed class CliTelemetryService : ICliTelemetryService
         return Convert.ToHexString(hash);
     }
 
-    /// <summary>
-    /// Appends a single line to a JSONL file asynchronously.
-    /// </summary>
-    /// <param name="filePath">Destination file path.</param>
-    /// <param name="content">Content to append as a single line.</param>
-    /// <param name="cancellationToken">Cancellation token to observe.</param>
-    private static async Task AppendLineAsync(string filePath, string content, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.Read, 4096, true);
-        await using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-        cancellationToken.ThrowIfCancellationRequested();
-        await writer.WriteLineAsync(content).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Minimal schema used for persisted telemetry events.
-    /// </summary>
     private sealed class CliTelemetryEnvelope
     {
         public int SchemaVersion { get; init; }
@@ -452,30 +196,15 @@ internal sealed class CliTelemetryService : ICliTelemetryService
         public string Version { get; init; } = string.Empty;
         public bool Success { get; init; }
         public long DurationMs { get; init; }
-        public string MachineId { get; init; } = string.Empty;
         public string RuntimeIdentifier { get; init; } = string.Empty;
         public string OperatingSystem { get; init; } = string.Empty;
-        public bool CiDetected { get; init; }
-        public string? ProjectRootHash { get; init; }
-        public string? ProcedureFilterHash { get; init; }
-        public bool TelemetrySwitchEnabled { get; init; }
         public bool CiMode { get; init; }
         public bool Verbose { get; init; }
         public bool NoCache { get; init; }
         public bool EntityFramework { get; init; }
         public bool RefreshSnapshot { get; init; }
+        public string? ProjectRootHash { get; init; }
+        public string? ProcedureFilterHash { get; init; }
         public IReadOnlyDictionary<string, string>? Metadata { get; init; }
-    }
-
-    /// <summary>
-    /// Document persisted when the disclosure banner has been shown.
-    /// </summary>
-    private sealed class CliTelemetryConsent
-    {
-        public int Version { get; init; }
-        public DateTimeOffset NotifiedUtc { get; init; }
-        public bool TelemetryEnabled { get; init; }
-        public bool CiDetected { get; init; }
-        public IReadOnlyDictionary<string, bool> OptOutVariables { get; init; } = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     }
 }
