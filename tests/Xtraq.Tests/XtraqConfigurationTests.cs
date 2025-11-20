@@ -17,6 +17,7 @@ public sealed class XtraqConfigurationTests
     {
         var cleanupKeys = new[]
         {
+            "XTRAQ_PROJECT_PATH",
             "XTRAQ_PROJECT_ROOT",
             "XTRAQ_NAMESPACE",
             "XTRAQ_GENERATOR_DB"
@@ -49,6 +50,7 @@ public sealed class XtraqConfigurationTests
             Xunit.Assert.Equal(expectedRoot, configuration.ProjectRoot);
             Xunit.Assert.Equal("Redirect.Namespace", configuration.NamespaceRoot);
             Xunit.Assert.Equal("Server=(local);Database=App;", configuration.GeneratorConnectionString);
+            Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH"));
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT"));
             Xunit.Assert.False(configuration.EnableMinimalApiExtensions);
             Xunit.Assert.False(configuration.EnableEntityFrameworkIntegration);
@@ -73,6 +75,7 @@ public sealed class XtraqConfigurationTests
     {
         var cleanupKeys = new[]
         {
+            "XTRAQ_PROJECT_PATH",
             "XTRAQ_PROJECT_ROOT",
             "XTRAQ_NAMESPACE",
             "XTRAQ_OUTPUT_DIR",
@@ -126,7 +129,9 @@ public sealed class XtraqConfigurationTests
     [Xunit.Fact]
     public void Load_WithoutTrackableConfig_ThrowsInvalidOperation()
     {
+        var originalPath = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH");
         var originalRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+        Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", null);
         Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", null);
 
         var projectRoot = Directory.CreateTempSubdirectory("xtraq-envcfg-missing-").FullName;
@@ -140,6 +145,7 @@ public sealed class XtraqConfigurationTests
         }
         finally
         {
+            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", originalPath);
             Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", originalRoot);
             TryDeleteDirectory(projectRoot);
         }

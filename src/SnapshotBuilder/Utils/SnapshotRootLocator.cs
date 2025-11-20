@@ -1,141 +1,96 @@
-using Xtraq.Configuration;
 using Xtraq.Utils;
 
 namespace Xtraq.SnapshotBuilder.Utils;
 
 /// <summary>
 /// Discovers project roots that contain Xtraq snapshot metadata (.xtraq directories).
-/// The logic mirrors the analyzer/runtime enumeration so writers and analyzers share the same probing behaviour.
 /// </summary>
 internal static class SnapshotRootLocator
 {
     internal static IEnumerable<string> EnumerateSnapshotRoots()
     {
-        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var candidate in EnumerateCandidates())
+        var explicitRoot = ResolveExplicitSnapshotRoot();
+        if (!string.IsNullOrWhiteSpace(explicitRoot))
         {
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            var normalized = NormalizeCandidate(candidate);
-            if (normalized is null)
-            {
-                continue;
-            }
-
-            if (TryAddSnapshotRoot(normalized, roots))
-            {
-                continue;
-            }
-
-            if (Directory.Exists(normalized))
-            {
-                var resolvedProjectRoot = SafeResolveProjectRoot(normalized);
-                if (!string.IsNullOrWhiteSpace(resolvedProjectRoot))
-                {
-                    TryAddSnapshotRoot(resolvedProjectRoot!, roots);
-                }
-            }
+            yield return explicitRoot!;
+            yield break;
         }
 
-        if (roots.Count == 0)
+        var projectRoot = ResolveProjectRoot();
+        if (string.IsNullOrWhiteSpace(projectRoot))
         {
-            var fallback = NormalizeCandidate(ProjectRootResolver.ResolveCurrent());
-            if (fallback is not null)
-            {
-                TryAddSnapshotRoot(fallback, roots);
-            }
+            yield break;
         }
 
-        return roots;
-
-        static IEnumerable<string?> EnumerateCandidates()
+        if (Directory.Exists(Path.Combine(projectRoot!, ".xtraq")))
         {
-            yield return Safe(() => Directory.GetCurrentDirectory());
-            yield return Safe(static () => Path.Combine(Directory.GetCurrentDirectory(), "debug"));
-            yield return Safe(() => DirectoryUtils.GetWorkingDirectory());
-            yield return Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
-            yield return Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
+            yield return projectRoot!;
+        }
+    }
+
+    private static string? ResolveExplicitSnapshotRoot()
+    {
+        var hint = Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
+        if (string.IsNullOrWhiteSpace(hint))
+        {
+            return null;
         }
 
-        static string? Safe(Func<string> factory)
+        var normalized = NormalizeDirectory(hint);
+        if (normalized is null)
         {
-            try
-            {
-                return factory();
-            }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
 
-        static string? NormalizeCandidate(string? candidate)
+        if (Path.GetFileName(normalized).Equals(".xtraq", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(candidate))
+            if (!Directory.Exists(normalized))
             {
                 return null;
             }
 
-            try
-            {
-                var fullPath = Path.GetFullPath(candidate);
-                if (Path.GetFileName(fullPath).Equals(".xtraq", StringComparison.OrdinalIgnoreCase))
-                {
-                    var parent = Path.GetDirectoryName(fullPath);
-                    return string.IsNullOrWhiteSpace(parent) ? null : parent;
-                }
+            var parent = Path.GetDirectoryName(normalized);
+            return NormalizeDirectory(parent);
+        }
 
-                return fullPath;
-            }
-            catch
+        return Directory.Exists(Path.Combine(normalized, ".xtraq"))
+            ? normalized
+            : null;
+    }
+
+    private static string? ResolveProjectRoot()
+    {
+        var hint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
+                   ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+
+        if (!string.IsNullOrWhiteSpace(hint))
+        {
+            var normalized = NormalizeDirectory(hint);
+            if (!string.IsNullOrWhiteSpace(normalized))
             {
-                return null;
+                return normalized;
             }
         }
 
-        static string? SafeResolveProjectRoot(string baseDirectory)
+        var resolved = ProjectRootResolver.ResolveCurrent();
+        return NormalizeDirectory(resolved);
+    }
+
+    private static string? NormalizeDirectory(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
         {
-            try
-            {
-                return TrackableConfigManager.ResolveProjectRoot(baseDirectory);
-            }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
 
-        static bool TryAddSnapshotRoot(string root, ISet<string> collector)
+        try
         {
-            if (string.IsNullOrWhiteSpace(root))
-            {
-                return false;
-            }
-
-            try
-            {
-                var normalized = Path.GetFullPath(root);
-                if (collector.Contains(normalized))
-                {
-                    return true;
-                }
-
-                if (Directory.Exists(Path.Combine(normalized, ".xtraq")))
-                {
-                    collector.Add(normalized);
-                    return true;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-
-            return false;
+            var path = Path.GetFullPath(value);
+            return Directory.Exists(path) ? path : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 }

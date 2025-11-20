@@ -39,12 +39,19 @@ public static class Program
 
         try
         {
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT")))
+            var existingProjectPath = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
+                ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+
+            if (!string.IsNullOrWhiteSpace(existingProjectPath))
+            {
+                UpdateProjectEnvironment(existingProjectPath!);
+            }
+            else
             {
                 var defaultRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(Directory.GetCurrentDirectory());
                 if (!string.IsNullOrWhiteSpace(defaultRoot))
                 {
-                    Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", defaultRoot);
+                    UpdateProjectEnvironment(defaultRoot);
                 }
             }
         }
@@ -290,7 +297,7 @@ public static class Program
             if (string.IsNullOrWhiteSpace(value))
             {
                 var resolvedDefault = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(fallback);
-                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", resolvedDefault);
+                UpdateProjectEnvironment(resolvedDefault);
                 return resolvedDefault;
             }
 
@@ -341,8 +348,48 @@ public static class Program
                 resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(candidate);
             }
 
-            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", resolvedRoot);
+            UpdateProjectEnvironment(resolvedRoot);
             return resolvedRoot;
+        }
+
+        void UpdateProjectEnvironment(string? projectRoot)
+        {
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                return;
+            }
+
+            var normalized = projectRoot;
+            try
+            {
+                normalized = Path.GetFullPath(projectRoot!);
+            }
+            catch
+            {
+                // ignore path normalization failures and keep original value
+            }
+
+            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", normalized);
+            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", normalized);
+            EnsureSnapshotRoot(normalized);
+        }
+
+        void EnsureSnapshotRoot(string projectRoot)
+        {
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT")))
+            {
+                return;
+            }
+
+            try
+            {
+                var snapshotPath = Path.Combine(projectRoot, ".xtraq");
+                Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", snapshotPath);
+            }
+            catch
+            {
+                // ignore snapshot root publication errors
+            }
         }
 
         async Task ExecuteCommandAsync(
@@ -850,7 +897,8 @@ public static class Program
             }
         }
 
-        var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+        var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
+            ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
         if (!string.IsNullOrWhiteSpace(projectHint))
         {
             var normalizedHint = NormalizePathSafe(projectHint);

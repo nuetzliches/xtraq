@@ -6,7 +6,7 @@ namespace Xtraq.Utils;
 /// <summary>
 /// Centralized resolution of the active project root for generation.
 /// Order of precedence:
-/// 1. Environment variable XTRAQ_PROJECT_ROOT when it points to an existing directory
+/// 1. Environment variable XTRAQ_PROJECT_PATH (or legacy XTRAQ_PROJECT_ROOT) when it points to an existing directory
 /// 2. .xtraqconfig discovery from the current working directory upwards
 /// 3. Current working directory
 /// Falls back gracefully and never throws.
@@ -18,7 +18,8 @@ internal static class ProjectRootResolver
     {
         try
         {
-            var projRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+            var projRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
+                ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
             if (!string.IsNullOrWhiteSpace(projRoot))
             {
                 try
