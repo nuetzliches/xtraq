@@ -1,99 +1,89 @@
 # Xtraq CLI command surface
 
-This document captures the current command- and option-set exposed by the `xtraq` global tool as implemented in `Program.cs` and the helper types under `src/Cli`. It also outlines the planned direction for a modernised command architecture.
+This document describes the command and option surface provided by the `xtraq` global tool together with the hosting architecture under `src/Cli`. It reflects the current `CliCommandAppBuilder` implementation that Program.cs now delegates to.
 
 ## Root command (`xtraq`)
 
 ```
-xtraq [project-path] [options]
+xtraq [options]
 ```
 
-- **Arguments**
-  - `project-path` (optional): file system path to the project root. When omitted the current working directory is used. If provided, the value can point to a directory or a `.env` file and will be normalised before execution.
-- **Options**
+- The root command no longer accepts a positional project argument. Use `--project-path`/`--project`/`-p` or the explicit subcommand arguments instead.
+- Running `xtraq` with no additional arguments routes to `xtraq build --refresh-snapshot`, mirroring the legacy "snapshot + build" workflow.
+- Global options:
+  - `--verbose`, `-v`: enable verbose console output plus additional logging downstream.
+  - `--debug`: switch to the "debug" environment profile and enable extra diagnostics in services.
+  - `--debug-alias`: set `XTRAQ_ALIAS_DEBUG=1` so alias scope tracing becomes visible.
+  - `--no-cache`: force cache misses for schema metadata (sets `CacheControl.ForceReload = true`).
+  - `--procedure <schema.name,...>`: restrict execution to a comma-separated allow-list; validation rejects malformed tokens.
+  - `--telemetry`: persist telemetry snapshots under `.xtraq/telemetry` after successful runs.
+  - `--json-include-null-values`: opt into JSON-null emission; tracked even when explicitly `false` so generators can distinguish overrides.
+  - `--entity-framework`: toggle Entity Framework helper generation (`XTRAQ_ENTITY_FRAMEWORK`).
+  - `--ci`: suppress Spectre.Console enhancements for plain-text/CI logs.
+  - `--project-path`, `--project`, `-p`: supply a directory or `.env` file used to locate `.xtraqconfig`; defaults to the current directory when omitted.
 
-  - `--verbose`, `-v`: enables additional console detail, including verbose logging hooks in downstream services.
-  - `--debug`: switches to the "debug" environment profile (consumed by runtime services and telemetry).
-  - `--debug-alias`: sets `XTRAQ_ALIAS_DEBUG=1`, enabling alias scope tracing.
-  - `--no-cache`: disables reads and writes against the local procedure metadata cache (`CacheControl.ForceReload = true`).
-  - `--procedure <schemaA.proc1,...>`: restricts execution to the listed procedures. Sets the `XTRAQ_BUILD_PROCEDURES` environment variable for downstream consumers.
-  - `--telemetry`: persists run telemetry to `.xtraq/telemetry`. Only honoured after successful build executions.
-  - `--json-include-null-values`: opt-in flag for JSON result payload generation. When present the flag is propagated even when `false` to allow explicit overrides.
-  - `--ci`: disables Spectre.Console enrichments (charts, markup) to produce plain-text output for CI pipelines.
+**Implicit behaviour**
 
-- **Implicit behaviours**
-  - Update checks run asynchronously unless `XTRAQ_NO_UPDATE`/`XTRAQ_SKIP_UPDATE` are set (via `.env` or shell). There is currently no CLI switch to opt-out per invocation.
-  - The runtime records the last parsed options in `CommandOptions` so subsequent invocations can reuse defaults.
-  - Spectre.Console enrichments (breakdown charts, inline markup) are enabled by default and fall back to plain text when `--ci` is supplied or when the console implementation does not support ANSI sequences.
-  - After every command the working directory base path is reset by `DirectoryUtils.ResetBasePath()`.
+- Update checks run asynchronously unless suppressed through `XTRAQ_NO_UPDATE`/`XTRAQ_SKIP_UPDATE`.
+- Parsed options are stored in `CommandOptions` so subsequent commands can reuse defaults.
+- `DirectoryUtils.ResetBasePath()` runs after each command so per-command path overrides do not leak between invocations.
 
 ## Built-in subcommands
 
+### `xtraq snapshot`
+
+- Description: capture database metadata into `.xtraq` snapshots without generating code.
+- Arguments: optional `project-path` (alias: `--project-path`/`-p`).
+- Options: inherits all global switches; honours `--procedure`, `--no-cache`, `--telemetry`, and `--entity-framework`.
+- Notes: schedules asynchronous update checks unless disabled.
+
+### `xtraq build`
+
+- Description: generate code artifacts from the latest snapshot; `--refresh-snapshot` can force a pre-build snapshot.
+- Arguments: optional `project-path`.
+- Options: inherits global switches plus `--refresh-snapshot` (default false when the subcommand is used explicitly, true when invoked via the root command alias).
+- Notes: schedules asynchronous update checks unless disabled.
+
 ### `xtraq version`
 
-- Description: show installed and latest Xtraq versions.
-- Options: reuses `--verbose`. All other switches are ignored.
+- Description: print the installed CLI version and the latest published version.
+- Options: honours `--verbose` for extra detail.
 
 ### `xtraq update`
 
-- Description: update the installed Xtraq global tool to the latest version.
-- Options: reuses `--verbose`.
+- Description: update the installed global tool to the newest version.
+- Options: honours `--verbose`.
 
 ### `xtraq init`
 
-- Description: bootstrap a project `.env` and supporting artefacts.
+- Description: bootstrap `.env`, `.env.example`, `.xtraqconfig`, and `.gitignore` scaffolding.
+- Arguments: optional `project-path` argument or `--project-path` option for the target directory.
 - Options:
-  - `--path`, `-p`: target directory (defaults to current directory).
   - `--force`, `-f`: overwrite an existing `.env`.
-  - `--namespace`, `-n`: seed `XTRAQ_NAMESPACE` in the generated `.env`.
+  - `--namespace`, `-n`: seed `XTRAQ_NAMESPACE`.
   - `--connection`, `-c`: seed `XTRAQ_GENERATOR_DB`.
-  - `--schemas`, `-s`: comma-separated allow-list for `XTRAQ_BUILD_SCHEMAS`.
-- Side effects: writes/updates `.xtraqconfig`, ensures `.env.example` and `.gitignore`, and normalises `.env` keys to uppercase.
+  - `--schemas`, `-s`: seed `XTRAQ_BUILD_SCHEMAS` (comma-separated allow-list).
+- Side effects: normalises key casing, writes `.xtraqconfig`, and ensures `.gitignore` excludes generated folders.
 
 ## Option semantics
 
-- The single positional argument is always treated as the project path. No action inference is performed; verbs are chosen explicitly or implied via the default workflow.
-- `--telemetry` is honoured after successful build executions (including default "snapshot+build" runs triggered without explicit verbs).
-- `--procedure` accepts multiple comma-separated tokens; each is trimmed and propagated as-is. Validation remains TODO.
-- `--json-include-null-values` stores both the value and a `HasJsonIncludeNullValuesOverride` boolean, allowing downstream components to distinguish between "unset" and "explicit false".
-- `--ci` suppresses Spectre.Console widgets and rich formatting so logs remain machine-friendly.
+- `--procedure` supports `*`/`?` wildcards, trims tokens, deduplicates entries, and surfaces invalid filters at parse time (`CliHostUtilities.TryNormalizeProcedureFilter`).
+- `--json-include-null-values` and `--entity-framework` both record `Has*Override` flags so downstream processors can tell whether the option was explicitly set.
+- `--telemetry` is honoured on successful snapshot/build runs; version/update/init still capture lightweight telemetry envelopes without touching disk.
+- `--project-path` accepts either a directory or an `.env` file; the CLI normalizes the root path before invoking the runtime.
 
-## Target architecture (greenfield CLI)
+## Current architecture snapshot
 
-To design the next iteration of the CLI without legacy constraints, adopt the following baseline:
+1. **Bootstrapping**: `CliEnvironmentBootstrapper` normalizes invocation arguments, wires process-level environment variables, and ensures Spectre.Console defaults are applied before DI spins up.
+2. **Host builder**: `CliHostBuilder` centralizes configuration and dependency injection, returning a disposable `CliHostContext` that exposes `IConfiguration`, `IServiceProvider`, and the resolved environment.
+3. **Command wiring**: `CliCommandAppBuilder` constructs the `System.CommandLine` tree (options, validators, subcommands) and binds handlers to `IXtraqCommand` implementations or inline logic (`init`).
+4. **Execution flow**: `Program.RunCliAsync` is now a thin shim that normalizes args, builds the host, instantiates `CliCommandAppBuilder`, and invokes the resulting `RootCommand`.
+5. **Next up**: a focused `CliCommandExecutor` will lift the telemetry + execution logic out of the builder so tests can target it without spinning up the parser.
 
-1. **Command kernel:** define a lightweight `IXtraqCommand` abstraction (e.g. `ValueTask<int> ExecuteAsync(CliInvocation context)`) and register concrete handlers (`SnapshotCommand`, `BuildCommand`, `InitCommand`, etc.) via dependency injection. `Program.cs` only wires the root parser to the command catalog.
-2. **Parsing model:** rely on `System.CommandLine` 2.x binding to project parse results directly into immutable option records. Expose explicit verbs (`xtraq init`, `xtraq snapshot`, `xtraq build`) and reserve the single positional argument exclusively for the project path; drop the legacy `rebuild` noun entirely.
-3. **Default workflow:**
+## Console tooling assessment
 
-- Bare `xtraq` (no arguments) resolves to `build --refresh-snapshot`, i.e. snapshot followed by build. This behaviour should be implemented by routing the root command to the `BuildCommand` with a `RefreshSnapshot` flag set.
-- When invoked, the root command first probes the target project (current directory or the positional path argument). If `.env`, `.xtraqconfig`, or `.xtraq/` are missing, emit a status block explaining that the project is uninitialised and offer to run `xtraq init <path>`. Include a `--yes` switch for fully automated bootstraps.
-- `xtraq <path>` is equivalent to `xtraq <path> build --refresh-snapshot`, while `xtraq <path> snapshot` and `xtraq <path> build` map directly to the respective verbs.
-- `snapshot` only refreshes metadata; `build` compiles artefacts; `build --refresh-snapshot` executes both steps; no separate `rebuild` verb exists.
-
-4. **Shared option catalog:** centralise reusable options (`--verbose`, `--debug`, `--no-cache`, `--telemetry`, `--procedure`, `--json-include-null-values`, `--yes`) in a single builder so commands and automation scripts draw from the same definitions. Inject validators to ensure paths exist and procedure filters have valid syntax.
-5. **Observability:** emit structured telemetry for each command (verb, options, duration, exit code) and surface feature flags through tracked configuration (`.xtraqconfig`) rather than scattered environment variables to simplify testing.
-
-With this foundation, additional verbs such as `doctor`, `cache clear`, or `plan` can be introduced by adding new `IXtraqCommand` implementations without touching the core parser.
-
-### Console tooling assessment
-
-`System.CommandLine` in .NET 8/10 covers parsing, help, suggestions, and basic terminal output, but it offers limited primitives for richer TUI elements. Because the future CLI requires progress indicators, tables, status panels, and interactive prompts, we should adopt [Spectre.Console](https://spectreconsole.net/) as the presentation layer.
-
-Adoption plan:
-
-- Keep `System.CommandLine` for parsing and binding.
-- Extend `IConsoleService` with a Spectre-backed implementation (`SpectreConsoleService`) that exposes high-level helpers for rendering tables, progress bars, confirmation prompts, and rich status output. Provide a simplified shim (ANSI-only) for environments where Spectre is unavailable (e.g. minimal host tooling).
-- Use Spectre's `Progress`, `Status`, and `Table` APIs inside the new command handlers to deliver consistent UX across scripted and interactive flows.
-- Isolate Spectre-specific code in a dedicated `Xtraq.Cli.Tui` namespace so downstream libraries remain unaffected and tests can swap in a mock renderer.
-
-This approach keeps parsing concerns separate while delivering the TUI feature set expected from the modernised CLI.
+`System.CommandLine` handles parsing and binding; Spectre.Console remains the presentation layer for progress, tables, and prompts exposed through `IConsoleService`. The CLI keeps Spectre usage behind abstractions so tests can substitute mock consoles.
 
 ## Command interface blueprint
 
-The new command contract lives in `src/Cli/Commands/IXtraqCommand.cs` and consists of:
-
-- `IXtraqCommand`: a single-method interface (`ValueTask<int> ExecuteAsync(...)`) that returns an exit code and accepts a rich `XtraqCommandContext` plus an optional `CancellationToken`.
-- `XtraqCommandContext`: immutable invocation data exposing the normalised project path, parsed `ICommandOptions`, the ambient `IServiceProvider`, the console abstraction, and a `RefreshSnapshot` toggle used by the default workflow.
-
-Each verb-specific handler (e.g. `SnapshotCommand`, `BuildCommand`) will implement `IXtraqCommand`, operate solely on the provided context, and resolve further services through `context.Services`. Tests can supply mock implementations of `IXtraqCommand` or substitute the console to validate TUI output without invoking Spectre.Console directly.
+`IXtraqCommand` and `XtraqCommandContext` live under `src/Cli/Commands`. Each verb-specific handler (`SnapshotCommand`, `BuildCommand`, …) resolves services from the ambient `IServiceProvider`, executes its workload, and returns an exit code. Tests can supply fake contexts or interceptors to validate behaviors without spinning up the full CLI host.
