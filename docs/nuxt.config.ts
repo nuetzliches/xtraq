@@ -91,6 +91,17 @@ export default defineNuxtConfig({
     },
     fallbackToApi: false
   },
+  content: {
+    highlight: {
+      preload: ['csharp'],
+      langs: [
+        {
+          name: 'csharp',
+          alias: ['cs']
+        }
+      ]
+    }
+  },
   appConfig: {
     docus: {
       title: 'xtraq Documentation',
