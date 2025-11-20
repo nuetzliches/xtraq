@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xtraq.Cache;
-using Xtraq.Cli;
 using Xtraq.Data;
 using Xtraq.Generators;
 using Xtraq.Metadata;

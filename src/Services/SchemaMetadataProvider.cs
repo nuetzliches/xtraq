@@ -1,5 +1,4 @@
 #pragma warning disable CS0618 // SchemaMetadataProvider remains Obsolete while downstream migration completes.
-using Xtraq.Cli;
 using Xtraq.Metadata;
 using Xtraq.Schema;
 using Xtraq.Utils;

@@ -19,3 +19,4 @@ global using System.Threading.Tasks;
 
 // Microsoft Extensions (minimal, project-specific)
 global using Microsoft.Extensions.DependencyInjection;
+global using Xtraq.Cli;

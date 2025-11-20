@@ -1,5 +1,4 @@
 using Spectre.Console;
-using Xtraq.Cli;
 using Xtraq.Core;
 
 namespace Xtraq.Services;

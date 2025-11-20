@@ -1,5 +1,4 @@
 using Microsoft.Data.SqlClient;
-using Xtraq.Cli;
 using Xtraq.Configuration;
 using Xtraq.Core;
 using Xtraq.Engine;
