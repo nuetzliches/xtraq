@@ -1,7 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
-using Microsoft.Extensions.DependencyInjection;
 using Xtraq.Cli.Commands;
 using Xtraq.Infrastructure;
 using Xtraq.Runtime;
