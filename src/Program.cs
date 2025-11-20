@@ -194,7 +194,7 @@ public static class Program
         var debugOption = new Option<bool>("--debug", "Use debug environment settings");
         var debugAliasOption = new Option<bool>("--debug-alias", "Enable alias scope debug logging (sets XTRAQ_ALIAS_DEBUG=1)");
         var noCacheOption = new Option<bool>("--no-cache", "Do not read or write the local procedure metadata cache");
-        var procedureOption = new Option<string?>("--procedure", "Process only specific procedures (comma separated schema.name)");
+        var procedureOption = new Option<string?>("--procedure", "Process only specific procedures (comma separated schema.name with optional '*' or '?' wildcards)");
         var telemetryOption = new Option<bool>("--telemetry", "Persist a database telemetry report to .xtraq/telemetry");
         var jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values", "Emit JsonIncludeNullValues attribute for JSON result properties");
         var entityFrameworkOption = new Option<bool>("--entity-framework", "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK)");
@@ -220,6 +220,14 @@ public static class Program
             if (invalidToken is not null)
             {
                 result.ErrorMessage = "Option '-p|--project' requires a path argument.";
+            }
+        });
+        procedureOption.AddValidator(result =>
+        {
+            var rawValue = result.GetValueOrDefault<string?>();
+            if (!TryNormalizeProcedureFilter(rawValue, out _, out var error) && !string.IsNullOrEmpty(error))
+            {
+                result.ErrorMessage = error;
             }
         });
 
@@ -431,7 +439,7 @@ public static class Program
                 Debug = invocationContext.ParseResult.GetValueForOption(debugOption),
                 NoCache = invocationContext.ParseResult.GetValueForOption(noCacheOption),
                 NoUpdate = false,
-                Procedure = invocationContext.ParseResult.GetValueForOption(procedureOption)?.Trim() ?? string.Empty,
+                Procedure = NormalizeProcedureFilter(invocationContext.ParseResult.GetValueForOption(procedureOption)),
                 Telemetry = invocationContext.ParseResult.GetValueForOption(telemetryOption),
                 JsonIncludeNullValues = invocationContext.ParseResult.GetValueForOption(jsonIncludeNullValuesOption),
                 HasJsonIncludeNullValuesOverride = invocationContext.ParseResult.HasOption(jsonIncludeNullValuesOption),
@@ -556,7 +564,7 @@ public static class Program
                 Debug = context.ParseResult.GetValueForOption(debugOption),
                 NoCache = context.ParseResult.GetValueForOption(noCacheOption),
                 NoUpdate = false,
-                Procedure = context.ParseResult.GetValueForOption(procedureOption)?.Trim() ?? string.Empty,
+                Procedure = NormalizeProcedureFilter(context.ParseResult.GetValueForOption(procedureOption)),
                 Telemetry = context.ParseResult.GetValueForOption(telemetryOption),
                 JsonIncludeNullValues = context.ParseResult.GetValueForOption(jsonIncludeNullValuesOption),
                 HasJsonIncludeNullValuesOverride = context.ParseResult.HasOption(jsonIncludeNullValuesOption),
@@ -618,7 +626,7 @@ public static class Program
                 Debug = context.ParseResult.GetValueForOption(debugOption),
                 NoCache = context.ParseResult.GetValueForOption(noCacheOption),
                 NoUpdate = false,
-                Procedure = context.ParseResult.GetValueForOption(procedureOption)?.Trim() ?? string.Empty,
+                Procedure = NormalizeProcedureFilter(context.ParseResult.GetValueForOption(procedureOption)),
                 Telemetry = context.ParseResult.GetValueForOption(telemetryOption),
                 JsonIncludeNullValues = context.ParseResult.GetValueForOption(jsonIncludeNullValuesOption),
                 HasJsonIncludeNullValuesOverride = context.ParseResult.HasOption(jsonIncludeNullValuesOption),
@@ -697,7 +705,7 @@ public static class Program
                 Debug = context.ParseResult.GetValueForOption(debugOption),
                 NoCache = context.ParseResult.GetValueForOption(noCacheOption),
                 NoUpdate = false,
-                Procedure = context.ParseResult.GetValueForOption(procedureOption)?.Trim() ?? string.Empty,
+                Procedure = NormalizeProcedureFilter(context.ParseResult.GetValueForOption(procedureOption)),
                 Telemetry = context.ParseResult.GetValueForOption(telemetryOption),
                 JsonIncludeNullValues = context.ParseResult.GetValueForOption(jsonIncludeNullValuesOption),
                 HasJsonIncludeNullValuesOverride = context.ParseResult.HasOption(jsonIncludeNullValuesOption),
@@ -984,6 +992,92 @@ public static class Program
         }
 
         return typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0";
+    }
+
+    private static string NormalizeProcedureFilter(string? rawValue)
+    {
+        return TryNormalizeProcedureFilter(rawValue, out var normalized, out _) ? normalized ?? string.Empty : string.Empty;
+    }
+
+    internal static bool TryNormalizeProcedureFilter(string? rawValue, out string? normalized, out string? error)
+    {
+        normalized = null;
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return true;
+        }
+
+        var tokens = rawValue
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(static token => token.Trim())
+            .Where(static token => token.Length > 0);
+
+        var deduped = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var token in tokens)
+        {
+            if (!IsValidProcedureFilterToken(token))
+            {
+                error = $"Invalid procedure filter '{token}'. Use schema.name with optional '*' or '?' wildcards.";
+                normalized = null;
+                return false;
+            }
+
+            if (seen.Add(token))
+            {
+                deduped.Add(token);
+            }
+        }
+
+        if (deduped.Count == 0)
+        {
+            normalized = null;
+            return true;
+        }
+
+        normalized = string.Join(',', deduped);
+        return true;
+    }
+
+    private static bool IsValidProcedureFilterToken(string token)
+    {
+        var separatorIndex = token.IndexOf('.');
+        if (separatorIndex <= 0 || separatorIndex == token.Length - 1)
+        {
+            return false;
+        }
+
+        var schemaSpan = token.AsSpan(0, separatorIndex);
+        var procedureSpan = token.AsSpan(separatorIndex + 1);
+        return IsValidIdentifierSegment(schemaSpan) && IsValidIdentifierSegment(procedureSpan);
+    }
+
+    private static bool IsValidIdentifierSegment(ReadOnlySpan<char> segment)
+    {
+        if (segment.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var ch in segment)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                continue;
+            }
+
+            if (ch is '_' or '-' or '*' or '?')
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private static string[] NormalizeInvocationArguments(string[] args)
