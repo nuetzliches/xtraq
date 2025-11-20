@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Connection string 'SampleDb' is not configured. Set it in appsettings.json or provide XTRAQ_SAMPLE_SQL_CONNECTION.");
+    throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured. Set it in appsettings.json");
 }
 
 builder.Services.AddEndpointsApiExplorer();

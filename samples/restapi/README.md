@@ -7,12 +7,6 @@ This folder contains a lightweight ASP.NET Core minimal API that exercises the c
 - .NET 10 SDK — the sample defaults to net10.0 but still multi-targets net8.0 for compatibility
 - Running SQL Server instance seeded with the scripts under `samples/sql` (the Docker setup in `samples/mssql` exposes a ready-made container on port 1433)
 
-## Configure the connection
-
-1. Copy `appsettings.Template.json` to `appsettings.json`.
-2. Replace `REPLACE_WITH_STRONG_PASSWORD` with the password you configured for the sample SQL Server.
-3. Alternatively set the `XTRAQ_SAMPLE_SQL_CONNECTION` environment variable, which takes precedence over the JSON configuration.
-
 ## Useful commands
 
 ```cmd
