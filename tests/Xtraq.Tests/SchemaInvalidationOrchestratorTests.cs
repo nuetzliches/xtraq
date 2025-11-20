@@ -233,6 +233,45 @@ public sealed class SchemaInvalidationOrchestratorTests
         Assert.Contains(secondResult.InvalidatedObjects, candidate => SchemaEquals(candidate, procedureRef));
     }
 
+    [Fact]
+    public async Task AnalyzeAndInvalidateAsync_WhenCacheTimestampMissing_RequestsFullScan()
+    {
+        var console = new TestConsoleService();
+        var cache = new FakeCacheManager();
+        var changeDetection = new FakeChangeDetectionService();
+
+        var orchestrator = CreateOrchestrator(cache, changeDetection, console);
+        await orchestrator.InitializeAsync("Server=(local);Database=Fake;", CancellationToken.None);
+        await orchestrator.AnalyzeAndInvalidateAsync(cancellationToken: CancellationToken.None);
+
+        foreach (var history in changeDetection.SinceHistory.Values)
+        {
+            Assert.All(history, timestamp => Assert.Null(timestamp));
+        }
+    }
+
+    [Fact]
+    public async Task AnalyzeAndInvalidateAsync_WhenCacheTimestampAvailable_UsesPersistedReference()
+    {
+        var console = new TestConsoleService();
+        var cache = new FakeCacheManager();
+        var changeDetection = new FakeChangeDetectionService();
+
+        var orchestrator = CreateOrchestrator(cache, changeDetection, console);
+        await orchestrator.InitializeAsync("Server=(local);Database=Fake;", CancellationToken.None);
+
+        await orchestrator.AnalyzeAndInvalidateAsync(cancellationToken: CancellationToken.None);
+        var baseline = cache.GetLastUpdatedUtc();
+        Assert.NotNull(baseline);
+
+        changeDetection.ResetHistory();
+
+        await orchestrator.AnalyzeAndInvalidateAsync(cancellationToken: CancellationToken.None);
+
+        var recorded = changeDetection.GetLastSince(SchemaObjectType.StoredProcedure);
+        Assert.Equal(baseline, recorded);
+    }
+
     private static bool SchemaEquals(SchemaObjectRef? candidate, SchemaObjectRef expected)
     {
         return candidate is not null
@@ -495,8 +534,13 @@ public sealed class SchemaInvalidationOrchestratorTests
     private sealed class FakeChangeDetectionService : ISchemaChangeDetectionService
     {
         private readonly Dictionary<SchemaObjectType, Queue<SchemaObjectChangeSet>> _changeSets = new();
+        private readonly Dictionary<SchemaObjectType, List<DateTime?>> _sinceHistory = new();
         private readonly Dictionary<SchemaObjectRef, IReadOnlyList<SchemaObjectRef>> _dependencyMap = new(new SchemaObjectRefComparer());
         private DateTime _timestamp = DateTime.UtcNow;
+
+        public IReadOnlyDictionary<SchemaObjectType, IReadOnlyList<DateTime?>> SinceHistory => _sinceHistory.ToDictionary(
+            static pair => pair.Key,
+            static pair => (IReadOnlyList<DateTime?>)pair.Value.ToList());
 
         public void Initialize(string connectionString)
         {
@@ -526,6 +570,13 @@ public sealed class SchemaInvalidationOrchestratorTests
             bool allowFullScanFallback = true,
             CancellationToken cancellationToken = default)
         {
+            if (!_sinceHistory.TryGetValue(objectType, out var history))
+            {
+                history = new List<DateTime?>();
+                _sinceHistory[objectType] = history;
+            }
+            history.Add(sinceUtc);
+
             if (_changeSets.TryGetValue(objectType, out var queue) && queue.Count > 0)
             {
                 return Task.FromResult(queue.Dequeue());
@@ -533,6 +584,15 @@ public sealed class SchemaInvalidationOrchestratorTests
 
             return Task.FromResult(EmptyChangeSet);
         }
+
+        public DateTime? GetLastSince(SchemaObjectType objectType)
+        {
+            return _sinceHistory.TryGetValue(objectType, out var history) && history.Count > 0
+                ? history[^1]
+                : null;
+        }
+
+        public void ResetHistory() => _sinceHistory.Clear();
 
         public Task<IReadOnlyList<SchemaObjectRef>> GetDependenciesAsync(
             SchemaObjectRef objectRef,

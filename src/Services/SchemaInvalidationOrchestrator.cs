@@ -309,12 +309,11 @@ internal sealed class SchemaInvalidationOrchestrator : ISchemaInvalidationOrches
 
     private Task<DateTime?> GetEarliestCacheTimestampAsync(SchemaObjectType objectType)
     {
-        // Use the cache persistence timestamp as the baseline for delta queries.
-        // Falls back to a 24-hour window when no cache snapshot is available yet.
+        // When the cache has not been persisted yet (or was cleared), force a full scan by returning null.
+        // Otherwise reuse the persisted reference timestamp so delta queries can execute.
         _ = objectType;
         var reference = _cacheManager.GetLastUpdatedUtc();
-        var effective = reference ?? DateTime.UtcNow.AddDays(-1);
-        return Task.FromResult<DateTime?>(effective);
+        return Task.FromResult(reference);
     }
 
     private async Task UpdateDependenciesAsync(SchemaObjectRef objectRef, CancellationToken cancellationToken)
