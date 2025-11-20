@@ -2185,10 +2185,17 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
         private void PopulateFunctionCall(ProcedureResultColumn column, FunctionCall? functionCall)
         {
-            if (column == null || functionCall == null)
+            if (column == null)
             {
                 return;
             }
+
+            if (functionCall == null)
+            {
+                return;
+            }
+
+            var activeFunctionCall = functionCall!;
 
             column.ExpressionKind = ProcedureResultColumnExpressionKind.FunctionCall;
 
@@ -2223,16 +2230,20 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 ApplyJsonQueryParameterMetadata(column, functionCall?.Parameters);
             }
 
-            if (functionCall.CallTarget is MultiPartIdentifierCallTarget fnTarget && fnTarget.MultiPartIdentifier != null && fnTarget.MultiPartIdentifier.Identifiers.Count > 0)
+            if (activeFunctionCall.CallTarget is MultiPartIdentifierCallTarget fnTarget)
             {
-                var qualifierParts = fnTarget.MultiPartIdentifier.Identifiers
-                    .Select(id => id?.Value)
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .ToArray();
-
-                if (qualifierParts.Length > 0)
+                var multiPart = fnTarget.MultiPartIdentifier;
+                if (multiPart?.Identifiers is { Count: > 0 } identifiers)
                 {
-                    schema = string.Join('.', qualifierParts);
+                    var qualifierParts = identifiers
+                        .Select(id => id?.Value)
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .ToArray();
+
+                    if (qualifierParts.Length > 0)
+                    {
+                        schema = string.Join('.', qualifierParts);
+                    }
                 }
             }
 
@@ -2253,20 +2264,24 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 };
             }
 
-            if (functionCall.CallTarget is MultiPartIdentifierCallTarget target && target.MultiPartIdentifier != null)
+            if (activeFunctionCall.CallTarget is MultiPartIdentifierCallTarget target && target.MultiPartIdentifier != null)
             {
-                column.SourceSchema = target.MultiPartIdentifier.Identifiers.Count >= 2
-                    ? target.MultiPartIdentifier.Identifiers[^2].Value
-                    : null;
-                column.SourceTable = target.MultiPartIdentifier.Identifiers.Count >= 1
-                    ? target.MultiPartIdentifier.Identifiers[^1].Value
-                    : null;
+                var identifiers = target.MultiPartIdentifier.Identifiers;
+                if (identifiers.Count >= 2)
+                {
+                    column.SourceSchema = identifiers[^2]?.Value;
+                }
+
+                if (identifiers.Count >= 1)
+                {
+                    column.SourceTable = identifiers[^1]?.Value;
+                }
             }
 
             if (isBuiltIn)
             {
-                TryPopulateSourceFromFunctionArguments(column, functionCall);
-                ApplyBuiltInFunctionFallback(column, normalizedName, functionCall);
+                TryPopulateSourceFromFunctionArguments(column, activeFunctionCall);
+                ApplyBuiltInFunctionFallback(column, normalizedName, activeFunctionCall);
             }
         }
 
