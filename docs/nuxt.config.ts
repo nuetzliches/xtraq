@@ -92,14 +92,16 @@ export default defineNuxtConfig({
     fallbackToApi: false
   },
   content: {
-    highlight: {
-      preload: ['csharp'],
-      langs: [
-        {
-          name: 'csharp',
-          alias: ['cs']
+    build: {
+      markdown: {
+        highlight: {
+          theme: {
+            default: 'material-theme-lighter',
+            dark: 'material-theme-palenight'
+          },
+          langs: ['csharp', 'sql']
         }
-      ]
+      }
     }
   },
   appConfig: {
