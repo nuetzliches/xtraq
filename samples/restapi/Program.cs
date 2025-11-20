@@ -7,10 +7,7 @@ using global::Xtraq.Samples.RestApi.Xtraq.Sample;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var configuredConnection = builder.Configuration.GetConnectionString("SampleDb");
-var environmentConnection = Environment.GetEnvironmentVariable("XTRAQ_SAMPLE_SQL_CONNECTION");
-var connectionString = string.IsNullOrWhiteSpace(environmentConnection) ? configuredConnection : environmentConnection;
-
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException("Connection string 'SampleDb' is not configured. Set it in appsettings.json or provide XTRAQ_SAMPLE_SQL_CONNECTION.");
