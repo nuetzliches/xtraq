@@ -7,16 +7,11 @@ using global::Xtraq.Samples.RestApi.Xtraq.Sample;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured. Set it in appsettings.json");
-}
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddXtraqDbContext(options =>
 {
-    options.ConnectionString = connectionString;
+    options.ConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Configure the 'DefaultConnection' connection string in appsettings.json");
     options.CommandTimeout = 30;
 });
 
