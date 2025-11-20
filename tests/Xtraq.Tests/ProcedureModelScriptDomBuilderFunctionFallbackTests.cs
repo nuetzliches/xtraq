@@ -21,7 +21,8 @@ public sealed class ProcedureModelScriptDomBuilderFunctionFallbackTests
             var tempRoot = Path.Combine(Path.GetTempPath(), "xtraq-function-test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempRoot);
 
-            var snapshot = Capture(new[] { "XTRAQ_PROJECT_ROOT", "XTRAQ_SNAPSHOT_ROOT" });
+            var snapshot = Capture(new[] { "XTRAQ_PROJECT_PATH", "XTRAQ_PROJECT_ROOT", "XTRAQ_SNAPSHOT_ROOT" });
+            Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", tempRoot);
             Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", tempRoot);
             Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", tempRoot);
 

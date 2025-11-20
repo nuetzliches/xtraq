@@ -116,7 +116,14 @@ public sealed class XtraqConfiguration
         {
             if (!string.IsNullOrWhiteSpace(projectRoot))
             {
-                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", Path.GetFullPath(projectRoot));
+                var normalized = Path.GetFullPath(projectRoot);
+                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", normalized);
+                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", normalized);
+
+                if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT")))
+                {
+                    Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", Path.Combine(normalized, ".xtraq"));
+                }
             }
         }
         catch
