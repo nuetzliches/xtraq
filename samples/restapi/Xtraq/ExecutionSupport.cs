@@ -246,6 +246,9 @@ internal static class ProcedureExecutor
         return aggregate;
     }
 
+    public static Task<T> ExecuteAsync<T>(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
+        => ExecuteAsync<T>(connection, plan, input, ct);
+
     public static async Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
     {
         if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -311,6 +314,9 @@ internal static class ProcedureExecutor
 
         return plan.OutputFactory(outputs);
     }
+
+    public static Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+        => StreamResultSetAsync(connection, plan, resultSetIndex, streamAction, input, ct);
 }
 
 internal static class TvpHelper

@@ -69,13 +69,21 @@ internal sealed class SchemaArtifactWriter
         }
 
         ExtendSchemaSetWithDependencies(schemaSet, requiredTypeRefs, requiredTableRefs);
+        var dependencyFilter = SchemaDependencyFilter.Build(updatedProcedures!, requiredTypeRefs, requiredTableRefs);
+        foreach (var schema in dependencyFilter.Schemas)
+        {
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                schemaSet.Add(schema);
+            }
+        }
 
         if (schemaSet.Count == 0)
         {
             return summary;
         }
 
-        var functionSummary = await WriteFunctionArtifactsAsync(schemaRoot, schemaSet, requiredTypeRefs, cancellationToken).ConfigureAwait(false);
+        var functionSummary = await WriteFunctionArtifactsAsync(schemaRoot, schemaSet, requiredTypeRefs, dependencyFilter, cancellationToken).ConfigureAwait(false);
         summary.FilesWritten += functionSummary.FilesWritten;
         summary.FilesUnchanged += functionSummary.FilesUnchanged;
         if (functionSummary.FunctionsVersion > 0)
@@ -88,7 +96,7 @@ internal sealed class SchemaArtifactWriter
             summary.Functions.AddRange(functionSummary.Functions);
         }
 
-        var tableSummary = await WriteTableArtifactsAsync(schemaRoot, schemaSet, requiredTypeRefs, requiredTableRefs, cancellationToken).ConfigureAwait(false);
+        var tableSummary = await WriteTableArtifactsAsync(schemaRoot, schemaSet, requiredTypeRefs, requiredTableRefs, dependencyFilter, cancellationToken).ConfigureAwait(false);
         summary.FilesWritten += tableSummary.FilesWritten;
         summary.FilesUnchanged += tableSummary.FilesUnchanged;
         if (tableSummary.Tables.Count > 0)
@@ -125,6 +133,11 @@ internal sealed class SchemaArtifactWriter
 
             var tableType = tableTypeMetadata.TableType;
             if (tableType == null || string.IsNullOrWhiteSpace(tableType.SchemaName) || string.IsNullOrWhiteSpace(tableType.Name))
+            {
+                continue;
+            }
+
+            if (!dependencyFilter.ShouldEmitTableType(null, tableType.SchemaName, tableType.Name))
             {
                 continue;
             }
@@ -323,6 +336,7 @@ internal sealed class SchemaArtifactWriter
         ISet<string> schemaSet,
         ISet<string> requiredTypeRefs,
         ISet<string> requiredTableRefs,
+        SchemaDependencyFilter dependencyFilter,
         CancellationToken cancellationToken)
     {
         var summary = new TableArtifactSummary();
@@ -352,6 +366,11 @@ internal sealed class SchemaArtifactWriter
             cancellationToken.ThrowIfCancellationRequested();
             var table = tableEntry?.Table;
             if (table == null || string.IsNullOrWhiteSpace(table.SchemaName) || string.IsNullOrWhiteSpace(table.Name))
+            {
+                continue;
+            }
+
+            if (!dependencyFilter.ShouldEmitTable(table.CatalogName, table.SchemaName, table.Name))
             {
                 continue;
             }
@@ -393,6 +412,11 @@ internal sealed class SchemaArtifactWriter
 
                 var parts = SnapshotWriterUtilities.SplitTableRefParts(tableRef);
                 if (string.IsNullOrWhiteSpace(parts.Catalog) || string.IsNullOrWhiteSpace(parts.Schema) || string.IsNullOrWhiteSpace(parts.Name))
+                {
+                    continue;
+                }
+
+                if (!dependencyFilter.ShouldEmitTable(parts.Catalog, parts.Schema, parts.Name))
                 {
                     continue;
                 }
@@ -554,6 +578,7 @@ internal sealed class SchemaArtifactWriter
         string schemaRoot,
         ISet<string> schemaSet,
         ISet<string> requiredTypeRefs,
+        SchemaDependencyFilter dependencyFilter,
         CancellationToken cancellationToken)
     {
         var summary = new FunctionArtifactSummary();
@@ -715,6 +740,11 @@ internal sealed class SchemaArtifactWriter
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (function == null || string.IsNullOrWhiteSpace(function.schema_name) || string.IsNullOrWhiteSpace(function.function_name))
+            {
+                continue;
+            }
+
+            if (!dependencyFilter.ShouldEmitFunction(function.schema_name, function.function_name))
             {
                 continue;
             }
