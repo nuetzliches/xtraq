@@ -5,7 +5,7 @@ layout: landing
 navigation: false
 seo:
   title: Stored procedure automation for .NET
-  description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
+  description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures - no hand-written plumbing required.
 ---
 
 ::u-page-hero{class="landing-page-hero py-12 sm:py-16 lg:py-20"}
@@ -13,7 +13,7 @@ seo:
 Stored procedure automation for .NET
 
 #description
-Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
+Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures - no hand-written plumbing required.
 
 #links
 :::u-button
