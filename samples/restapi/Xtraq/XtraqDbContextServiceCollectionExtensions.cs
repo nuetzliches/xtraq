@@ -1,3 +1,5 @@
+
+#nullable enable
 namespace Xtraq.Samples.RestApi.Xtraq;
 
 using System;

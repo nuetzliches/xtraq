@@ -1,9 +1,12 @@
-/// <summary>Generated interface for the database context abstraction.</summary>
+
+#nullable enable
 namespace Xtraq.Samples.RestApi.Xtraq;
 
+using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 public interface IXtraqDbContext
 {
