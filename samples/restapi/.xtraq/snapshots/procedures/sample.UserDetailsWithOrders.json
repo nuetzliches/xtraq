@@ -62,7 +62,6 @@
           "Name": "Metadata",
           "SourceColumn": "Metadata",
           "UserTypeRef": "sample.JsonDocument",
-          "SqlTypeName": "nvarchar(max)",
           "IsNullable": true
         }
       ]

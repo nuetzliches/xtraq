@@ -201,8 +201,14 @@ internal sealed class JsonResultEnvelope<T>
 
 internal static class ProcedureExecutor
 {
-    public static async Task<T> ExecuteAsync<T>(DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
+    public static Task<T> ExecuteAsync<T>(DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
+        => ExecuteAsync<T>(null, connection, plan, input, ct);
+
+    public static async Task<T> ExecuteAsync<T>(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
     {
+        if (connection == null) throw new ArgumentNullException(nameof(connection));
+        if (plan == null) throw new ArgumentNullException(nameof(plan));
+
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = plan.Name;
         cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -216,34 +222,76 @@ internal static class ProcedureExecutor
             prm.Value = DBNull.Value;
             cmd.Parameters.Add(prm);
         }
-        plan.Binder(cmd, input);
-        var outputs = new Dictionary<string, object?>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var rsResults = new List<object>();
-        foreach (var rs in plan.ResultSets)
+
+        var interceptors = await InvokeBeforeAsync(interceptorProvider, plan.Name, cmd, input, ct).ConfigureAwait(false);
+        var start = DateTime.UtcNow;
+
+        try
         {
-            var list = await rs.Projector(reader, ct).ConfigureAwait(false);
-            rsResults.Add(list);
-            await reader.NextResultAsync(ct).ConfigureAwait(false);
-        }
-        foreach (DbParameter dbp in cmd.Parameters)
-        {
-            if (dbp.Direction.HasFlag(System.Data.ParameterDirection.Output) || dbp.Direction.HasFlag(System.Data.ParameterDirection.InputOutput))
+            if (connection.State != ConnectionState.Open)
             {
-                var key = dbp.ParameterName.TrimStart('@');
-                outputs[key] = dbp.Value == DBNull.Value ? null : dbp.Value;
+                await connection.OpenAsync(ct).ConfigureAwait(false);
             }
+
+            plan.Binder(cmd, input);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            var rsResults = new List<object>(plan.ResultSets.Length);
+            for (int i = 0; i < plan.ResultSets.Length; i++)
+            {
+                var list = await plan.ResultSets[i].Projector(reader, ct).ConfigureAwait(false);
+                rsResults.Add(list);
+                if (i < plan.ResultSets.Length - 1)
+                {
+                    if (!await reader.NextResultAsync(ct).ConfigureAwait(false))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (DbParameter dbp in cmd.Parameters)
+            {
+                if (dbp.Direction.HasFlag(System.Data.ParameterDirection.Output) || dbp.Direction.HasFlag(System.Data.ParameterDirection.InputOutput))
+                {
+                    var key = dbp.ParameterName.TrimStart('@');
+                    outputs[key] = dbp.Value == DBNull.Value ? null : dbp.Value;
+                }
+            }
+
+            var outputObj = plan.OutputFactory(outputs);
+            var rsArrays = new object[rsResults.Count];
+            for (int i = 0; i < rsResults.Count; i++)
+            {
+                rsArrays[i] = ((List<object>)rsResults[i]).ToArray();
+            }
+
+            var aggregate = (T)plan.AggregateFactory(true, null, outputObj, outputs, rsArrays);
+            var duration = DateTime.UtcNow - start;
+            await NotifyAfterAsync(interceptors, plan.Name, cmd, true, null, duration, aggregate, ct).ConfigureAwait(false);
+            return aggregate;
         }
-        var outputObj = plan.OutputFactory(outputs);
-        // Convert each collected result-set list to its object[] form once for the aggregate factory
-        var rsArrays = new object[rsResults.Count];
-        for (int i = 0; i < rsResults.Count; i++)
-            rsArrays[i] = ((List<object>)rsResults[i]).ToArray();
-        var aggregate = (T)plan.AggregateFactory(true, null, outputObj, outputs, rsArrays);
-        return aggregate;
+        catch (Exception ex)
+        {
+            var duration = DateTime.UtcNow - start;
+            try
+            {
+                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, ex.Message, duration, null, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Deliberately swallow interceptor failures on the failure path.
+            }
+
+            throw;
+        }
     }
 
-    public static async Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+    public static Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+        => StreamResultSetAsync(null, connection, plan, resultSetIndex, streamAction, input, ct);
+
+    public static async Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
     {
         if (connection == null) throw new ArgumentNullException(nameof(connection));
         if (plan == null) throw new ArgumentNullException(nameof(plan));
@@ -264,49 +312,165 @@ internal static class ProcedureExecutor
             cmd.Parameters.Add(prm);
         }
 
-        if (connection.State != ConnectionState.Open)
+        var interceptors = await InvokeBeforeAsync(interceptorProvider, plan.Name, cmd, input, ct).ConfigureAwait(false);
+        var start = DateTime.UtcNow;
+
+        try
         {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-        }
-
-        plan.Binder(cmd, input);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-
-        for (int i = 0; i < plan.ResultSets.Length; i++)
-        {
-            if (i == resultSetIndex)
+            if (connection.State != ConnectionState.Open)
             {
-                await streamAction(reader, ct).ConfigureAwait(false);
+                await connection.OpenAsync(ct).ConfigureAwait(false);
             }
-            else
+
+            plan.Binder(cmd, input);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
+            for (int i = 0; i < plan.ResultSets.Length; i++)
             {
-                while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                if (i == resultSetIndex)
                 {
-                    // discard non-target rows
+                    await streamAction(reader, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                    {
+                        // Discard rows for non-target result sets.
+                    }
+                }
+
+                if (i < plan.ResultSets.Length - 1)
+                {
+                    if (!await reader.NextResultAsync(ct).ConfigureAwait(false))
+                    {
+                        break;
+                    }
                 }
             }
 
-            if (i < plan.ResultSets.Length - 1)
+            var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (DbParameter dbp in cmd.Parameters)
             {
-                if (!await reader.NextResultAsync(ct).ConfigureAwait(false))
+                if (dbp.Direction.HasFlag(System.Data.ParameterDirection.Output) || dbp.Direction.HasFlag(System.Data.ParameterDirection.InputOutput))
                 {
-                    break;
+                    var key = dbp.ParameterName.TrimStart('@');
+                    outputs[key] = dbp.Value == DBNull.Value ? null : dbp.Value;
                 }
             }
+
+            var outputObj = plan.OutputFactory(outputs);
+            var duration = DateTime.UtcNow - start;
+            await NotifyAfterAsync(interceptors, plan.Name, cmd, true, null, duration, outputObj, ct).ConfigureAwait(false);
+            return outputObj;
+        }
+        catch (Exception ex)
+        {
+            var duration = DateTime.UtcNow - start;
+            try
+            {
+                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, ex.Message, duration, null, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Intentionally ignore interceptor failures while propagating the exception.
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<List<(IXtraqProcedureInterceptor Interceptor, object? State)>?> InvokeBeforeAsync(
+        IXtraqProcedureInterceptorProvider? interceptorProvider,
+        string procedureName,
+        DbCommand command,
+        object? state,
+        CancellationToken cancellationToken)
+    {
+        var interceptors = CollectInterceptors(interceptorProvider);
+        if (interceptors.Count == 0)
+        {
+            return null;
         }
 
-        var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        foreach (DbParameter dbp in cmd.Parameters)
+        var results = new List<(IXtraqProcedureInterceptor, object?)>(interceptors.Count);
+        foreach (var interceptor in interceptors)
         {
-            if (dbp.Direction.HasFlag(System.Data.ParameterDirection.Output) || dbp.Direction.HasFlag(System.Data.ParameterDirection.InputOutput))
+            object? beforeState = null;
+            try
             {
-                var key = dbp.ParameterName.TrimStart('@');
-                outputs[key] = dbp.Value == DBNull.Value ? null : dbp.Value;
+                beforeState = await interceptor.OnBeforeExecuteAsync(procedureName, command, state, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore interceptor failures in the before hook.
+            }
+
+            results.Add((interceptor, beforeState));
+        }
+
+        return results;
+    }
+
+    private static async Task NotifyAfterAsync(
+        List<(IXtraqProcedureInterceptor Interceptor, object? State)>? interceptors,
+        string procedureName,
+        DbCommand command,
+        bool success,
+        string? error,
+        TimeSpan duration,
+        object? aggregate,
+        CancellationToken cancellationToken)
+    {
+        if (interceptors is null || interceptors.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (interceptor, beforeState) in interceptors)
+        {
+            try
+            {
+                await interceptor.OnAfterExecuteAsync(procedureName, command, success, error, duration, beforeState, aggregate, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore individual interceptor failures in the after hook.
             }
         }
+    }
 
-        return plan.OutputFactory(outputs);
+    private static List<IXtraqProcedureInterceptor> CollectInterceptors(IXtraqProcedureInterceptorProvider? interceptorProvider)
+    {
+        if (interceptorProvider is null)
+        {
+            return new List<IXtraqProcedureInterceptor>();
+        }
+
+        try
+        {
+            var interceptors = interceptorProvider.GetInterceptors();
+            if (interceptors == null || interceptors.Count == 0)
+            {
+                return new List<IXtraqProcedureInterceptor>();
+            }
+
+            var collected = new List<IXtraqProcedureInterceptor>(interceptors.Count);
+            for (int i = 0; i < interceptors.Count; i++)
+            {
+                var interceptor = interceptors[i];
+                if (interceptor != null)
+                {
+                    collected.Add(interceptor);
+                }
+            }
+
+            return collected;
+        }
+        catch
+        {
+            return new List<IXtraqProcedureInterceptor>();
+        }
     }
 }
 

@@ -214,16 +214,54 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 try
                 {
                     var existing = File.ReadAllText(execPath);
-                    // Rewrite when namespace mismatches or TvpHelper/ReaderUtil are missing (template updated)
-                    if (!existing.Contains($"namespace {ns};") || !existing.Contains("TvpHelper") || !existing.Contains("ReaderUtil") || !existing.Contains("StreamResultSetAsync")) write = true;
+                    // Rewrite when namespace mismatches or ExecutionSupport is missing updated helpers
+                    if (!existing.Contains($"namespace {ns};", StringComparison.Ordinal) ||
+                        !existing.Contains("TvpHelper", StringComparison.Ordinal) ||
+                        !existing.Contains("ReaderUtil", StringComparison.Ordinal) ||
+                        !existing.Contains("StreamResultSetAsync", StringComparison.Ordinal) ||
+                        !existing.Contains("IXtraqProcedureInterceptorProvider", StringComparison.Ordinal))
+                    {
+                        write = true;
+                    }
                 }
-                catch { write = true; }
+                catch
+                {
+                    write = true;
+                }
             }
             if (write)
             {
                 var execModel = new { Namespace = ns, HEADER = headerBlock };
                 var code = Templates.RenderRawTemplate(execTpl, execModel);
                 File.WriteAllText(execPath, code);
+            }
+        }
+        if (Templates.TryLoad("ProcedureInterceptors", out var interceptorTpl))
+        {
+            var interceptorPath = Path.Combine(baseOutputDir, "IXtraqProcedureInterceptorProvider.cs");
+            bool writeInterceptor = !File.Exists(interceptorPath);
+            if (!writeInterceptor)
+            {
+                try
+                {
+                    var existing = File.ReadAllText(interceptorPath);
+                    if (!existing.Contains("IXtraqProcedureInterceptor", StringComparison.Ordinal) ||
+                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
+                    {
+                        writeInterceptor = true;
+                    }
+                }
+                catch
+                {
+                    writeInterceptor = true;
+                }
+            }
+
+            if (writeInterceptor)
+            {
+                var interceptorModel = new { Namespace = ns, HEADER = headerBlock };
+                var code = Templates.RenderRawTemplate(interceptorTpl, interceptorModel);
+                File.WriteAllText(interceptorPath, code);
             }
         }
         var adapterPath = Path.Combine(baseOutputDir, "ProcedureResultEntityAdapter.cs");

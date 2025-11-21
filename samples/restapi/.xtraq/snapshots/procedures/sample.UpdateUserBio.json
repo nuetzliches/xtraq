@@ -31,7 +31,6 @@
           "Name": "Bio",
           "SourceColumn": "Bio",
           "UserTypeRef": "sample.UserBioType",
-          "SqlTypeName": "nvarchar(4000)",
           "IsNullable": true,
           "MaxLength": 4000
         },
