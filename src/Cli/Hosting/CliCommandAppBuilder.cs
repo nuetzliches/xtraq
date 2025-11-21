@@ -65,7 +65,7 @@ internal sealed class CliCommandAppBuilder
         _verboseOption.AddAlias("-v");
 
         _debugOption = new Option<bool>("--debug", "Use debug environment settings");
-        _debugAliasOption = new Option<bool>("--debug-alias", "Enable alias scope debug logging (sets XTRAQ_ALIAS_DEBUG=1)");
+        _debugAliasOption = new Option<bool>("--debug-alias", "Enable alias scope debug logging (promotes XTRAQ_LOG_LEVEL to debug)");
 
         _noCacheOption = new Option<bool>("--no-cache", "Do not read or write the local procedure metadata cache");
 
@@ -610,7 +610,10 @@ internal sealed class CliCommandAppBuilder
         }
 
         var debugAliasValue = parseResult.GetValueForOption(_debugAliasOption);
-        Environment.SetEnvironmentVariable("XTRAQ_ALIAS_DEBUG", debugAliasValue ? "1" : null);
+        if (debugAliasValue)
+        {
+            LogLevelConfiguration.PromoteTo(LogLevelThreshold.Debug);
+        }
     }
 
     private void PrepareCommandEnvironment(CliCommandOptions options)

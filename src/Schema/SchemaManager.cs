@@ -16,11 +16,7 @@ internal sealed class SchemaManager(
 {
     private static bool ShouldDiagJsonMissAst()
     {
-        if (LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Trace)) return true;
-        if (LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug)) return true;
-        // Separate explicit gate if someone wants the message without full debug
-        if (EnvironmentHelper.IsTrue("XTRAQ_JSON_MISS_AST_DIAG")) return true;
-        return false;
+        return LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug) || LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Trace);
     }
     // Logging prefixes used in this manager (overview):
     // [proc-fixup-json-reparse]   Added JSON sets after placeholder-only detection via reparse.
@@ -537,7 +533,7 @@ internal sealed class SchemaManager(
                         // Legacy FOR JSON single-column upgrade
                         if (syntheticSet.Columns.Count == 1 && string.Equals(syntheticSet.Columns[0].Name, "JSON_F52E2B61-18A1-11d1-B105-00805F49916B", StringComparison.OrdinalIgnoreCase) && (syntheticSet.Columns[0].SqlTypeName?.StartsWith("nvarchar", StringComparison.OrdinalIgnoreCase) ?? false))
                         {
-                            if (EnvironmentHelper.IsTrue("XTRAQ_JSON_LEGACY_SINGLE"))
+                            if (LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug))
                             {
                                 syntheticSet = new StoredProcedureContentModel.ResultSet
                                 {

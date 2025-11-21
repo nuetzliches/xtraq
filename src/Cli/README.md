@@ -13,7 +13,7 @@ xtraq [options]
 - Global options:
   - `--verbose`, `-v`: enable verbose console output plus additional logging downstream.
   - `--debug`: switch to the "debug" environment profile and enable extra diagnostics in services.
-  - `--debug-alias`: set `XTRAQ_ALIAS_DEBUG=1` so alias scope tracing becomes visible.
+- `--debug-alias`: promotes `XTRAQ_LOG_LEVEL` to `debug` so alias scope tracing becomes visible.
   - `--no-cache`: force cache misses for schema metadata (sets `CacheControl.ForceReload = true`).
   - `--procedure <schema.name,...>`: restrict execution to a comma-separated allow-list; validation rejects malformed tokens.
   - `--telemetry`: persist telemetry snapshots under `.xtraq/telemetry` after successful runs.

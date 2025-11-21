@@ -551,7 +551,7 @@ internal static class ProcedureSnapshotDocumentBuilder
             return null;
         }
 
-        var debugEnabled = EnvironmentHelper.IsTrue("XTRAQ_DEBUG_USER_TYPE_RESOLUTION") || DebugOutputHelper.IsVerboseEnabled;
+        var debugEnabled = LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug) || DebugOutputHelper.IsVerboseEnabled;
 
         var typeRef = column.UserTypeRef;
         if (string.IsNullOrWhiteSpace(typeRef))

@@ -7039,7 +7039,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
         private static bool IsAliasDebugEnabled()
         {
-            return EnvironmentHelper.IsTrue("XTRAQ_ALIAS_DEBUG");
+            return LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug);
         }
     }
 }

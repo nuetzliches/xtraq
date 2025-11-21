@@ -28,7 +28,11 @@ internal sealed class DatabaseProcedureCollector : IProcedureCollector
         options ??= SnapshotBuildOptions.Default;
         cancellationToken.ThrowIfCancellationRequested();
 
-        var allProcedures = await _dbContext.StoredProcedureListAsync(string.Empty, cancellationToken).ConfigureAwait(false);
+        var schemaListLiteral = options.Schemas is { Count: > 0 }
+            ? string.Join(", ", options.Schemas.Select(static s => $"'{s.Replace("'", "''")}'"))
+            : string.Empty;
+
+        var allProcedures = await _dbContext.StoredProcedureListAsync(schemaListLiteral, cancellationToken).ConfigureAwait(false);
         if (allProcedures == null || allProcedures.Count == 0)
         {
             _console.Verbose("[snapshot-collect] No procedures returned by catalog query");

@@ -221,8 +221,7 @@ internal static class ProjectEnvironmentBootstrapper
 
         return "# Example configuration for Xtraq" + Environment.NewLine
              + "# XTRAQ_GENERATOR_DB=Server=.;Database=AppDb;Trusted_Connection=True;TrustServerCertificate=True;" + Environment.NewLine
-             + "# XTRAQ_LOG_LEVEL=Debug" + Environment.NewLine
-             + "# XTRAQ_ALIAS_DEBUG=1" + Environment.NewLine;
+             + "# XTRAQ_LOG_LEVEL=Debug" + Environment.NewLine;
     }
 
     private static string? FindRepoRoot(string start)

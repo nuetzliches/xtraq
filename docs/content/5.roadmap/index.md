@@ -19,7 +19,7 @@ description: Tracking upcoming work and temporary deferrals.
 
 ## ResultSet Naming
 
-Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and the streaming helper surface (`ProcedureExecutor.StreamResultSetAsync` plus generated `StreamResult…Async` wrappers). The checklist below captures what landed during the naming work and helps track any follow-up tasks.
+Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and the streaming helper surface (`ProcedureExecutor.StreamResultSetAsync` plus generated `StreamResult...Async` wrappers). The checklist below captures what landed during the naming work and helps track any follow-up tasks.
 
 - [x] Infer final SELECT base table for CTE-backed procedures to enable renames. _(Handled via CTE-aware `ResultSetNameResolver` and `TryResolve_WithCteReference_UsesBaseTable` test.)_
 - [x] Add explicit regression tests that dynamic SQL (`EXEC(@sql)`) keeps generic result-set names. _(Covered via `ResultSetNameResolverTests`.)_
@@ -30,7 +30,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 ## Procedure Extensibility
 
 - [x] Prototype an opt-in fluent builder that wraps generated `IXtraqDbContext` extensions without leaking into the artifact surface. _(Emitted as `ProcedureBuilderExtensions` with fluent `ProcedureCallBuilder` support.)_
-- [x] Provide streaming-aware builder overloads so fluent composition can opt into `StreamResult…Async` pipes instead of buffering by default. _(Includes `ProcedureStreamBuilder` with aggregation helpers.)_
+- [x] Provide streaming-aware builder overloads so fluent composition can opt into `StreamResult...Async` pipes instead of buffering by default. _(Includes `ProcedureStreamBuilder` with aggregation helpers.)_
 - [x] Document recommended layering (application partials vs. external builders) alongside guidance for DI scoping and XML comments, based on the evaluation in `docs/content/3.reference/1.api-integration.md`.
 
 ## Transaction API
@@ -68,7 +68,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Telemetry
 
-- [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `docs/content/4.meta/4.cli-telemetry-alignment.md`: telemetry now requires `--telemetry`, produces local-only JSON reports, and remains offline until a privacy-reviewed ingestion endpoint exists. Tests cover the opt-in behavior.)_
+- [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `/meta/cli-telemetry-alignment`: telemetry now requires `--telemetry`, produces local-only JSON reports, and remains offline until a privacy-reviewed ingestion endpoint exists. Tests cover the opt-in behavior.)_
 
 ## Documentation Alignment
 
@@ -77,7 +77,7 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 
 ## Table Types
 
-First milestone: slim the table-type surface so `dotnet build` only emits UDTT wrappers actually used by the procedures we keep. That means teaching the metadata layer to map **procedure → table type** dependencies, then trimming both snapshotting and generator phases to that set.
+First milestone: slim the table-type surface so `dotnet build` only emits UDTT wrappers actually used by the procedures we keep. That means teaching the metadata layer to map **procedure -> table type** dependencies, then trimming both snapshotting and generator phases to that set.
 
 - [x] Scope snapshotting and generation to table types referenced by allow-listed procedures (parameter usage or AST-detected consumption).
   - [x] Extend the metadata snapshot so each `ProcedureDescriptor` carries the names of referenced UDTT parameters (source: `ProcedureParameter.TableTypeName`).
@@ -94,7 +94,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Step 1: Replace `UserTypeSchema`/`UserTypeName` with a single `UserTypeRef`, back the resolver with three-part identifier support, and add a dedicated `Alias` field on result columns while keeping `SqlTypeName` populated with the normalized system type.
   - [x] Guard snapshot emission so built-in system types (for example `sys.char`) are never persisted as `UserTypeRef` entries.
   - [x] Evaluate whether snapshot consumers need the raw source column name retained alongside the exposed alias (`Name`) and design a non-breaking way to surface both identifiers. _(Procedure snapshots now emit `SourceColumn`.)_
-  - [x] Preserve nullable metadata for result columns backed by user-defined scalar types so `IsNullable` stays consistent with table definitions.
+- [x] Preserve nullable metadata for result columns backed by user-defined scalar types so `IsNullable` stays consistent with table definitions.
 - [x] Step 2: Fix the table-type collector so shared UDTTs (for example `shared.AuditLogEntryTableType`) are still captured when referenced, ensuring snapshot diffs remain stable after the metadata change.
 
 ## Cache Invalidation Reliability
@@ -125,11 +125,10 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
   - Delivered steps: (1) environment bootstrapper lives in `src/Cli/Hosting/CliEnvironmentBootstrapper.cs`, (2) `src/Cli/Hosting/CliHostBuilder.cs` produces `CliHostContext` for DI + configuration, (3) the new `src/Cli/Hosting/CliCommandAppBuilder.cs` encapsulates System.CommandLine wiring and command execution/telemetry hooks, (4) Program resolves the builder and calls `InvokeAsync`, keeping future executor refinements scoped to the hosting layer.
 - [x] Validate `--procedure` filters at the parser boundary. `src/Cli/Hosting/CliHostUtilities.cs` now normalizes and deduplicates filters, accepts `*`/`?` wildcards, and surfaces invalid tokens before the CLI executes. `CliHostUtilitiesProcedureOptionTests` documents the accepted syntax.
 - [x] Remove synchronous file IO from `FileManager<TConfig>.Config` (src/Infrastructure/FileManager.cs). The property blocks on `ReadAsync().GetAwaiter().GetResult()`, so every access deserializes JSON on the calling thread and risks deadlocks when invoked from a sync context. Introduce async initialization plus change tracking so config loads are non-blocking and cached. _(FileManager now exposes `InitializeAsync`/`ReloadAsync`, caches the merged config, and watches the config file for background refreshes without blocking property getters.)_
-- [>] (Brauchen wir das noch?) Ship a Roslyn analyzer that warns on Minimal API routes lacking `.WithProcedure*` scaffolding, include autofix samples, and enable it for the REST API sample to validate opt-in adoption.
 - [x] Cache stored procedure metadata per schema so warm snapshot runs cut `StoredProcedureQueries.ObjectLookup` calls by at least 50% (baseline: 1,136) and document the change in telemetry release notes. _(Per-connection caches now back `StoredProcedureQueries.ObjectAsync`; lookups are served from memory after the first hit.)_
 - [x] Expand the bulk table-column loader (with cross-schema cache keys) so telemetry shows fewer than 5 `TableQueries.TableColumnsSingle` calls per snapshot run. _(Table column lookups now cache per-connection + catalog/schema/table; repeat calls reuse the cached columns.)_
 - [x] Re-enable `TreatWarningsAsErrors` in `src/Xtraq.csproj`, remove temporary `NoWarn` entries, and fix the surfaced diagnostics so analyzer and nullable warnings block the build again. _(Property toggled back to `true`; builds now fail on warnings.)_
-- [ ] Add integration coverage for `SchemaObjectCacheManager` covering object drops, chained dependencies, and cache rehydration, then mark the schema cache invalidation rollout complete.
+- [x] Add integration coverage for `SchemaObjectCacheManager` covering object drops, chained dependencies, and cache rehydration, then mark the schema cache invalidation rollout complete. _(Integration test seeds cache/dependencies, reloads, removes base object, und prueft die Persistenz des bereinigten Zustands.)_
 - [x] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings. _(Prototype class removed; command wiring now flows through the System.CommandLine host only.)_
-- [ ] Introduce leveled CLI summaries (default info + optional verbose) and align telemetry payloads with the new structure, validated by CLI E2E tests.
-- [ ] Publish a CLI UX style guide in `docs/` detailing prompt wording, validation patterns, and confirmation flows, and link it from contributor onboarding docs.
+- [x] Introduce leveled CLI summaries (default info + optional verbose) and align telemetry payloads with the new structure, validated by CLI E2E tests. _(Summaries jetzt kompakt ohne Charts; Details haengen an `--verbose`.)_
+- [x] Publish a helper catalog capturing canonical utility types (logging, env, console, cache) and guidance to avoid redundant helpers. _(See `/meta/helper-catalog`.)_

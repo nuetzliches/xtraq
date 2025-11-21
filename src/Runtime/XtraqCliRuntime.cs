@@ -117,7 +117,16 @@ internal sealed class XtraqCliRuntime(
             ExistingResult = null
         };
 
-        var resolutionPlan = await snapshotResolutionService.PrepareAsync(resolutionRequest, CancellationToken.None).ConfigureAwait(false);
+        SnapshotResolutionPlan resolutionPlan;
+        var planStopwatch = Stopwatch.StartNew();
+        using (var planProgress = consoleService.BeginProgressScope("Planning schema refresh"))
+        {
+            resolutionPlan = await snapshotResolutionService.PrepareAsync(resolutionRequest, CancellationToken.None).ConfigureAwait(false);
+            planStopwatch.Stop();
+            var planned = resolutionPlan.InvalidationResult?.RefreshPlan.Sum(static b => b.Count) ?? 0;
+            planProgress.Complete(message: $"schemas={resolutionPlan.EffectiveSchemas.Count} objects={planned}");
+        }
+
         snapshotResolutionService.ApplyEnvironment(resolutionPlan);
         _lastSnapshotPlan = resolutionPlan;
 
@@ -220,6 +229,11 @@ internal sealed class XtraqCliRuntime(
             consoleService.Info($"Analyzed={result.ProceduresAnalyzed} reused={result.ProceduresReused} written={result.FilesWritten} unchanged={result.FilesUnchanged} in {stopwatch.ElapsedMilliseconds} ms.");
         }
 
+        var collectSeconds = result.CollectDuration.TotalSeconds;
+        var analyzeSeconds = result.AnalyzeDuration.TotalSeconds;
+        var writeSeconds = result.WriteDuration.TotalSeconds;
+        consoleService.Info($"[snapshot] total={stopwatch.Elapsed.TotalSeconds:F2}s plan={planStopwatch.Elapsed.TotalSeconds:F2}s collect={collectSeconds:F2}s analyze={analyzeSeconds:F2}s write={writeSeconds:F2}s");
+
         var snapshotPhaseSegments = new Dictionary<string, double>(3, StringComparer.OrdinalIgnoreCase);
         if (result.CollectDuration > TimeSpan.Zero)
         {
@@ -282,6 +296,7 @@ internal sealed class XtraqCliRuntime(
                 {
                     Command = "snapshot",
                     CompletedUtc = DateTimeOffset.UtcNow,
+                    PlanDurationMilliseconds = planStopwatch.Elapsed.TotalMilliseconds,
                     DurationMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
                     TotalQueries = telemetryReport.TotalQueries,
                     FailedQueries = telemetryReport.FailedQueries,
@@ -294,7 +309,11 @@ internal sealed class XtraqCliRuntime(
                         EffectiveSchemaCount = effectiveSchemas.Count,
                         MissingSnapshotCount = resolutionPlan.MissingSnapshots.Count,
                         SelectedProcedureCount = selectedProcedures.Count,
-                        ProcedureFilter = snapshotOptions.ProcedureWildcard
+                        ProcedureFilter = snapshotOptions.ProcedureWildcard,
+                        PlanDurationMs = planStopwatch.Elapsed.TotalMilliseconds,
+                        CollectDurationMs = result.CollectDuration.TotalMilliseconds,
+                        AnalyzeDurationMs = result.AnalyzeDuration.TotalMilliseconds,
+                        WriteDurationMs = result.WriteDuration.TotalMilliseconds
                     }
                 };
                 PrintTelemetrySummary(telemetryReport);
@@ -1075,12 +1094,7 @@ internal sealed class XtraqCliRuntime(
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        if (options.CiMode || segments is null || segments.Count == 0)
-        {
-            return;
-        }
-
-        consoleService.RenderBreakdownChart(title, segments, unit);
+        // Charts removed from default output for readability.
     }
 
     private async Task<ExecuteResultEnum> RunWithWarningSummaryAsync(Func<Task<ExecuteResultEnum>> action)
@@ -1253,6 +1267,8 @@ internal sealed class XtraqCliRuntime(
 
         public DateTimeOffset CompletedUtc { get; init; }
 
+        public double? PlanDurationMilliseconds { get; init; }
+
         public double? DurationMilliseconds { get; init; }
 
         public int TotalQueries { get; init; }
@@ -1281,6 +1297,14 @@ internal sealed class XtraqCliRuntime(
         public int SelectedProcedureCount { get; init; }
 
         public string? ProcedureFilter { get; init; }
+
+        public double? PlanDurationMs { get; init; }
+
+        public double? CollectDurationMs { get; init; }
+
+        public double? AnalyzeDurationMs { get; init; }
+
+        public double? WriteDurationMs { get; init; }
     }
 
     private sealed class BuildRunSummary
