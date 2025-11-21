@@ -1,5 +1,8 @@
+
+#nullable enable
 namespace Xtraq.Samples.RestApi.Xtraq;
 
+using System;
 using System.Text.Json;
 
 public sealed class XtraqDbContextOptions

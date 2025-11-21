@@ -10,6 +10,7 @@ internal class DbContext(IConsoleService consoleService, IDatabaseTelemetryColle
 {
     private SqlConnection? _connection;
     private List<AppSqlTransaction>? _transactions;
+    private string? _connectionString;
 
     public void SetConnectionString(string connectionString)
     {
@@ -17,6 +18,7 @@ internal class DbContext(IConsoleService consoleService, IDatabaseTelemetryColle
         {
             throw new ArgumentException("Connection string must not be null or whitespace.", nameof(connectionString));
         }
+        _connectionString = connectionString;
 
         if (_transactions?.Count > 0)
         {
@@ -338,6 +340,8 @@ internal class DbContext(IConsoleService consoleService, IDatabaseTelemetryColle
     {
         return _transactions?.LastOrDefault();
     }
+
+    internal string? GetConnectionString() => _connection?.ConnectionString ?? _connectionString;
 
     public static SqlDbType GetSqlDbType(object? value) => value switch
     {

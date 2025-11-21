@@ -5,6 +5,19 @@ namespace Xtraq.Data.Queries;
 
 internal static class StoredProcedureQueries
 {
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<(string Schema, string Name), DbObject?>> ObjectLookupCache = new(StringComparer.OrdinalIgnoreCase);
+    private sealed class SchemaObjectComparer : IEqualityComparer<(string Schema, string Name)>
+    {
+        public bool Equals((string Schema, string Name) x, (string Schema, string Name) y)
+            => string.Equals(x.Schema, y.Schema, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Schema, string Name) obj)
+            => HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Schema ?? string.Empty),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name ?? string.Empty));
+    }
+
     public static Task<List<StoredProcedure>> StoredProcedureListAsync(this DbContext context, string schemaList, CancellationToken cancellationToken)
     {
         string queryString;
@@ -166,11 +179,43 @@ internal static class StoredProcedureQueries
                                 FROM sys.objects AS o
                                 INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
                                 WHERE s.name = @schemaName AND o.name = @name;";
+        var cacheKey = context.GetConnectionString();
+        if (!string.IsNullOrWhiteSpace(cacheKey))
+        {
+            var bucket = ObjectLookupCache.GetOrAdd(cacheKey!, _ => new ConcurrentDictionary<(string Schema, string Name), DbObject?>(new SchemaObjectComparer()));
+            var tuple = (schemaName, name);
+            if (bucket.TryGetValue(tuple, out var cached))
+            {
+                return Task.FromResult<DbObject?>(cached);
+            }
+
+            return FetchAndCacheAsync(context, queryString, parameters, cancellationToken, tuple, bucket);
+        }
+
         return context.SingleAsync<DbObject>(
             queryString,
             parameters,
             cancellationToken,
             telemetryOperation: "StoredProcedureQueries.ObjectLookup",
             telemetryCategory: "Collector.Metadata");
+    }
+
+    private static async Task<DbObject?> FetchAndCacheAsync(
+        DbContext context,
+        string query,
+        List<SqlParameter> parameters,
+        CancellationToken cancellationToken,
+        (string Schema, string Name) tuple,
+        ConcurrentDictionary<(string Schema, string Name), DbObject?> bucket)
+    {
+        var result = await context.SingleAsync<DbObject>(
+            query,
+            parameters,
+            cancellationToken,
+            telemetryOperation: "StoredProcedureQueries.ObjectLookup",
+            telemetryCategory: "Collector.Metadata").ConfigureAwait(false);
+
+        bucket[tuple] = result;
+        return result;
     }
 }

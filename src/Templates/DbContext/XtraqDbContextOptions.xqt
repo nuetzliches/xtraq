@@ -1,5 +1,8 @@
-﻿namespace {{ Namespace }};
+﻿{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
 
+using System;
 using System.Text.Json;
 
 public sealed class XtraqDbContextOptions

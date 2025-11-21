@@ -8,6 +8,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 #endif
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Xtraq.Samples.RestApi.Xtraq;
 
 public static class ProcedurePipelineExtensions
