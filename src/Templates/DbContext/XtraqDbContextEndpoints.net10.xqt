@@ -1,3 +1,5 @@
+{{ HEADER }}
+#nullable enable
 /// <summary>Generated minimal API endpoints for XtraqDbContext. (net10 variant)</summary>
 namespace {{ Namespace }};
 

@@ -1,4 +1,5 @@
 {{ HEADER }}
+#nullable enable
 namespace {{ Namespace }};
 
 public interface ITableType {}

@@ -1,6 +1,8 @@
-/// <summary>Generated interface for the database context abstraction.</summary>
+{{ HEADER }}
+#nullable enable
 namespace {{ Namespace }};
 
+using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;

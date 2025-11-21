@@ -130,6 +130,6 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [ ] Expand the bulk table-column loader (with cross-schema cache keys) so telemetry shows fewer than 5 `TableQueries.TableColumnsSingle` calls per snapshot run. _(Today we issue a per-table call in `TableColumnsForTableInternalAsync`; no batched path exists.)_
 - [x] Re-enable `TreatWarningsAsErrors` in `src/Xtraq.csproj`, remove temporary `NoWarn` entries, and fix the surfaced diagnostics so analyzer and nullable warnings block the build again. _(Property toggled back to `true`; builds now fail on warnings.)_
 - [ ] Add integration coverage for `SchemaObjectCacheManager` covering object drops, chained dependencies, and cache rehydration, then mark the schema cache invalidation rollout complete.
-- [ ] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings.
+- [x] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings. _(Prototype class removed; command wiring now flows through the System.CommandLine host only.)_
 - [ ] Introduce leveled CLI summaries (default info + optional verbose) and align telemetry payloads with the new structure, validated by CLI E2E tests.
 - [ ] Publish a CLI UX style guide in `docs/` detailing prompt wording, validation patterns, and confirmation flows, and link it from contributor onboarding docs.

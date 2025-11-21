@@ -1,4 +1,6 @@
-﻿namespace {{ Namespace }};
+{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
 
 using System;
 using System.Data;
