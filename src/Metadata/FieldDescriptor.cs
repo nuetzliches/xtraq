@@ -8,7 +8,7 @@ namespace Xtraq.Metadata;
 /// <param name="PropertyName">The CLR-safe property name generated for the field.</param>
 /// <param name="ClrType">The CLR type projected from the SQL type.</param>
 /// <param name="IsNullable">Indicates whether the field can produce <c>null</c> values.</param>
-/// <param name="SqlTypeName">The database type name returned by metadata discovery.</param>
+/// <param name="SqlTypeName">The database type name returned by metadata discovery (may be null when unavailable).</param>
 /// <param name="MaxLength">The optional maximum length for variable sized fields.</param>
 /// <param name="Documentation">Human-readable documentation extracted from extended properties.</param>
 /// <param name="Attributes">Optional additional attributes applied during code generation.</param>
@@ -26,7 +26,7 @@ public sealed record FieldDescriptor(
     string PropertyName,
     string ClrType,
     bool IsNullable,
-    string SqlTypeName,
+    string? SqlTypeName,
     int? MaxLength = null,
     string? Documentation = null,
     IReadOnlyList<string>? Attributes = null,

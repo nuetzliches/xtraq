@@ -81,7 +81,7 @@ internal static partial class OrderListAsJsonPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderListAsJsonInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderListAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

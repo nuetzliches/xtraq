@@ -62,7 +62,7 @@ internal static partial class SyncUserContactsPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@Contacts", System.Data.DbType.Object, null, false, false),
+            new("@Contacts", System.Data.DbType.Object, null, false, false, "sample.UserContactTableType"),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -88,7 +88,7 @@ internal static partial class SyncUserContactsPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (SyncUserContactsInput)state!;
-			{ var prm = cmd.Parameters["@Contacts"]; prm.Value = TvpHelper.BuildRecords(input.Contacts) ?? (object)DBNull.Value; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) sp.SqlDbType = System.Data.SqlDbType.Structured; }
+			{ var prm = cmd.Parameters["@Contacts"]; var tvp = TvpHelper.BuildRecords(input.Contacts) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "sample.UserContactTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[SyncUserContacts]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

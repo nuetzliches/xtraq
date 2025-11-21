@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using Microsoft.Data.SqlClient;
 
 namespace Xtraq.Execution;
 
@@ -69,7 +70,8 @@ public sealed class ProcedureExecutionPlan
 /// <param name="Size">The optional size specification used for variable-length types.</param>
 /// <param name="IsOutput">Indicates whether the parameter participates in output binding.</param>
 /// <param name="IsNullable">Indicates whether the parameter accepts <c>null</c> values.</param>
-public sealed record ProcedureParameter(string Name, DbType? DbType, int? Size, bool IsOutput, bool IsNullable);
+/// <param name="TypeName">The optional type name for user-defined table types.</param>
+public sealed record ProcedureParameter(string Name, DbType? DbType, int? Size, bool IsOutput, bool IsNullable, string? TypeName = null);
 
 /// <summary>
 /// Captures the mapping logic required to materialize a stored procedure result set.
@@ -159,6 +161,11 @@ public static class ProcedureExecutor
             if (p.DbType.HasValue) param.DbType = p.DbType.Value;
             if (p.Size.HasValue) param.Size = p.Size.Value;
             param.Direction = p.IsOutput ? ParameterDirection.InputOutput : ParameterDirection.Input;
+            if (!string.IsNullOrWhiteSpace(p.TypeName) && param is SqlParameter sqlParam)
+            {
+                sqlParam.SqlDbType = SqlDbType.Structured;
+                sqlParam.TypeName = p.TypeName;
+            }
             if (!p.IsOutput)
             {
                 // Value binding is deferred to generated wrapper; here default to DBNull (overridden by wrapper before execute);
@@ -264,6 +271,11 @@ public static class ProcedureExecutor
             if (p.DbType.HasValue) param.DbType = p.DbType.Value;
             if (p.Size.HasValue) param.Size = p.Size.Value;
             param.Direction = p.IsOutput ? ParameterDirection.InputOutput : ParameterDirection.Input;
+            if (!string.IsNullOrWhiteSpace(p.TypeName) && param is SqlParameter sqlParam)
+            {
+                sqlParam.SqlDbType = SqlDbType.Structured;
+                sqlParam.TypeName = p.TypeName;
+            }
             if (!p.IsOutput)
             {
                 param.Value = DBNull.Value;

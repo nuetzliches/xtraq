@@ -55,7 +55,7 @@ internal static partial class ImportOrdersPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@Orders", System.Data.DbType.Object, null, false, false),
+            new("@Orders", System.Data.DbType.Object, null, false, false, "sample.OrderImportTableType"),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -81,7 +81,7 @@ internal static partial class ImportOrdersPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (ImportOrdersInput)state!;
-			{ var prm = cmd.Parameters["@Orders"]; prm.Value = TvpHelper.BuildRecords(input.Orders) ?? (object)DBNull.Value; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) sp.SqlDbType = System.Data.SqlDbType.Structured; }
+			{ var prm = cmd.Parameters["@Orders"]; var tvp = TvpHelper.BuildRecords(input.Orders) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "sample.OrderImportTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[ImportOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

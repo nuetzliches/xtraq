@@ -114,6 +114,10 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 
 - [x] Replace per-dependency `modify_date` lookups with catalog-wide scans so SQL Server is queried only once per object type while the analyzer filters dependencies in memory. _(DatabaseDependencyMetadataProvider now hydrates in-memory snapshots via `LoadCatalogAsync` and reuses them across dependency resolution.)_
 
+## Deferred / VNext
+
+- [>] Extract `samples/restapi/Xtraq/*` shared scaffolding into a new project reference, leaving only schema-specific artifacts under `samples/restapi/Xtraq/Sample`, and update the sample README with the new dependency flow.
+
 ## Next Steps
 
 - [x] Broaden the warm-run delta window. `SchemaInvalidationOrchestrator.GetEarliestCacheTimestampAsync` now returns `null` when the cache lacks a persisted timestamp, forcing a full catalog scan on the first warm run (or after deleting `.xtraq/cache`). Regression tests in `SchemaInvalidationOrchestratorTests` prove the orchestrator records a baseline and reuses it on subsequent passes.
@@ -124,7 +128,6 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [ ] Ship a Roslyn analyzer that warns on Minimal API routes lacking `.WithProcedure*` scaffolding, include autofix samples, and enable it for the REST API sample to validate opt-in adoption.
 - [ ] Cache stored procedure metadata per schema so warm snapshot runs cut `StoredProcedureQueries.ObjectLookup` calls by at least 50% (baseline: 1,136) and document the change in telemetry release notes.
 - [ ] Expand the bulk table-column loader (with cross-schema cache keys) so telemetry shows fewer than 5 `TableQueries.TableColumnsSingle` calls per snapshot run.
-- [ ] Extract `samples/restapi/Xtraq/*` shared scaffolding into a new project reference, leaving only schema-specific artifacts under `samples/restapi/Xtraq/Sample`, and update the sample README with the new dependency flow.
 - [x] Re-enable `TreatWarningsAsErrors` in `src/Xtraq.csproj`, remove temporary `NoWarn` entries, and fix the surfaced diagnostics so analyzer and nullable warnings block the build again. _(Property toggled back to `true`; builds now fail on warnings.)_
 - [ ] Add integration coverage for `SchemaObjectCacheManager` covering object drops, chained dependencies, and cache rehydration, then mark the schema cache invalidation rollout complete.
 - [ ] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings.

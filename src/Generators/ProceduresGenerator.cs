@@ -960,13 +960,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     string bodyBlock;
                     if (isJson)
                     {
+                        var sbInit = "var __sb = new System.Text.StringBuilder();\nwhile (await r.ReadAsync(ct).ConfigureAwait(false))\n{\n    if (!r.IsDBNull(0))\n    {\n        __sb.Append(r.GetString(0));\n    }\n}\nvar __raw = __sb.Length > 0 ? __sb.ToString() : null;";
                         if (isJsonArray)
                         {
-                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\nstring? __raw = null;\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (await r.ReadAsync(ct).ConfigureAwait(false))\n{{\n    if (!r.IsDBNull(0))\n    {{\n        __raw = r.GetString(0);\n        try\n        {{\n            var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, JsonSupport.Options);\n            if (__parsed is not null)\n            {{\n                foreach (var __entry in __parsed)\n                {{\n                    if (__entry is {{ }} __value)\n                    {{\n                        __items.Add(__value);\n                    }}\n                }}\n            }}\n        }}\n        catch\n        {{\n        }}\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, JsonSupport.Options);\n        if (__parsed is not null)\n        {{\n            foreach (var __entry in __parsed)\n            {{\n                if (__entry is {{ }} __value)\n                {{\n                    __items.Add(__value);\n                }}\n            }}\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
                         }
                         else
                         {
-                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\nstring? __raw = null;\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (await r.ReadAsync(ct).ConfigureAwait(false))\n{{\n    if (!r.IsDBNull(0))\n    {{\n        __raw = r.GetString(0);\n        try\n        {{\n            var __parsed = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, JsonSupport.Options);\n            if (__parsed is {{ }} __value)\n            {{\n                __items.Add(__value);\n            }}\n        }}\n        catch\n        {{\n        }}\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, JsonSupport.Options);\n        if (__parsed is {{ }} __value)\n        {{\n            __items.Add(__value);\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
                         }
                     }
                     else
@@ -1454,7 +1455,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     if (isTableType)
                     {
                         // Use Object DbType placeholder; binder will override with SqlDbType.Structured
-                        paramLines.Add($"new(\"@{ip.Name}\", System.Data.DbType.Object, null, false, false)");
+                        var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
+                        paramLines.Add($"new(\"@{ip.Name}\", System.Data.DbType.Object, null, false, false, \"{typeNameLiteral}\")");
                     }
                     else
                     {
@@ -1497,9 +1499,11 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         if (isTableType)
                         {
                             // Build SqlDataRecord collection via reflection helper (ExecutionSupport.TvpHelper)
-                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; prm.Value = TvpHelper.BuildRecords(input.{ip.PropertyName}) ?? (object)DBNull.Value; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) sp.SqlDbType = System.Data.SqlDbType.Structured; }}";
+                            var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
+                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var tvp = TvpHelper.BuildRecords(input.{ip.PropertyName}) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
                         }
-                        return $"cmd.Parameters[\"@{ip.Name}\"].Value = input.{ip.PropertyName};";
+                        var valueExpr = ip.IsNullable ? $"(object?)input.{ip.PropertyName} ?? DBNull.Value" : $"input.{ip.PropertyName}";
+                        return $"cmd.Parameters[\"@{ip.Name}\"].Value = {valueExpr};";
                     }).ToList(),
                     ResultSets = rsMeta,
                     OutputFactoryArgs = outputFactoryArgs,
@@ -1606,7 +1610,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return core;
     }
 
-    private static string MapDbType(string sqlType)
+    private static string MapDbType(string? sqlType)
     {
         if (string.IsNullOrWhiteSpace(sqlType)) return "System.Data.DbType.String";
         var t = sqlType.ToLowerInvariant();

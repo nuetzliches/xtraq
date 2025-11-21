@@ -81,24 +81,28 @@ internal static partial class OrderListByUserAsJsonPlan
             new("ResultSet1", async (r, ct) =>
 			{
                 var list = new System.Collections.Generic.List<object>();
-                string? __raw = null;
-                var __items = new System.Collections.Generic.List<OrderListByUserAsJsonResultSet1Result>();
-                if (await r.ReadAsync(ct).ConfigureAwait(false))
+                var __sb = new System.Text.StringBuilder();
+                while (await r.ReadAsync(ct).ConfigureAwait(false))
                 {
                     if (!r.IsDBNull(0))
                     {
-                        __raw = r.GetString(0);
-                        try
+                        __sb.Append(r.GetString(0));
+                    }
+                }
+                var __raw = __sb.Length > 0 ? __sb.ToString() : null;
+                var __items = new System.Collections.Generic.List<OrderListByUserAsJsonResultSet1Result>();
+                if (__raw != null)
+                {
+                    try
+                    {
+                        var __parsed = System.Text.Json.JsonSerializer.Deserialize<OrderListByUserAsJsonResultSet1Result?>(__raw, JsonSupport.Options);
+                        if (__parsed is { } __value)
                         {
-                            var __parsed = System.Text.Json.JsonSerializer.Deserialize<OrderListByUserAsJsonResultSet1Result?>(__raw, JsonSupport.Options);
-                            if (__parsed is { } __value)
-                            {
-                                __items.Add(__value);
-                            }
+                            __items.Add(__value);
                         }
-                        catch
-                        {
-                        }
+                    }
+                    catch
+                    {
                     }
                 }
                 list.Add(JsonResultEnvelope<OrderListByUserAsJsonResultSet1Result>.Create(__items, __raw));
@@ -122,7 +126,7 @@ internal static partial class OrderListByUserAsJsonPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderListByUserAsJsonInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderListByUserAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

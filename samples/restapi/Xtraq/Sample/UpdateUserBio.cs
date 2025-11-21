@@ -86,8 +86,8 @@ internal static partial class UpdateUserBioPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UpdateUserBioInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
-			cmd.Parameters["@Bio"].Value = input.Bio;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
+			cmd.Parameters["@Bio"].Value = (object?)input.Bio ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UpdateUserBio]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

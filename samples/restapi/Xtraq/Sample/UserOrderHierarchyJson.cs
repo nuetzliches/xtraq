@@ -80,30 +80,34 @@ internal static partial class UserOrderHierarchyJsonPlan
             new("ResultSet1", async (r, ct) =>
 			{
                 var list = new System.Collections.Generic.List<object>();
-                string? __raw = null;
-                var __items = new System.Collections.Generic.List<UserOrderHierarchyJsonResultSet1Result>();
-                if (await r.ReadAsync(ct).ConfigureAwait(false))
+                var __sb = new System.Text.StringBuilder();
+                while (await r.ReadAsync(ct).ConfigureAwait(false))
                 {
                     if (!r.IsDBNull(0))
                     {
-                        __raw = r.GetString(0);
-                        try
+                        __sb.Append(r.GetString(0));
+                    }
+                }
+                var __raw = __sb.Length > 0 ? __sb.ToString() : null;
+                var __items = new System.Collections.Generic.List<UserOrderHierarchyJsonResultSet1Result>();
+                if (__raw != null)
+                {
+                    try
+                    {
+                        var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<UserOrderHierarchyJsonResultSet1Result?>>(__raw, JsonSupport.Options);
+                        if (__parsed is not null)
                         {
-                            var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<UserOrderHierarchyJsonResultSet1Result?>>(__raw, JsonSupport.Options);
-                            if (__parsed is not null)
+                            foreach (var __entry in __parsed)
                             {
-                                foreach (var __entry in __parsed)
+                                if (__entry is { } __value)
                                 {
-                                    if (__entry is { } __value)
-                                    {
-                                        __items.Add(__value);
-                                    }
+                                    __items.Add(__value);
                                 }
                             }
                         }
-                        catch
-                        {
-                        }
+                    }
+                    catch
+                    {
                     }
                 }
                 list.Add(JsonResultEnvelope<UserOrderHierarchyJsonResultSet1Result>.Create(__items, __raw));

@@ -90,7 +90,7 @@ internal static partial class UserFindPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserFindInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserFind]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

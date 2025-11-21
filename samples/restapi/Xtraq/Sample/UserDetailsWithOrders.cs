@@ -114,7 +114,7 @@ internal static partial class UserDetailsWithOrdersPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserDetailsWithOrdersInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserDetailsWithOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

@@ -19,13 +19,14 @@ using System.Buffers;
 
 internal sealed class ProcedureParameter
 {
-    public ProcedureParameter(string name, System.Data.DbType dbType, object? size, bool isOutput, bool isNullable)
-    { Name = name; DbType = dbType; Size = size; IsOutput = isOutput; IsNullable = isNullable; }
+    public ProcedureParameter(string name, System.Data.DbType dbType, object? size, bool isOutput, bool isNullable, string? typeName = null)
+    { Name = name; DbType = dbType; Size = size; IsOutput = isOutput; IsNullable = isNullable; TypeName = typeName; }
     public string Name { get; }
     public System.Data.DbType DbType { get; }
     public object? Size { get; }
     public bool IsOutput { get; }
     public bool IsNullable { get; }
+    public string? TypeName { get; }
 }
 
 internal sealed class ResultSetMapping
@@ -223,6 +224,11 @@ internal static class ProcedureExecutor
             if (p.Size is int s && s > 0) prm.Size = s;
             prm.Direction = p.IsOutput ? System.Data.ParameterDirection.InputOutput : System.Data.ParameterDirection.Input;
             prm.Value = DBNull.Value;
+            if (!string.IsNullOrWhiteSpace(p.TypeName) && prm is Microsoft.Data.SqlClient.SqlParameter sqlParam)
+            {
+                sqlParam.SqlDbType = System.Data.SqlDbType.Structured;
+                sqlParam.TypeName = p.TypeName;
+            }
             cmd.Parameters.Add(prm);
         }
 
@@ -312,6 +318,11 @@ internal static class ProcedureExecutor
             if (p.Size is int s && s > 0) prm.Size = s;
             prm.Direction = p.IsOutput ? System.Data.ParameterDirection.InputOutput : System.Data.ParameterDirection.Input;
             prm.Value = DBNull.Value;
+            if (!string.IsNullOrWhiteSpace(p.TypeName) && prm is Microsoft.Data.SqlClient.SqlParameter sqlParam)
+            {
+                sqlParam.SqlDbType = System.Data.SqlDbType.Structured;
+                sqlParam.TypeName = p.TypeName;
+            }
             cmd.Parameters.Add(prm);
         }
 
@@ -482,7 +493,7 @@ internal static class TvpHelper
     // Converts a single record or enumerable of records into SqlDataRecord collection for TVP binding.
     public static IEnumerable<SqlDataRecord>? BuildRecords(object? value)
     {
-        if (value == null) return null;
+        if (value == null) return Array.Empty<SqlDataRecord>();
         var list = value as System.Collections.IEnumerable;
         if (list == null)
         {
@@ -490,10 +501,17 @@ internal static class TvpHelper
             list = new object[] { value };
         }
         var enumerator = list.GetEnumerator();
-        // Peek first element to build metadata
-        if (!enumerator.MoveNext()) return null; // empty -> null
-        var first = enumerator.Current;
-        if (first == null) return null;
+        // Peek first non-null element to build metadata
+        object? first = null;
+        while (enumerator.MoveNext())
+        {
+            if (enumerator.Current != null)
+            {
+                first = enumerator.Current;
+                break;
+            }
+        }
+        if (first == null) return Array.Empty<SqlDataRecord>(); // empty -> no rows
         var rowType = first.GetType();
         var properties = rowType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var meta = new List<SqlMetaData>();

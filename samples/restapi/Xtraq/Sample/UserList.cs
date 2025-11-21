@@ -89,7 +89,7 @@ internal static partial class UserListPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserListInput)state!;
-			cmd.Parameters["@IncludeInactive"].Value = input.IncludeInactive;
+			cmd.Parameters["@IncludeInactive"].Value = (object?)input.IncludeInactive ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

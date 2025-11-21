@@ -87,8 +87,8 @@ internal static partial class OrderStatusReportPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderStatusReportInput)state!;
-			cmd.Parameters["@FromUtc"].Value = input.FromUtc;
-			cmd.Parameters["@ToUtc"].Value = input.ToUtc;
+			cmd.Parameters["@FromUtc"].Value = (object?)input.FromUtc ?? DBNull.Value;
+			cmd.Parameters["@ToUtc"].Value = (object?)input.ToUtc ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
