@@ -5,6 +5,8 @@ namespace Xtraq.Data.Queries;
 
 internal static class TableQueries
 {
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<(string? Catalog, string Schema, string Table), List<Column>>> ColumnCache = new(StringComparer.OrdinalIgnoreCase);
+
     public static Task<List<Table>> TableListAsync(this DbContext context, string schemaName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(schemaName))
@@ -122,6 +124,19 @@ internal static class TableQueries
             return Task.FromResult(new List<Column>());
         }
 
+        var connectionKey = context.GetConnectionString();
+        if (!string.IsNullOrWhiteSpace(connectionKey))
+        {
+            var bucket = ColumnCache.GetOrAdd(connectionKey!, _ => new ConcurrentDictionary<(string? Catalog, string Schema, string Table), List<Column>>());
+            var cacheKey = (catalogName, schemaName, tableName);
+            if (bucket.TryGetValue(cacheKey, out var cached))
+            {
+                return Task.FromResult(cached);
+            }
+
+            return FetchAndCacheAsync(context, catalogName, schemaName, tableName, cancellationToken, bucket, cacheKey);
+        }
+
         var parameters = new List<SqlParameter>
         {
             new("@catalogName", NormalizeCatalogParameter(catalogName)),
@@ -139,6 +154,37 @@ internal static class TableQueries
                 ? "TableQueries.TableColumnsSingle"
                 : "TableQueries.TableColumnsByCatalog",
             telemetryCategory: "Collector.Tables");
+    }
+
+    private static async Task<List<Column>> FetchAndCacheAsync(
+        DbContext context,
+        string? catalogName,
+        string schemaName,
+        string tableName,
+        CancellationToken cancellationToken,
+        ConcurrentDictionary<(string? Catalog, string Schema, string Table), List<Column>> bucket,
+        (string? Catalog, string Schema, string Table) cacheKey)
+    {
+        var parameters = new List<SqlParameter>
+        {
+            new("@catalogName", NormalizeCatalogParameter(catalogName)),
+            new("@schemaName", schemaName),
+            new("@tableName", tableName)
+        };
+
+        const string whereClause = "WHERE s.name = @schemaName AND tbl.name = @tableName";
+
+        var result = await context.ListAsync<Column>(
+            BuildColumnSelectQuery(BuildSysCatalogPrefix(catalogName), whereClause),
+            parameters,
+            cancellationToken,
+            telemetryOperation: string.IsNullOrWhiteSpace(catalogName)
+                ? "TableQueries.TableColumnsSingle"
+                : "TableQueries.TableColumnsByCatalog",
+            telemetryCategory: "Collector.Tables").ConfigureAwait(false);
+
+        bucket[cacheKey] = result;
+        return result;
     }
 
     private static string BuildColumnSelectQuery(string sysCatalogPrefix, string whereClause)
