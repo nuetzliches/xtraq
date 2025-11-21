@@ -17,7 +17,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>xtraq</ToolCommandName>
     <PackageId>xtraq</PackageId>
-    <Version>1.0.0-alpha.14</Version>
+    <Version>1.0.0-alpha.15</Version>
     <Authors>Xtraq Team</Authors>
     <Description>Xtraq CLI Tool with auto-update capabilities</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
