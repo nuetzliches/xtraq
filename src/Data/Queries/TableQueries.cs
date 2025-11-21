@@ -5,7 +5,9 @@ namespace Xtraq.Data.Queries;
 
 internal static class TableQueries
 {
+    private static readonly ConcurrentDictionary<string, Task<List<Column>>> CatalogColumnCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, ConcurrentDictionary<(string? Catalog, string Schema, string Table), List<Column>>> ColumnCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Task<List<Table>>> TableListCache = new(StringComparer.OrdinalIgnoreCase);
 
     public static Task<List<Table>> TableListAsync(this DbContext context, string schemaName, CancellationToken cancellationToken)
     {
@@ -14,6 +16,18 @@ internal static class TableQueries
             return Task.FromResult(new List<Table>());
         }
 
+        var connectionKey = context.GetConnectionString();
+        var cacheKey = BuildTableListCacheKey(connectionKey, schemaName);
+        if (!string.IsNullOrWhiteSpace(cacheKey))
+        {
+            return TableListCache.GetOrAdd(cacheKey!, _ => FetchTableListAsync(context, schemaName, cancellationToken));
+        }
+
+        return FetchTableListAsync(context, schemaName, cancellationToken);
+    }
+
+    private static Task<List<Table>> FetchTableListAsync(DbContext context, string schemaName, CancellationToken cancellationToken)
+    {
         var parameters = new List<SqlParameter> { new("@schemaName", schemaName) };
 
         const string queryString = @"SELECT tbl.object_id,
@@ -83,33 +97,27 @@ internal static class TableQueries
     public static Task<List<Column>> TableColumnsCatalogAsync(this DbContext context, string? catalogName, IReadOnlyCollection<string>? schemaFilter, CancellationToken cancellationToken)
     {
         var normalizedSchemas = NormalizeSchemaFilter(schemaFilter);
-        var parameters = new List<SqlParameter>
-        {
-            new("@catalogName", NormalizeCatalogParameter(catalogName))
-        };
+        var connectionKey = context.GetConnectionString();
+        var cacheKey = BuildCatalogCacheKey(connectionKey, catalogName, normalizedSchemas);
 
-        string whereClause = string.Empty;
-        if (normalizedSchemas.Count > 0)
+        if (!string.IsNullOrWhiteSpace(connectionKey))
         {
-            var placeholders = new List<string>(normalizedSchemas.Count);
-            for (var i = 0; i < normalizedSchemas.Count; i++)
+            var allKey = BuildCatalogCacheKey(connectionKey, catalogName, Array.Empty<string>());
+            var allTask = CatalogColumnCache.GetOrAdd(allKey!, _ => FetchCatalogColumnsAsync(context, catalogName, Array.Empty<string>(), cancellationToken));
+
+            if (normalizedSchemas.Count == 0)
             {
-                var parameterName = $"@schemaFilter{i}";
-                placeholders.Add(parameterName);
-                parameters.Add(new SqlParameter(parameterName, normalizedSchemas[i]));
+                return allTask;
             }
 
-            whereClause = $"WHERE s.name IN ({string.Join(", ", placeholders)})";
+            return CatalogColumnCache.GetOrAdd(cacheKey!, _ => allTask.ContinueWith(t =>
+            {
+                var source = t.Result ?? new List<Column>();
+                return FilterColumns(source, normalizedSchemas);
+            }, cancellationToken, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default));
         }
 
-        var queryString = BuildColumnSelectQuery(BuildSysCatalogPrefix(catalogName), whereClause);
-
-        return context.ListAsync<Column>(
-            queryString,
-            parameters,
-            cancellationToken,
-            telemetryOperation: "TableQueries.TableColumnsCatalog",
-            telemetryCategory: "Collector.Tables");
+        return FetchCatalogColumnsAsync(context, catalogName, normalizedSchemas, cancellationToken);
     }
 
     private static Task<List<Column>> TableColumnsForTableInternalAsync(
@@ -187,6 +195,78 @@ internal static class TableQueries
         return result;
     }
 
+    private static string? BuildCatalogCacheKey(string? connectionKey, string? catalogName, IReadOnlyList<string> schemas)
+    {
+        if (string.IsNullOrWhiteSpace(connectionKey))
+        {
+            return null;
+        }
+
+        var catalogPart = string.IsNullOrWhiteSpace(catalogName) ? "(default)" : catalogName.Trim();
+        var schemaPart = schemas is { Count: > 0 } ? string.Join("|", schemas) : "(all)";
+        return string.Concat(connectionKey, "|", catalogPart, "|", schemaPart);
+    }
+
+    private static async Task<List<Column>> FetchCatalogColumnsAsync(
+        DbContext context,
+        string? catalogName,
+        IReadOnlyList<string> normalizedSchemas,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var parameters = new List<SqlParameter>
+            {
+                new("@catalogName", NormalizeCatalogParameter(catalogName))
+            };
+
+            string whereClause = string.Empty;
+            if (normalizedSchemas.Count > 0)
+            {
+                var placeholders = new List<string>(normalizedSchemas.Count);
+                for (var i = 0; i < normalizedSchemas.Count; i++)
+                {
+                    var parameterName = $"@schemaFilter{i}";
+                    placeholders.Add(parameterName);
+                    parameters.Add(new SqlParameter(parameterName, normalizedSchemas[i]));
+                }
+
+                whereClause = $"WHERE s.name IN ({string.Join(", ", placeholders)})";
+            }
+
+            var queryString = BuildColumnSelectQuery(BuildSysCatalogPrefix(catalogName), whereClause);
+
+            return await context.ListAsync<Column>(
+                queryString,
+                parameters,
+                cancellationToken,
+                telemetryOperation: "TableQueries.TableColumnsCatalog",
+                telemetryCategory: "Collector.Tables").ConfigureAwait(false);
+        }
+        catch
+        {
+            // Remove failed entries so subsequent calls can retry.
+            var connectionKey = context.GetConnectionString();
+            var cacheKey = BuildCatalogCacheKey(connectionKey, catalogName, normalizedSchemas);
+            if (!string.IsNullOrWhiteSpace(cacheKey))
+            {
+                CatalogColumnCache.TryRemove(cacheKey!, out _);
+            }
+            throw;
+        }
+    }
+
+    private static List<Column> FilterColumns(List<Column> source, IReadOnlyList<string> schemas)
+    {
+        if (source == null || source.Count == 0 || schemas.Count == 0)
+        {
+            return new List<Column>();
+        }
+
+        var filter = new HashSet<string>(schemas, StringComparer.OrdinalIgnoreCase);
+        return source.Where(c => c != null && !string.IsNullOrWhiteSpace(c.SchemaName) && filter.Contains(c.SchemaName)).ToList();
+    }
+
     private static string BuildColumnSelectQuery(string sysCatalogPrefix, string whereClause)
     {
         var whereSegment = string.IsNullOrWhiteSpace(whereClause) ? string.Empty : $"{Environment.NewLine}{whereClause}";
@@ -259,6 +339,7 @@ ORDER BY s.name, tbl.name, c.column_id;";
             }
         }
 
+        result.Sort(StringComparer.OrdinalIgnoreCase);
         return result;
     }
 
@@ -275,5 +356,15 @@ ORDER BY s.name, tbl.name, c.column_id;";
         }
 
         return "[" + value.Replace("]", "]]", StringComparison.Ordinal) + "]";
+    }
+
+    private static string? BuildTableListCacheKey(string? connectionKey, string schema)
+    {
+        if (string.IsNullOrWhiteSpace(connectionKey) || string.IsNullOrWhiteSpace(schema))
+        {
+            return null;
+        }
+
+        return string.Concat(connectionKey, "|tables|", schema.Trim());
     }
 }

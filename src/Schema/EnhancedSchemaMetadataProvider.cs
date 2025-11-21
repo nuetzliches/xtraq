@@ -94,6 +94,9 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
     private Dictionary<string, IReadOnlyList<ColumnMetadata>>? _functionColumnsCache;
     private readonly ConcurrentDictionary<string, Dictionary<string, List<Column>>> _catalogColumnCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _catalogColumnLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _catalogPrefetchSemaphore = new(1, 1);
+    private Dictionary<string, Dictionary<string, List<Column>>>? _catalogAllSchemasCache;
+    private bool _catalogPrefetchCompleted;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -946,11 +949,19 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
 
     private async Task<Dictionary<string, List<Column>>> GetOrLoadCatalogColumnsAsync(string schema, string? catalog, CancellationToken cancellationToken)
     {
+        await EnsureCatalogColumnsPrefetchAsync(cancellationToken).ConfigureAwait(false);
+
         var schemaKey = schema.Trim();
         var cacheKey = BuildCatalogSchemaKey(schemaKey, catalog);
         if (_catalogColumnCache.TryGetValue(cacheKey, out var existing))
         {
             return existing;
+        }
+
+        if (_catalogAllSchemasCache != null && _catalogAllSchemasCache.TryGetValue(schemaKey, out var preloaded))
+        {
+            _catalogColumnCache[cacheKey] = preloaded;
+            return preloaded;
         }
 
         var gate = _catalogColumnLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
@@ -1022,6 +1033,80 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         return string.IsNullOrWhiteSpace(catalogKey)
             ? schema
             : string.Concat(catalogKey, "|", schema);
+    }
+
+    private async Task EnsureCatalogColumnsPrefetchAsync(CancellationToken cancellationToken)
+    {
+        if (_catalogPrefetchCompleted || _dbContext == null)
+        {
+            return;
+        }
+
+        await _catalogPrefetchSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_catalogPrefetchCompleted)
+            {
+                return;
+            }
+
+            var schemaFilter = ParseSchemaFilter(Environment.GetEnvironmentVariable("XTRAQ_BUILD_SCHEMAS"));
+            var columns = await _dbContext.TableColumnsCatalogAsync(catalogName: null, schemaFilter: schemaFilter, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
+            var bySchema = new Dictionary<string, Dictionary<string, List<Column>>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var column in columns)
+            {
+                if (column == null || string.IsNullOrWhiteSpace(column.SchemaName) || string.IsNullOrWhiteSpace(column.TableName))
+                {
+                    continue;
+                }
+
+                if (!bySchema.TryGetValue(column.SchemaName, out var tables))
+                {
+                    tables = new Dictionary<string, List<Column>>(StringComparer.OrdinalIgnoreCase);
+                    bySchema[column.SchemaName] = tables;
+                }
+
+                if (!tables.TryGetValue(column.TableName, out var list))
+                {
+                    list = new List<Column>();
+                    tables[column.TableName] = list;
+                }
+
+                list.Add(column);
+            }
+
+            _catalogAllSchemasCache = bySchema;
+            _catalogPrefetchCompleted = true;
+
+            _console.Verbose($"[enhanced-schema] Prefetched catalog columns for {bySchema.Count} schema(s) (TableColumnsCatalog).");
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[enhanced-schema] Catalog prefetch failed: {ex.Message}");
+            _catalogAllSchemasCache = null;
+            _catalogPrefetchCompleted = false;
+        }
+        finally
+        {
+            _catalogPrefetchSemaphore.Release();
+        }
+    }
+
+    private static IReadOnlyCollection<string>? ParseSchemaFilter(string? schemas)
+    {
+        if (string.IsNullOrWhiteSpace(schemas))
+        {
+            return null;
+        }
+
+        var parts = schemas
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return parts.Length == 0 ? null : parts;
     }
 
     private async Task<List<Column>> LoadTableColumnsDirectAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)

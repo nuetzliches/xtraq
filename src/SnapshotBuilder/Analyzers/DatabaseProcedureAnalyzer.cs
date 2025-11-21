@@ -18,6 +18,8 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
     private readonly IDependencyMetadataProvider _dependencyMetadataProvider;
     private readonly IProcedureAstBuilder _procedureAstBuilder;
     private readonly IProcedureMetadataEnricher _metadataEnricher;
+    private Dictionary<string, string>? _definitionCache;
+    private Dictionary<string, List<StoredProcedureInput>>? _parameterCache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DatabaseProcedureAnalyzer"/> class.
@@ -51,6 +53,8 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
 
         options ??= SnapshotBuildOptions.Default;
         var results = new List<ProcedureAnalysisResult>(items.Count);
+
+        await PrefetchProcedureMetadataAsync(items, cancellationToken).ConfigureAwait(false);
 
         await _console.RunProgressAsync("Analyzing stored procedures", items.Count, async advance =>
         {
@@ -145,6 +149,12 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
         string descriptorLabel,
         CancellationToken cancellationToken)
     {
+        var cacheKey = BuildProcedureKey(descriptor.Schema, descriptor.Name);
+        if (_definitionCache != null && cacheKey != null && _definitionCache.TryGetValue(cacheKey, out var cachedDefinition))
+        {
+            return cachedDefinition;
+        }
+
         try
         {
             return await _dbContext.StoredProcedureContentAsync(
@@ -169,6 +179,12 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
         string descriptorLabel,
         CancellationToken cancellationToken)
     {
+        var cacheKey = BuildProcedureKey(descriptor.Schema, descriptor.Name);
+        if (_parameterCache != null && cacheKey != null && _parameterCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
         try
         {
             var loaded = await _dbContext.StoredProcedureInputListAsync(
@@ -586,5 +602,94 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
         }
 
         return string.IsNullOrWhiteSpace(name) ? schema : $"{schema}.{name}";
+    }
+
+    private async Task PrefetchProcedureMetadataAsync(IReadOnlyList<ProcedureCollectionItem> items, CancellationToken cancellationToken)
+    {
+        if (items == null || items.Count == 0)
+        {
+            return;
+        }
+
+        var schemas = items
+            .Select(static i => i?.Descriptor?.Schema)
+            .Where(static s => !string.IsNullOrWhiteSpace(s))
+            .Select(static s => s!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (schemas.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var definitions = await _dbContext.StoredProcedureDefinitionsBySchemaAsync(schemas, cancellationToken).ConfigureAwait(false);
+            _definitionCache = definitions?
+                .Where(static d => !string.IsNullOrWhiteSpace(d.SchemaName) && !string.IsNullOrWhiteSpace(d.Name))
+                .ToDictionary(static d => BuildProcedureKey(d.SchemaName!, d.Name!)!, static d => d.Definition ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[snapshot-analyze] prefetch definitions failed: {ex.Message}");
+            _definitionCache = null;
+        }
+
+        try
+        {
+            var parameters = await _dbContext.StoredProcedureInputListBySchemaAsync(schemas, cancellationToken).ConfigureAwait(false);
+            if (parameters != null)
+            {
+                _parameterCache = new Dictionary<string, List<StoredProcedureInput>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var parameter in parameters)
+                {
+                    if (string.IsNullOrWhiteSpace(parameter.SchemaName) || string.IsNullOrWhiteSpace(parameter.StoredProcedureName))
+                    {
+                        continue;
+                    }
+
+                    var key = BuildProcedureKey(parameter.SchemaName, parameter.StoredProcedureName);
+                    if (key == null)
+                    {
+                        continue;
+                    }
+
+                    if (!_parameterCache.TryGetValue(key, out var list))
+                    {
+                        list = new List<StoredProcedureInput>();
+                        _parameterCache[key] = list;
+                    }
+
+                    list.Add(new StoredProcedureInput
+                    {
+                        Name = parameter.Name,
+                        IsNullable = parameter.IsNullable,
+                        SqlTypeName = parameter.SqlTypeName,
+                        MaxLength = parameter.MaxLength,
+                        IsOutput = parameter.IsOutput,
+                        IsTableType = parameter.IsTableType,
+                        UserTypeName = parameter.UserTypeName,
+                        UserTypeId = parameter.UserTypeId,
+                        UserTypeSchemaName = parameter.UserTypeSchemaName
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _console.Verbose($"[snapshot-analyze] prefetch parameters failed: {ex.Message}");
+            _parameterCache = null;
+        }
+    }
+
+    private static string? BuildProcedureKey(string? schema, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        return string.Concat(schema.Trim(), ".", name.Trim());
     }
 }

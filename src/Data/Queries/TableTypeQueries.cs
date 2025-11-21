@@ -5,6 +5,8 @@ namespace Xtraq.Data.Queries;
 
 internal static class TableTypeQueries
 {
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<int, List<Column>>> TableTypeColumnCache = new(StringComparer.OrdinalIgnoreCase);
+
     public static Task<List<TableType>> TableTypeListAsync(this DbContext context, string schemaList, CancellationToken cancellationToken)
     {
         var queryString = @"SELECT tt.user_type_id, tt.name, s.name AS schema_name
@@ -23,6 +25,18 @@ internal static class TableTypeQueries
 
     public static Task<List<Column>> TableTypeColumnListAsync(this DbContext context, int userTypeId, CancellationToken cancellationToken)
     {
+        var connectionKey = context.GetConnectionString();
+        if (!string.IsNullOrWhiteSpace(connectionKey))
+        {
+            var bucket = TableTypeColumnCache.GetOrAdd(connectionKey!, _ => new ConcurrentDictionary<int, List<Column>>());
+            if (bucket.TryGetValue(userTypeId, out var cached))
+            {
+                return Task.FromResult(cached);
+            }
+
+            return FetchAndCacheAsync(context, userTypeId, cancellationToken, bucket);
+        }
+
         var parameters = new List<SqlParameter> { new("@userTypeId", userTypeId) };
 
         const string queryString = @"SELECT c.name,
@@ -47,5 +61,40 @@ internal static class TableTypeQueries
             cancellationToken,
             telemetryOperation: "TableTypeQueries.TableTypeColumns",
             telemetryCategory: "Collector.TableTypes");
+    }
+
+    private static async Task<List<Column>> FetchAndCacheAsync(
+        DbContext context,
+        int userTypeId,
+        CancellationToken cancellationToken,
+        ConcurrentDictionary<int, List<Column>> bucket)
+    {
+        var parameters = new List<SqlParameter> { new("@userTypeId", userTypeId) };
+
+        const string queryString = @"SELECT c.name,
+                    CAST(c.is_nullable AS bit) AS is_nullable,
+                                    t.name AS system_type_name,
+                                    IIF(t.name LIKE 'nvarchar%', c.max_length / 2, c.max_length) AS max_length,
+                                    t_alias.name AS user_type_name,
+                                    s_alias.name AS user_type_schema_name,
+                                    CAST(c.precision AS int) AS precision,
+                                    CAST(c.scale AS int) AS scale
+                                FROM sys.table_types AS tt
+                                INNER JOIN sys.columns c ON c.object_id = tt.type_table_object_id
+                                INNER JOIN sys.types t ON t.system_type_id = c.system_type_id AND t.user_type_id = c.system_type_id
+                                LEFT JOIN sys.types AS t_alias ON t_alias.system_type_id = c.system_type_id AND t_alias.user_type_id = c.user_type_id AND t_alias.is_user_defined = 1 AND t_alias.is_table_type = 0
+                                LEFT JOIN sys.schemas AS s_alias ON s_alias.schema_id = t_alias.schema_id
+                                WHERE tt.user_type_id = @userTypeId
+                                ORDER BY c.column_id;";
+
+        var result = await context.ListAsync<Column>(
+            queryString,
+            parameters,
+            cancellationToken,
+            telemetryOperation: "TableTypeQueries.TableTypeColumns",
+            telemetryCategory: "Collector.TableTypes").ConfigureAwait(false);
+
+        bucket[userTypeId] = result;
+        return result;
     }
 }

@@ -11,6 +11,11 @@ public static class DebugOutputHelper
     private static bool _verboseMode = EnvironmentHelper.IsTrue("XTRAQ_VERBOSE") || LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Info);
 
     /// <summary>
+    /// Indicates whether verbose or debug output is currently enabled.
+    /// </summary>
+    public static bool IsVerboseEnabled => _debugMode || _verboseMode;
+
+    /// <summary>
     /// Write debug message only if debug mode is explicitly enabled.
     /// </summary>
     public static void WriteDebug(string message)

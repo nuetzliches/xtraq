@@ -70,6 +70,65 @@ internal static class StoredProcedureQueries
             telemetryCategory: "Collector.Dependencies");
     }
 
+    public static Task<List<StoredProcedureDefinition>> StoredProcedureDefinitionsBySchemaAsync(this DbContext context, IReadOnlyCollection<string>? schemas, CancellationToken cancellationToken)
+    {
+        var schemaFilter = BuildSchemaFilter(schemas);
+        var filterClause = string.IsNullOrWhiteSpace(schemaFilter) ? "o.type = N'P'" : $"o.type = N'P' AND s.name IN({schemaFilter})";
+
+        var queryString = $@"SELECT s.name AS schema_name, o.name, o.object_id AS id, m.definition
+                               FROM sys.objects AS o
+                               INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+                               INNER JOIN sys.sql_modules AS m ON m.object_id = o.object_id
+                               WHERE {filterClause}
+                               ORDER BY s.name, o.name;";
+
+        return context.ListAsync<StoredProcedureDefinition>(
+            queryString,
+            new List<SqlParameter>(),
+            cancellationToken,
+            telemetryOperation: "StoredProcedureQueries.DefinitionBulk",
+            telemetryCategory: "Collector.StoredProcedures");
+    }
+
+    public static Task<List<StoredProcedureInputBulk>> StoredProcedureInputListBySchemaAsync(this DbContext context, IReadOnlyCollection<string>? schemas, CancellationToken cancellationToken)
+    {
+        var schemaFilter = BuildSchemaFilter(schemas);
+        var filterClause = string.IsNullOrWhiteSpace(schemaFilter) ? "o.type = N'P'" : $"o.type = N'P' AND s.name IN({schemaFilter})";
+
+        const string baseQuery = @"SELECT
+    s.name AS schema_name,
+    o.name AS procedure_name,
+    p.name,
+    CAST(p.is_nullable AS bit) AS is_nullable,
+    t.name AS system_type_name,
+    IIF(t.name LIKE 'nvarchar%', p.max_length / 2, p.max_length) AS max_length,
+    CAST(p.is_output AS bit) AS is_output,
+    t1.is_table_type,
+    t1.name AS user_type_name,
+    t1s.name AS user_type_schema_name,
+    CAST(p.precision AS int) AS precision,
+    CAST(p.scale AS int) AS scale,
+    CAST(p.has_default_value AS bit) AS has_default_value,
+    p.parameter_id
+FROM sys.parameters AS p
+INNER JOIN sys.objects AS o ON o.object_id = p.object_id
+INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+LEFT OUTER JOIN sys.types t ON t.system_type_id = p.system_type_id AND t.user_type_id = p.system_type_id
+LEFT OUTER JOIN sys.types AS t1 ON t1.system_type_id = p.system_type_id AND t1.user_type_id = p.user_type_id
+LEFT OUTER JOIN sys.schemas AS t1s ON t1s.schema_id = t1.schema_id
+    WHERE {filterClause}
+    ORDER BY s.name, o.name, p.parameter_id;";
+
+        var queryString = baseQuery.Replace("{filterClause}", filterClause, StringComparison.Ordinal);
+
+        return context.ListAsync<StoredProcedureInputBulk>(
+            queryString,
+            new List<SqlParameter>(),
+            cancellationToken,
+            telemetryOperation: "StoredProcedureQueries.InputParametersBulk",
+            telemetryCategory: "Collector.StoredProcedures");
+    }
+
     public static async Task<StoredProcedureDefinition?> StoredProcedureDefinitionAsync(this DbContext context, string schemaName, string name, CancellationToken cancellationToken)
     {
         var sp = await context.ObjectAsync(schemaName, name, cancellationToken).ConfigureAwait(false);
@@ -217,5 +276,20 @@ internal static class StoredProcedureQueries
 
         bucket[tuple] = result;
         return result;
+    }
+
+    private static string? BuildSchemaFilter(IReadOnlyCollection<string>? schemas)
+    {
+        if (schemas == null || schemas.Count == 0)
+        {
+            return null;
+        }
+
+        var filtered = schemas
+            .Where(static s => !string.IsNullOrWhiteSpace(s))
+            .Select(static s => $"'{s.Replace("'", "''")}'")
+            .ToArray();
+
+        return filtered.Length == 0 ? null : string.Join(",", filtered);
     }
 }

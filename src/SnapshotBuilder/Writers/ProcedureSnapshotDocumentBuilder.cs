@@ -551,7 +551,7 @@ internal static class ProcedureSnapshotDocumentBuilder
             return null;
         }
 
-        var debugEnabled = EnvironmentHelper.IsTrue("XTRAQ_DEBUG_USER_TYPE_RESOLUTION");
+        var debugEnabled = EnvironmentHelper.IsTrue("XTRAQ_DEBUG_USER_TYPE_RESOLUTION") || DebugOutputHelper.IsVerboseEnabled;
 
         var typeRef = column.UserTypeRef;
         if (string.IsNullOrWhiteSpace(typeRef))
@@ -583,7 +583,7 @@ internal static class ProcedureSnapshotDocumentBuilder
                 {
                     if (debugEnabled)
                     {
-                        Console.WriteLine($"[writer-type-resolve] miss typeRef={typeRef} candidate={normalizedCandidate}");
+                        DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] miss typeRef={typeRef} candidate={normalizedCandidate}");
                     }
                     continue;
                 }
@@ -604,7 +604,7 @@ internal static class ProcedureSnapshotDocumentBuilder
 
                     if (debugEnabled)
                     {
-                        Console.WriteLine($"[writer-type-resolve] hit typeRef={typeRef} sqlType={formattedType}");
+                        DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] hit typeRef={typeRef} sqlType={formattedType}");
                     }
                     return formattedType;
                 }
@@ -614,7 +614,7 @@ internal static class ProcedureSnapshotDocumentBuilder
                 {
                     if (debugEnabled)
                     {
-                        Console.WriteLine($"[writer-type-resolve] empty-base typeRef={typeRef}");
+                        DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] empty-base typeRef={typeRef}");
                     }
                     continue;
                 }
@@ -633,7 +633,7 @@ internal static class ProcedureSnapshotDocumentBuilder
 
                 if (debugEnabled)
                 {
-                    Console.WriteLine($"[writer-type-resolve] base-hit typeRef={typeRef} baseType={baseType}");
+                    DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] base-hit typeRef={typeRef} baseType={baseType}");
                 }
                 return baseType;
             }
@@ -641,7 +641,7 @@ internal static class ProcedureSnapshotDocumentBuilder
             {
                 if (debugEnabled)
                 {
-                    Console.WriteLine($"[writer-type-resolve] error typeRef={typeRef}");
+                    DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] error typeRef={typeRef}");
                 }
                 // Ignore resolver failures and continue probing remaining roots.
             }
@@ -649,7 +649,7 @@ internal static class ProcedureSnapshotDocumentBuilder
 
         if (debugEnabled)
         {
-            Console.WriteLine($"[writer-type-resolve] exhausted typeRef={typeRef}");
+            DebugOutputHelper.WriteVerboseDebug($"[writer-type-resolve] exhausted typeRef={typeRef}");
         }
 
         return null;
