@@ -13,6 +13,11 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 
 /// <summary>
 /// Represents the contract for the stored procedure <c>sample.UserFind</c> including parameters, result sets and execution metadata.
@@ -122,6 +127,22 @@ public static class UserFindExtensions
 	}
 
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+/// <summary>Minimal API extension for '[sample].[UserFind]'.</summary>
+public static class UserFindRouteHandlerBuilderExtensions
+{
+    public static RouteHandlerBuilder WithUserFindProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<UserFindInput, UserFindResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input cancellationToken) => new ValueTask<UserFindResult>(
+                    UserFindExtensions.UserFindAsync(dbContext, input, cancellationToken))));
+    }
+}
+#endif
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
 public static class UserFindProcedure

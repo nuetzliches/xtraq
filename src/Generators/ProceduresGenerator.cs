@@ -850,9 +850,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     }
                     catch { }
                     // Align record type naming with existing tests:
-                    // always use NamePolicy.ResultSet(procPart, rs.Name).
+                    var jsonInfo = rs.JsonPayload;
+                    var isJson = jsonInfo != null;
+                    var isJsonArray = jsonInfo?.IsArray ?? false;
+                    var rootProp = string.IsNullOrWhiteSpace(jsonInfo?.RootProperty) ? null : jsonInfo!.RootProperty;
+                    var rsName = string.IsNullOrWhiteSpace(rootProp) ? rs.Name : rootProp;
+                    // always use NamePolicy.ResultSet(procPart, rsName).
                     // The unified aggregate stays NamePolicy.Result(procPart) so it no longer collides with the first set.
-                    string rsType = NamePolicy.ResultSet(procPart, rs.Name);
+                    string rsType = NamePolicy.ResultSet(procPart, rsName);
                     // Suffix correction is no longer required in the new schema
                     // Resolve alias-based property names first (required for JSON fallback handling)
                     var usedNames = new HashSet<string>(StringComparer.Ordinal);
@@ -874,9 +879,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var allMissingCondition = rs.Fields.Count > 0 ? string.Join(" && ", rs.Fields.Select((f, i) => $"o{i} < 0")) : "false"; // applies only to non-JSON sets
                     // Use ReturnsJson flags from the snapshot (result set model exposes the properties)
                     // When ReturnsJson is true we deserialize a single NVARCHAR column produced by FOR JSON.
-                    var jsonInfo = rs.JsonPayload;
-                    var isJson = jsonInfo != null;
-                    var isJsonArray = jsonInfo?.IsArray ?? false;
                     string ordinalDeclInline = string.Join(" ", ordinalAssignments); // classic mapping with cached ordinals (debug dump removed)
                     string ordinalDeclBlock = ordinalAssignments.Count == 0
                         ? string.Empty
@@ -891,7 +893,19 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var fieldExprs = string.Join(", ", effectiveFields.Select((f, idx) => MaterializeFieldExpressionCached(f, idx)));
                     var streamFieldExprs = isJson ? string.Empty : ConvertReaderVariable(fieldExprs);
                     // Preserve property naming pattern Result, Result1, Result2 ... so existing tests stay unchanged
-                    string propName = rsIdx == 0 ? "Result" : "Result" + rsIdx.ToString();
+                    string propName;
+                    if (isJson && !string.IsNullOrWhiteSpace(rootProp))
+                    {
+                        propName = NamePolicy.Sanitize(rootProp!);
+                        if (string.IsNullOrWhiteSpace(propName))
+                        {
+                            propName = rsIdx == 0 ? "Result" : "Result" + rsIdx.ToString();
+                        }
+                    }
+                    else
+                    {
+                        propName = rsIdx == 0 ? "Result" : "Result" + rsIdx.ToString();
+                    }
                     var initializerExpr = $"rs.Length > {rsIdx} && rs[{rsIdx}] is object[] rows{rsIdx} ? Array.ConvertAll(rows{rsIdx}, o => ({rsType})o).ToList() : (rs.Length > {rsIdx} && rs[{rsIdx}] is System.Collections.Generic.List<object> list{rsIdx} ? Array.ConvertAll(list{rsIdx}.ToArray(), o => ({rsType})o).ToList() : Array.Empty<{rsType}>())";
                     string propType;
                     string propDefault;
@@ -961,13 +975,16 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     if (isJson)
                     {
                         var sbInit = "var __sb = new System.Text.StringBuilder();\nwhile (await r.ReadAsync(ct).ConfigureAwait(false))\n{\n    if (!r.IsDBNull(0))\n    {\n        __sb.Append(r.GetString(0));\n    }\n}\nvar __raw = __sb.Length > 0 ? __sb.ToString() : null;";
+                        var rootUnwrap = string.IsNullOrWhiteSpace(rootProp)
+                            ? string.Empty
+                            : $"if (__raw != null)\n{{\n    try\n    {{\n        using var __doc = System.Text.Json.JsonDocument.Parse(__raw);\n        if (__doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object && __doc.RootElement.TryGetProperty(\"{rootProp}\", out var __root))\n        {{\n            __raw = __root.GetRawText();\n        }}\n    }}\n    catch {{ }}\n}}\n";
                         if (isJsonArray)
                         {
-                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, JsonSupport.Options);\n        if (__parsed is not null)\n        {{\n            foreach (var __entry in __parsed)\n            {{\n                if (__entry is {{ }} __value)\n                {{\n                    __items.Add(__value);\n                }}\n            }}\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\n{rootUnwrap}var __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<{rsType}?>>(__raw, JsonSupport.Options);\n        if (__parsed is not null)\n        {{\n            foreach (var __entry in __parsed)\n            {{\n                if (__entry is {{ }} __value)\n                {{\n                    __items.Add(__value);\n                }}\n            }}\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
                         }
                         else
                         {
-                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\nvar __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, JsonSupport.Options);\n        if (__parsed is {{ }} __value)\n        {{\n            __items.Add(__value);\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
+                            bodyBlock = $"var list = new System.Collections.Generic.List<object>();\n{sbInit}\n{rootUnwrap}var __items = new System.Collections.Generic.List<{rsType}>();\nif (__raw != null)\n{{\n    try\n    {{\n        var __parsed = System.Text.Json.JsonSerializer.Deserialize<{rsType}?>(__raw, JsonSupport.Options);\n        if (__parsed is {{ }} __value)\n        {{\n            __items.Add(__value);\n        }}\n    }}\n    catch\n    {{\n    }}\n}}\nlist.Add(JsonResultEnvelope<{rsType}>.Create(__items, __raw));\nreturn list;";
                         }
                     }
                     else
@@ -1197,7 +1214,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var rootFieldsBlock = string.Join(Environment.NewLine, rootParams);
                         rsMeta.Add(new
                         {
-                            Name = rs.Name,
+                            Name = rsName,
                             TypeName = rsType,
                             PropName = propName,
                             PropType = propType,
@@ -1353,7 +1370,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var hasOrdinalDecls = ordinalAssignments.Count > 0;
                         rsMeta.Add(new
                         {
-                            Name = rs.Name,
+                            Name = rsName,
                             TypeName = rsType,
                             PropName = propName,
                             PropType = propType,
@@ -1400,7 +1417,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         }));
                         rsMeta.Add(new
                         {
-                            Name = rs.Name,
+                            Name = rsName,
                             TypeName = rsType,
                             PropName = propName,
                             PropType = propType,

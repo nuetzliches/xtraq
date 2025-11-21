@@ -13,6 +13,11 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 
 /// <summary>
 /// Represents the contract for the stored procedure <c>sample.OrderListAsJson</c> including parameters, result sets and execution metadata.
@@ -113,6 +118,22 @@ public static class OrderListAsJsonExtensions
 	}
 
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+/// <summary>Minimal API extension for '[sample].[OrderListAsJson]'.</summary>
+public static class OrderListAsJsonRouteHandlerBuilderExtensions
+{
+    public static RouteHandlerBuilder WithOrderListAsJsonProcedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<OrderListAsJsonInput, OrderListAsJsonResult>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, input cancellationToken) => new ValueTask<OrderListAsJsonResult>(
+                    OrderListAsJsonExtensions.OrderListAsJsonAsync(dbContext, input, cancellationToken))));
+    }
+}
+#endif
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
 public static class OrderListAsJsonProcedure
