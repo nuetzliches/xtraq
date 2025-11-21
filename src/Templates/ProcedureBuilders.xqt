@@ -280,23 +280,6 @@ public static class ProcedureRouteHandlerBuilderExtensions
     }
 }
 
-public static class ProcedureRouteHandlerScaffolding
-{
-{{#each Procedures as procedure}}
-    /// <summary>Attaches the Minimal API pipeline for '{{ procedure.DisplayName }}'.</summary>
-    public static RouteHandlerBuilder {{ procedure.MethodName }}(this RouteHandlerBuilder builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.WithProcedure<{{ procedure.InputTypeName }}, {{ procedure.ResultTypeName }}>(
-            static pipeline => pipeline.WithExecutor(
-                static (dbContext, input, cancellationToken) => new ValueTask<{{ procedure.ResultTypeName }}>(
-                    {{ procedure.ExtensionTypeName }}.{{ procedure.ProcedureMethodName }}(dbContext, input, cancellationToken))));
-    }
-
-{{/each}}
-}
-
 #endif
 
 public interface IProcedureExecutionContext

@@ -3,6 +3,11 @@
 namespace {{ Namespace }};
 
 {{ UsingDirectives }}
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 
 /// <summary>
 /// Represents the contract for the stored procedure <c>{{ Schema }}.{{ Name }}</c> including parameters, result sets and execution metadata.
@@ -155,6 +160,22 @@ public static class {{ ProcedureTypeName }}Extensions
 
 {{/if}}{{/each}}
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+/// <summary>Minimal API extension for '{{ ProcedureFullName }}'.</summary>
+public static class {{ ProcedureTypeName }}RouteHandlerBuilderExtensions
+{
+    public static RouteHandlerBuilder With{{ ProcedureTypeName }}Procedure(this RouteHandlerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithProcedure<{{#if HasInput}}{{ InputTypeName }}{{else}}object?{{/if}}, {{ UnifiedResultTypeName }}>(
+            static pipeline => pipeline.WithExecutor(
+                static (dbContext, {{#if HasInput}}input{{else}}_,{{/if}} cancellationToken) => new ValueTask<{{ UnifiedResultTypeName }}>(
+                    {{ ProcedureTypeName }}Extensions.{{ ProcedureTypeName }}Async(dbContext{{#if HasInput}}, input{{/if}}, cancellationToken))));
+    }
+}
+#endif
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
 public static class {{ ProcedureTypeName }}Procedure
