@@ -1,6 +1,4 @@
-[data-content-id="landing/index.md"]
-  .relative.isolate
-  > .w-full.max-w-\(--ui-container\) {
+.landing-page-hero > .w-full.max-w-\(--ui-container\) {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }

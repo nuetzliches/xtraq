@@ -8,7 +8,7 @@ seo:
   description: Snapshot your database, generate typed clients, and keep .NET applications aligned with your stored procedures—no hand-written plumbing required.
 ---
 
-::u-page-hero{class="py-12 sm:py-16 lg:py-20"}
+::u-page-hero{class="landing-page-hero py-12 sm:py-16 lg:py-20"}
 #title
 Stored procedure automation for .NET
 
@@ -181,5 +181,3 @@ Join the community, track releases, and deploy the global tool from the platform
   ::
 
 :::
-
-::
