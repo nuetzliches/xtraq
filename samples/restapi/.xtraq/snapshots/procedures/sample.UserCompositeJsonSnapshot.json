@@ -1,0 +1,130 @@
+{
+  "Schema": "sample",
+  "Name": "UserCompositeJsonSnapshot",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "IsNullable": true
+    },
+    {
+      "Name": "RecentPaymentCount",
+      "TypeRef": "sys.int",
+      "IsNullable": true
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "ProfileJson",
+          "Alias": "ProfileJson",
+          "SourceColumn": "@UserProfileJson",
+          "TypeRef": "sys.nvarchar"
+        }
+      ]
+    },
+    {
+      "ReturnsJson": true,
+      "ReturnsJsonArray": true,
+      "JsonIncludeNullValues": true,
+      "Columns": [
+        {
+          "Name": "ContactId",
+          "SourceColumn": "ContactId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "Email",
+          "SourceColumn": "Email",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 320
+        },
+        {
+          "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Preferred",
+          "SourceColumn": "Preferred",
+          "TypeRef": "sys.bit"
+        },
+        {
+          "Name": "LastInteractionUtc",
+          "SourceColumn": "LastInteractionUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
+        },
+        {
+          "Name": "RecentPaymentsJson",
+          "Alias": "RecentPaymentsJson",
+          "SourceColumn": "PaymentId",
+          "ReturnsJson": true,
+          "ReturnsJsonArray": true,
+          "JsonIncludeNullValues": true,
+          "IsNullable": true,
+          "Columns": [
+            {
+              "Name": "PaymentId",
+              "SourceColumn": "PaymentId",
+              "TypeRef": "sys.uniqueidentifier"
+            },
+            {
+              "Name": "Gateway",
+              "SourceColumn": "Gateway",
+              "TypeRef": "sys.nvarchar",
+              "MaxLength": 50
+            },
+            {
+              "Name": "Amount",
+              "SourceColumn": "Amount",
+              "TypeRef": "sys.decimal",
+              "MaxLength": 9
+            },
+            {
+              "Name": "CapturedAtUtc",
+              "SourceColumn": "CapturedAtUtc",
+              "TypeRef": "sys.datetime2",
+              "IsNullable": true
+            },
+            {
+              "Name": "PropertiesJson",
+              "Alias": "PropertiesJson",
+              "SourceColumn": "Properties",
+              "ReturnsJson": true,
+              "ReturnsUnknownJson": true,
+              "IsNullable": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ReturnsJson": true,
+      "ReturnsJsonArray": true,
+      "Columns": [
+        {
+          "Name": "OrderId",
+          "SourceColumn": "OrderId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "OrderNumber",
+          "SourceColumn": "OrderNumber",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 40
+        },
+        {
+          "Name": "MetadataJson",
+          "Alias": "MetadataJson",
+          "SourceColumn": "Metadata",
+          "ReturnsJson": true,
+          "ReturnsUnknownJson": true,
+          "IsNullable": true
+        }
+      ]
+    }
+  ]
+}

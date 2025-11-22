@@ -1,0 +1,14 @@
+{
+  "Schema": "sample",
+  "Name": "WriteAuditLogEntries",
+  "Parameters": [
+    {
+      "Name": "Entries",
+      "TypeRef": "shared.AuditLogEntryTableType",
+      "TableTypeRef": "shared.AuditLogEntryTableType",
+      "TableTypeSchema": "shared",
+      "TableTypeName": "AuditLogEntryTableType"
+    }
+  ],
+  "ResultSets": []
+}

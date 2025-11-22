@@ -90,10 +90,12 @@ scripts=(
   "/sql/procedures/OrderListAsJson.sql"
   "/sql/procedures/OrderListByUserAsJson.sql"
   "/sql/procedures/UserOrderHierarchyJson.sql"
+  "/sql/procedures/UserCompositeJsonSnapshot.sql"
   "/sql/procedures/SyncUserContacts.sql"
   "/sql/procedures/UpdateUserBio.sql"
   "/sql/procedures/ImportOrders.sql"
   "/sql/procedures/OrderStatusReport.sql"
+  "/sql/procedures/WriteAuditLogEntries.sql"
 )
 
 for script in "${scripts[@]}"; do
