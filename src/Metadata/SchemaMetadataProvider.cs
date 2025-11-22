@@ -319,7 +319,13 @@ namespace Xtraq.Metadata
                         var maxLen = ip.GetPropertyOrDefaultInt("MaxLength");
                         var precision = ip.GetPropertyOrDefaultInt("Precision");
                         var scale = ip.GetPropertyOrDefaultInt("Scale");
+                        var hasDefaultValue = ip.GetPropertyOrDefaultBoolStrict("HasDefaultValue");
                         var isNullable = ip.GetPropertyOrDefaultBoolStrict("IsNullable");
+                        if (hasDefaultValue)
+                        {
+                            // Allow omission on the client when the server defines a default.
+                            isNullable = true;
+                        }
                         var isOutput = ip.GetPropertyOrDefaultBool("IsOutput");
                         var explicitTableType = ip.GetPropertyOrDefaultBool("IsTableType");
                         var tableTypeRefRaw = ip.GetPropertyOrDefault("TableTypeRef");
@@ -381,7 +387,7 @@ namespace Xtraq.Metadata
                             if (!string.IsNullOrWhiteSpace(ttSchema)) attrs.Add($"[TableTypeSchema({ttSchema})]");
                             var sqlIdentifier = string.IsNullOrWhiteSpace(typeRef) ? ttName! : typeRef!;
                             var clrType = $"IReadOnlyList<{pascal}>?";
-                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs);
+                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs, HasDefaultValue: hasDefaultValue);
 
                             var referenceSplit = TableTypeRefFormatter.Split(typeRef ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName));
                             var referenceSchema = string.IsNullOrWhiteSpace(ttSchema)
@@ -404,7 +410,7 @@ namespace Xtraq.Metadata
                         else
                         {
                             var clr = MapSqlToClr(sqlType, isNullable);
-                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen);
+                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen, HasDefaultValue: hasDefaultValue);
                         }
 
                         if (isOutput) outputParams.Add(fd); else inputParams.Add(fd);

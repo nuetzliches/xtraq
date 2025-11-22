@@ -22,6 +22,18 @@ public static class ProcedurePipelineExtensions
         return ProcedureCallPipeline<TInput>.Create(dbContext, input);
     }
 
+    public static async ValueTask<ProcedureCallPipeline<TInput>> ConfigureProcedure<TRequest, TInput>(
+        this IXtraqDbContext dbContext,
+        TRequest request,
+        Func<TRequest, IXtraqDbContext, CancellationToken, ValueTask<TInput>> mapper,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(mapper);
+        var input = await mapper(request, dbContext, cancellationToken).ConfigureAwait(false);
+        return ProcedureCallPipeline<TInput>.Create(dbContext, input);
+    }
+
     public static ProcedureCallExecution<TInput, TResult> BuildProcedure<TInput, TResult>(
         this IXtraqDbContext dbContext,
         TInput input,
@@ -29,6 +41,20 @@ public static class ProcedurePipelineExtensions
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(executor);
+        return ProcedureCallPipeline<TInput>.Create(dbContext, input).WithExecutor(executor);
+    }
+
+    public static async ValueTask<ProcedureCallExecution<TInput, TResult>> BuildProcedure<TRequest, TInput, TResult>(
+        this IXtraqDbContext dbContext,
+        TRequest request,
+        Func<TRequest, IXtraqDbContext, CancellationToken, ValueTask<TInput>> mapper,
+        Func<IXtraqDbContext, TInput, CancellationToken, ValueTask<TResult>> executor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(mapper);
+        ArgumentNullException.ThrowIfNull(executor);
+        var input = await mapper(request, dbContext, cancellationToken).ConfigureAwait(false);
         return ProcedureCallPipeline<TInput>.Create(dbContext, input).WithExecutor(executor);
     }
 
@@ -40,6 +66,18 @@ public static class ProcedurePipelineExtensions
         return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input);
     }
 
+    public static async ValueTask<ProcedureStreamPipeline<TInput, TRow>> ConfigureProcedureStream<TRequest, TInput, TRow>(
+        this IXtraqDbContext dbContext,
+        TRequest request,
+        Func<TRequest, IXtraqDbContext, CancellationToken, ValueTask<TInput>> mapper,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(mapper);
+        var input = await mapper(request, dbContext, cancellationToken).ConfigureAwait(false);
+        return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input);
+    }
+
     public static ProcedureStreamExecution<TInput, TRow, TUpstream, TUpstream> BuildProcedureStream<TInput, TRow, TUpstream>(
         this IXtraqDbContext dbContext,
         TInput input,
@@ -47,6 +85,20 @@ public static class ProcedurePipelineExtensions
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(streamExecutor);
+        return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input).WithExecutor(streamExecutor);
+    }
+
+    public static async ValueTask<ProcedureStreamExecution<TInput, TRow, TUpstream, TUpstream>> BuildProcedureStream<TRequest, TInput, TRow, TUpstream>(
+        this IXtraqDbContext dbContext,
+        TRequest request,
+        Func<TRequest, IXtraqDbContext, CancellationToken, ValueTask<TInput>> mapper,
+        Func<IXtraqDbContext, TInput, Func<TRow, CancellationToken, ValueTask>, CancellationToken, ValueTask<TUpstream>> streamExecutor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(mapper);
+        ArgumentNullException.ThrowIfNull(streamExecutor);
+        var input = await mapper(request, dbContext, cancellationToken).ConfigureAwait(false);
         return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input).WithExecutor(streamExecutor);
     }
 }

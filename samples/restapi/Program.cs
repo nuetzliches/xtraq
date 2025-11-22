@@ -23,7 +23,7 @@ builder.Services.AddXtraqDbContext(options =>
             var sub = accessor?.HttpContext?.User?.FindFirstValue("sub");
             var parsed = int.TryParse(sub, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
             return ValueTask.FromResult(parsed);
-        }, "sample.UserCompositeJsonSnapshot")
+        })
         .BindTable<AuditLogEntryTableType>("@Entries", (services, _) =>
         {
             var accessor = services?.GetService<IHttpContextAccessor>();
@@ -135,6 +135,30 @@ app.MapPost("/api/users/{userId:int}/orders", async (int userId, CreateOrderRequ
     }
 })
 .WithName("CreateOrder");
+
+// Demo: request DTO + ambient parameter binding (UserId via claims, RecentPaymentCount via query)
+app.MapGet("/api/users/snapshot", async (int? recentPaymentCount, IXtraqDbContext db, CancellationToken ct) =>
+{
+    var request = new UserCompositeJsonSnapshotRequest { RecentPaymentCount = recentPaymentCount };
+    var result = await db.UserCompositeJsonSnapshotAsync(request, ct).ConfigureAwait(false);
+    return Results.Ok(result);
+})
+.WithName("UserCompositeSnapshot");
+
+// Demo: TVP request DTO + mapper + validation
+app.MapPost("/api/audit-log", async (WriteAuditLogEntriesRequest request, IXtraqDbContext db, CancellationToken ct) =>
+{
+    if (request?.Entries is null || request.Entries.Count == 0)
+    {
+        return Results.BadRequest(new { error = "At least one audit entry is required." });
+    }
+
+    var result = await db.WriteAuditLogEntriesAsync(request, ct).ConfigureAwait(false);
+    return result.Success
+        ? Results.Ok(new { inserted = request.Entries.Count })
+        : Results.Problem("Failed to write audit entries");
+})
+.WithName("AuditLogBulk");
 
 app.Run();
 

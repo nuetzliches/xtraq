@@ -158,10 +158,14 @@ internal static class ParameterBindingEngine
         var options = provider.ParameterBindings;
         if (options == null || options.Bindings.Count == 0) return;
 
-        var procedureName = NormalizeProcedureName(cmd?.CommandText);
+        if (cmd is null) return;
+        var parameters = cmd.Parameters;
+        if (parameters == null) return;
+
+        var procedureName = NormalizeProcedureName(cmd.CommandText);
         foreach (var binding in options.Bindings)
         {
-            var parameter = FindParameter(cmd.Parameters, binding.Name);
+            var parameter = FindParameter(parameters, binding.Name);
             if (parameter == null) continue;
             if (HasValue(parameter.Value)) continue;
             if (binding.AppliesTo != null && !binding.AppliesTo(procedureName)) continue;
@@ -247,6 +251,64 @@ internal static class ParameterBindingEngine
                           .Replace("]", string.Empty, StringComparison.Ordinal)
                           .Trim();
         return cleaned.StartsWith(".", StringComparison.Ordinal) ? cleaned[1..] : cleaned;
+    }
+
+    public static async ValueTask<object?> ResolveValueAsync(string procedureName, string parameterName, bool isTableType, object? currentValue, IXtraqParameterBindingProvider? provider, CancellationToken cancellationToken)
+    {
+        if (provider == null) return currentValue;
+        var options = provider.ParameterBindings;
+        if (options == null || options.Bindings.Count == 0) return currentValue;
+        if (HasValue(currentValue)) return currentValue;
+
+        var normalizedProcedure = NormalizeProcedureName(procedureName);
+        var normalizedParameter = NormalizeParameterName(parameterName);
+
+        foreach (var binding in options.Bindings)
+        {
+            if (!ParameterNameEquals(binding.Name, normalizedParameter)) continue;
+            if (binding.AppliesTo != null && !binding.AppliesTo(normalizedProcedure)) continue;
+
+            try
+            {
+                using var cmd = CreatePlaceholderCommand(procedureName, parameterName, isTableType, currentValue);
+                var resolved = await binding.Resolver(new ParameterBindingContext(provider.Services, cmd, null, cancellationToken)).ConfigureAwait(false);
+                if (resolved is not null)
+                {
+                    return resolved;
+                }
+            }
+            catch
+            {
+                // Ignore resolver failures during request mapping; execution-time binding will still run.
+            }
+        }
+
+        return currentValue;
+    }
+
+    private static SqlCommand CreatePlaceholderCommand(string? procedureName, string parameterName, bool isTableType, object? currentValue)
+    {
+        var cmd = new SqlCommand
+        {
+            CommandText = procedureName ?? string.Empty
+        };
+        var prm = new SqlParameter(parameterName, isTableType ? SqlDbType.Structured : SqlDbType.Variant)
+        {
+            Value = currentValue ?? DBNull.Value
+        };
+        cmd.Parameters.Add(prm);
+        return cmd;
+    }
+
+    private static string NormalizeParameterName(string? name)
+    {
+        return string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim().TrimStart('@');
+    }
+
+    private static bool ParameterNameEquals(string? candidate, string target)
+    {
+        if (string.IsNullOrWhiteSpace(candidate) || string.IsNullOrWhiteSpace(target)) return false;
+        return NormalizeParameterName(candidate).Equals(NormalizeParameterName(target), StringComparison.OrdinalIgnoreCase);
     }
 }
 

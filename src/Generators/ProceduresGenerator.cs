@@ -220,7 +220,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         !existing.Contains("ReaderUtil", StringComparison.Ordinal) ||
                         !existing.Contains("StreamResultSetAsync", StringComparison.Ordinal) ||
                         !existing.Contains("IXtraqProcedureInterceptorProvider", StringComparison.Ordinal) ||
-                        !existing.Contains("IXtraqParameterBindingProvider", StringComparison.Ordinal))
+                        !existing.Contains("IXtraqParameterBindingProvider", StringComparison.Ordinal) ||
+                        !existing.Contains("ResolveValueAsync", StringComparison.Ordinal))
                     {
                         write = true;
                     }
@@ -480,6 +481,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
             // Align with existing tests expecting <Proc>Result as unified aggregate type
             var unifiedResultTypeName = NamePolicy.Result(procPart);
             var inputTypeName = NamePolicy.Input(procPart);
+            var requestTypeName = NamePolicy.Request(procPart);
             var outputTypeName = NamePolicy.Output(procPart);
             // JSON type-correction tracking for this procedure (outside the template block so it stays available later)
             var jsonTypeCorrections = new List<string>();
@@ -1467,6 +1469,20 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                 // Parameters meta
                 var tableTypeNames = new HashSet<string>(proc.TableTypeParameters.Select(p => p.ParameterName), StringComparer.OrdinalIgnoreCase);
+                var requestParameters = proc.InputParameters.Select((p, i) => new
+                {
+                    Name = p.Name,
+                    PropertyName = p.PropertyName,
+                    RequestClrType = BuildRequestClrType(p.ClrType),
+                    InputClrType = p.ClrType,
+                    IsNullable = p.IsNullable,
+                    HasDefaultValue = p.HasDefaultValue ?? false,
+                    IsTableType = tableTypeNames.Contains(p.Name),
+                    ElementType = ResolveTableElementType(p.ClrType),
+                    IsValueType = LooksLikeValueType(p.ClrType),
+                    InputArgument = BuildInputArgument(p, tableTypeNames.Contains(p.Name)),
+                    Comma = i == proc.InputParameters.Count - 1 ? string.Empty : ","
+                }).ToList();
                 var paramLines = new List<string>();
                 foreach (var ip in proc.InputParameters)
                 {
@@ -1511,6 +1527,9 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     OutputTypeName = outputTypeName,
                     PlanTypeName = procedureTypeName + "Plan",
                     InputTypeName = inputTypeName,
+                    RequestTypeName = requestTypeName,
+                    RequestParameters = requestParameters,
+                    EnableParameterBinding = enableParameterBinding,
                     ParameterLines = paramLines,
                     EnableParameterBindingArgument = enableParameterBinding ? string.Empty : ", enableParameterBinding: false",
                     InputAssignments = proc.InputParameters.Select(ip =>
@@ -1896,6 +1915,72 @@ internal sealed class ProceduresGenerator : GeneratorBase
         {
             return null;
         }
+    }
+
+    private static string BuildRequestClrType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType)) return clrType;
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal)) return trimmed;
+        return trimmed + "?";
+    }
+
+    private static string ResolveTableElementType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType)) return "object";
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+        var lastLt = trimmed.LastIndexOf('<');
+        var lastGt = trimmed.LastIndexOf('>');
+        if (lastLt >= 0 && lastGt > lastLt)
+        {
+            return trimmed.Substring(lastLt + 1, lastGt - lastLt - 1);
+        }
+        if (trimmed.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return trimmed[..^2];
+        }
+        return trimmed;
+    }
+
+    private static bool LooksLikeValueType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType)) return false;
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+        var genericIdx = trimmed.IndexOf('<');
+        if (genericIdx >= 0)
+        {
+            trimmed = trimmed.Substring(0, genericIdx);
+        }
+        var baseName = trimmed.Split('.').Last();
+        return baseName switch
+        {
+            "int" or "long" or "short" or "decimal" or "double" or "float" or "bool" or "byte" or "sbyte" or "uint" or "ulong" or "ushort" or "char" or "DateTime" or "DateTimeOffset" or "Guid" or "TimeSpan" => true,
+            _ => false
+        };
+    }
+
+    private static string BuildInputArgument(FieldDescriptor parameter, bool isTableType)
+    {
+        var variable = parameter.PropertyName;
+        if (parameter.IsNullable || isTableType)
+        {
+            return variable;
+        }
+
+        if (LooksLikeValueType(parameter.ClrType))
+        {
+            return $"{variable} ?? default";
+        }
+
+        return $"{variable} ?? default!";
     }
 
     private static string ToPascalCase(string input)

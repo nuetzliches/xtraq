@@ -21,6 +21,7 @@ namespace Xtraq.Metadata;
 /// <param name="JsonElementClrType">The CLR type used for JSON element projections.</param>
 /// <param name="JsonElementSqlType">The SQL type used when JSON columns are materialized as JSON elements.</param>
 /// <param name="JsonIncludeNullValues">Indicates whether JSON serialization should include null values.</param>
+/// <param name="HasDefaultValue">Indicates whether the parameter has a database-side default value.</param>
 public sealed record FieldDescriptor(
     string Name,
     string PropertyName,
@@ -38,6 +39,7 @@ public sealed record FieldDescriptor(
     bool? ReturnsUnknownJson = null,
     string? JsonElementClrType = null,
     string? JsonElementSqlType = null,
-    bool? JsonIncludeNullValues = null
+    bool? JsonIncludeNullValues = null,
+    bool? HasDefaultValue = null
 );
 

@@ -17,6 +17,11 @@ description: Tracking upcoming work and temporary deferrals.
 
 - [x] Update `src\Configuration\Constants.cs` and `src\Configuration\TargetFrameworkEnum.cs` to set .NET 10.0 as the default target framework for new projects and remove legacy frameworks from the enum. _(Default now targets net10.0; legacy entries trimmed to net8.0/net10.0 coverage.)_
 
+## Parameter Binding & Defaults
+
+- [x] Snapshot `HasDefaultValue` flags enable nullable request/input generation so DB defaults apply when callers omit parameters; documented under Parameter Binding.
+- [x] Request DTO overloads exist for call and stream helpers plus fluent pipelines; Minimal API and parameter-binding docs updated.
+
 ## ResultSet Naming
 
 Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and the streaming helper surface (`ProcedureExecutor.StreamResultSetAsync` plus generated `StreamResult...Async` wrappers). The checklist below captures what landed during the naming work and helps track any follow-up tasks.
@@ -132,7 +137,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings. _(Prototype class removed; command wiring now flows through the System.CommandLine host only.)_
 - [x] Introduce leveled CLI summaries (default info + optional verbose) and align telemetry payloads with the new structure, validated by CLI E2E tests. _(Summaries jetzt kompakt ohne Charts; Details haengen an `--verbose`.)_
 - [x] Publish a helper catalog capturing canonical utility types (logging, env, console, cache) and guidance to avoid redundant helpers. _(See `/meta/helper-catalog`.)_
-- [ ] Parameter Binding Abstraction: Resolver-Signatur von `HttpContext` entkoppeln (`Func<IServiceProvider, HttpContext?, CancellationToken, ValueTask<T>>`) damit File-/DB-/Queue-Sourcen und non-HTTP-Hosts bedient werden können.
-- [ ] Async-Binder (mit Cancellation) als first-class citizen für Secrets/File/DB-Zugriffe unterstützen.
-- [ ] UDTT-Binder an dieselbe Abstraktion hängen (`ITableType`/`IEnumerable<Row>`), inkl. DI-Registrierung statt HTTP-only Quellen.
-- [ ] Defaults und Fallbacks dokumentieren (Claims/HttpContext vorhanden vs. nicht vorhanden).
+- [x] Parameter Binding Abstraction: decouple resolver signature from `HttpContext` (`Func<IServiceProvider, HttpContext?, CancellationToken, ValueTask<T>>`) so file/DB/queue sources and non-HTTP hosts work. _(Resolver already take `IServiceProvider` + `CancellationToken`; `HttpContext` remains optional via accessor.)_
+- [x] Make async binders (with cancellation) first-class for secrets/file/DB lookups. _(BindScalar/BindTable support async `ValueTask` resolvers with cancellation.)_
+- [x] Attach UDTT binders to the same abstraction (`ITableType`/`IEnumerable<Row>`), including DI registration instead of HTTP-only sources. _(BindTable accepts IEnumerable/async sources; table-valued parameters hydrate via the same binding pipeline.)_
+- [x] Document defaults/fallbacks for missing ambient data (claims/HttpContext absent vs present). _(See Parameter Binding reference.)_

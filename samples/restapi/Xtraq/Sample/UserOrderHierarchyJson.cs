@@ -156,6 +156,7 @@ internal static partial class UserOrderHierarchyJsonPlan
 /// <summary>Convenience extension for executing '[sample].[UserOrderHierarchyJson]' via an <see cref="IXtraqDbContext"/>.</summary>
 public static class UserOrderHierarchyJsonExtensions
 {
+
 	public static async Task<UserOrderHierarchyJsonResult> UserOrderHierarchyJsonAsync(this IXtraqDbContext db, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -174,8 +175,10 @@ public static class UserOrderHierarchyJsonRouteHandlerBuilderExtensions
 
         return builder.WithProcedure<object?, UserOrderHierarchyJsonResult>(
             static pipeline => pipeline.WithExecutor(
-                static (dbContext, _, cancellationToken) => new ValueTask<UserOrderHierarchyJsonResult>(
-                    UserOrderHierarchyJsonExtensions.UserOrderHierarchyJsonAsync(dbContext, cancellationToken))));
+                static async ValueTask<UserOrderHierarchyJsonResult> (dbContext, _, cancellationToken) =>
+                {
+                    return await UserOrderHierarchyJsonExtensions.UserOrderHierarchyJsonAsync(dbContext, cancellationToken).ConfigureAwait(false);
+                }));
     }
 }
 #endif

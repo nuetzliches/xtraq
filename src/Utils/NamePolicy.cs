@@ -10,6 +10,7 @@ internal static class NamePolicy
     internal static string Input(string operation) => Sanitize(operation) + "Input";
     internal static string Output(string operation) => Sanitize(operation) + "Output";
     internal static string Result(string operation) => Sanitize(operation) + "Result";
+    internal static string Request(string operation) => Sanitize(operation) + "Request";
     internal static string Procedure(string operation) => Sanitize(operation);
     // New unified result naming: Each result set becomes an inline record inside <Proc>Result.cs
     // For internal referencing we still need a deterministic type name per set.
