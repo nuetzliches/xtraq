@@ -219,7 +219,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         !existing.Contains("TvpHelper", StringComparison.Ordinal) ||
                         !existing.Contains("ReaderUtil", StringComparison.Ordinal) ||
                         !existing.Contains("StreamResultSetAsync", StringComparison.Ordinal) ||
-                        !existing.Contains("IXtraqProcedureInterceptorProvider", StringComparison.Ordinal))
+                        !existing.Contains("IXtraqProcedureInterceptorProvider", StringComparison.Ordinal) ||
+                        !existing.Contains("IXtraqParameterBindingProvider", StringComparison.Ordinal))
                     {
                         write = true;
                     }
@@ -1465,11 +1466,11 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 var usingBlock = string.Join("\n", usingSet.OrderBy(u => u));
 
                 // Parameters meta
+                var tableTypeNames = new HashSet<string>(proc.TableTypeParameters.Select(p => p.ParameterName), StringComparer.OrdinalIgnoreCase);
                 var paramLines = new List<string>();
                 foreach (var ip in proc.InputParameters)
                 {
-                    var isTableType = ip.Attributes != null && ip.Attributes.Any(a => a.StartsWith("[TableType]", StringComparison.Ordinal));
-                    if (isTableType)
+                    if (tableTypeNames.Contains(ip.Name))
                     {
                         // Use Object DbType placeholder; binder will override with SqlDbType.Structured
                         var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
@@ -1485,6 +1486,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                 // Output factory args
                 string outputFactoryArgs = proc.OutputFields.Count > 0 ? string.Join(", ", proc.OutputFields.Select(f => CastOutputValue(f))) : string.Empty;
+                var enableParameterBinding = ShouldEnableParameterBinding(proc);
 
                 // Aggregate assignments
                 var model = new
@@ -1510,14 +1512,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     PlanTypeName = procedureTypeName + "Plan",
                     InputTypeName = inputTypeName,
                     ParameterLines = paramLines,
+                    EnableParameterBindingArgument = enableParameterBinding ? string.Empty : ", enableParameterBinding: false",
                     InputAssignments = proc.InputParameters.Select(ip =>
                     {
-                        var isTableType = ip.Attributes != null && ip.Attributes.Any(a => a.StartsWith("[TableType]", StringComparison.Ordinal));
-                        if (isTableType)
+                        if (tableTypeNames.Contains(ip.Name))
                         {
                             // Build SqlDataRecord collection via reflection helper (ExecutionSupport.TvpHelper)
                             var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
-                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var tvp = TvpHelper.BuildRecords(input.{ip.PropertyName}) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
+                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; if (source != null) {{ var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; }} if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
                         }
                         var valueExpr = ip.IsNullable ? $"(object?)input.{ip.PropertyName} ?? DBNull.Value" : $"input.{ip.PropertyName}";
                         return $"cmd.Parameters[\"@{ip.Name}\"].Value = {valueExpr};";
@@ -2022,6 +2024,31 @@ internal sealed class ProceduresGenerator : GeneratorBase
         // Escape C# reserved keywords with '@'
         if (IsCSharpKeyword(ident)) ident = "@" + ident;
         return ident;
+    }
+
+    private bool ShouldEnableParameterBinding(ProcedureDescriptor proc)
+    {
+        var configured = Configuration?.MinimalApiHydrateProcedures;
+        if (configured is { Count: > 0 })
+        {
+            var opName = proc.OperationName ?? $"{proc.Schema}.{proc.ProcedureName}";
+            var schemaQualified = string.IsNullOrWhiteSpace(proc.Schema)
+                ? opName
+                : $"{proc.Schema}.{proc.ProcedureName}";
+
+            foreach (var candidate in configured)
+            {
+                if (string.Equals(candidate, opName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(candidate, schemaQualified, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private static readonly HashSet<string> CSharpKeywords = new(new[]

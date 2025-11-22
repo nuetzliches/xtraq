@@ -116,6 +116,17 @@ public interface IXtraqDbContext
     int CommandTimeout { get; }
 }
 
+public interface IXtraqParameterBindingProvider
+{
+    IServiceProvider? Services { get; }
+    ParameterBindingOptions ParameterBindings { get; }
+}
+
+public sealed class ParameterBindingOptions
+{
+    public IReadOnlyList<object> Bindings => Array.Empty<object>();
+}
+
 public sealed class EfHarnessDbContext : DbContext
 {
     public EfHarnessDbContext(DbContextOptions<EfHarnessDbContext> options)

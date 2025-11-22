@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Xtraq.Tests.Configuration;
 
@@ -147,6 +148,61 @@ public sealed class XtraqConfigurationTests
         {
             Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", originalPath);
             Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", originalRoot);
+            TryDeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// Ensures MinimalApi object config hydrates per-procedure allow-lists.
+    /// </summary>
+    [Xunit.Fact]
+    public void Load_WhenMinimalApiObjectSpecified_ResolvesHydrationLists()
+    {
+        var cleanupKeys = new[]
+        {
+            "XTRAQ_PROJECT_PATH",
+            "XTRAQ_PROJECT_ROOT",
+            "XTRAQ_NAMESPACE",
+            "XTRAQ_GENERATOR_DB",
+            "XTRAQ_MINIMAL_API",
+            "XTRAQ_HYDRATE_PARAMETERS",
+            "XTRAQ_HYDRATE_PROCEDURES"
+        };
+
+        var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in cleanupKeys)
+        {
+            snapshot[key] = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, null);
+        }
+
+        var projectRoot = Directory.CreateTempSubdirectory("xtraq-hydration-").FullName;
+
+        try
+        {
+            File.WriteAllText(Path.Combine(projectRoot, ".env"),
+                "XTRAQ_GENERATOR_DB=Server=(local);Database=App;TrustServerCertificate=True;\n");
+
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
+                "{\n" +
+                "  \"Namespace\": \"Hydration.Namespace\",\n" +
+                "  \"MinimalApi\": { \"Enabled\": true, \"HydrateParameters\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"HydrateProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] }\n" +
+                "}\n");
+
+            var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
+
+            Xunit.Assert.True(configuration.EnableMinimalApiExtensions);
+            Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.MinimalApiHydrateParameters);
+            Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.MinimalApiHydrateProcedures);
+            Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig"), configuration.ConfigPath);
+        }
+        finally
+        {
+            foreach (var kvp in snapshot)
+            {
+                Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
+            }
+
             TryDeleteDirectory(projectRoot);
         }
     }

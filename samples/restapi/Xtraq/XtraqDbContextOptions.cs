@@ -20,5 +20,6 @@ public sealed class XtraqDbContextOptions
     public bool EnableDiagnostics { get; set; } = true;
     /// <summary>Optional factory used to create the scoped transaction orchestrator instance.</summary>
     public Func<IServiceProvider, IXtraqTransactionOrchestrator>? TransactionOrchestratorFactory { get; set; }
+    /// <summary>Ambient parameter bindings (scalar + table types) resolved from DI/host context.</summary>
+    public ParameterBindingOptions ParameterBindings { get; } = new();
 }
-

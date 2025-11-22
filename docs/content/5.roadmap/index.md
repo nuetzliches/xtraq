@@ -132,3 +132,7 @@ First milestone: slim the table-type surface so `dotnet build` only emits UDTT w
 - [x] Replace `CommandPalettePrototype` with dedicated command handler classes (Build, Snapshot, Refresh) that share UX primitives and reduce duplicated prompt strings. _(Prototype class removed; command wiring now flows through the System.CommandLine host only.)_
 - [x] Introduce leveled CLI summaries (default info + optional verbose) and align telemetry payloads with the new structure, validated by CLI E2E tests. _(Summaries jetzt kompakt ohne Charts; Details haengen an `--verbose`.)_
 - [x] Publish a helper catalog capturing canonical utility types (logging, env, console, cache) and guidance to avoid redundant helpers. _(See `/meta/helper-catalog`.)_
+- [ ] Parameter Binding Abstraction: Resolver-Signatur von `HttpContext` entkoppeln (`Func<IServiceProvider, HttpContext?, CancellationToken, ValueTask<T>>`) damit File-/DB-/Queue-Sourcen und non-HTTP-Hosts bedient werden können.
+- [ ] Async-Binder (mit Cancellation) als first-class citizen für Secrets/File/DB-Zugriffe unterstützen.
+- [ ] UDTT-Binder an dieselbe Abstraktion hängen (`ITableType`/`IEnumerable<Row>`), inkl. DI-Registrierung statt HTTP-only Quellen.
+- [ ] Defaults und Fallbacks dokumentieren (Claims/HttpContext vorhanden vs. nicht vorhanden).

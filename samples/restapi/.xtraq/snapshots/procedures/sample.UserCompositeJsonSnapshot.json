@@ -93,6 +93,7 @@
               "Name": "PropertiesJson",
               "Alias": "PropertiesJson",
               "SourceColumn": "Properties",
+              "UserTypeRef": "sample.JsonDocument",
               "ReturnsJson": true,
               "ReturnsUnknownJson": true,
               "IsNullable": true
@@ -120,6 +121,7 @@
           "Name": "MetadataJson",
           "Alias": "MetadataJson",
           "SourceColumn": "Metadata",
+          "UserTypeRef": "sample.JsonDocument",
           "ReturnsJson": true,
           "ReturnsUnknownJson": true,
           "IsNullable": true

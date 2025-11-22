@@ -96,7 +96,7 @@ internal static partial class OrderStatusReportPlan
 			cmd.Parameters["@ToUtc"].Value = (object?)input.ToUtc ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
+			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
 	}
 }
 
@@ -106,7 +106,7 @@ public static class OrderStatusReportExtensions
 	public static async Task<OrderStatusReportResult> OrderStatusReportAsync(this IXtraqDbContext db, OrderStatusReportInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await OrderStatusReportProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
+		return await OrderStatusReportProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> without buffering it into the aggregate payload.</summary>
@@ -115,7 +115,7 @@ public static class OrderStatusReportExtensions
 		ArgumentNullException.ThrowIfNull(db);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
 		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		await OrderStatusReportProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
+		await OrderStatusReportProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(this IXtraqDbContext db, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
@@ -147,18 +147,24 @@ public static class OrderStatusReportProcedure
 {
 	public const string Name = "[sample].[OrderStatusReport]";
 	public static Task<OrderStatusReportResult> ExecuteAsync(DbConnection connection, OrderStatusReportInput input, CancellationToken cancellationToken = default)
-		=> ExecuteAsync(null, connection, input, cancellationToken);
+		=> ExecuteAsync(null, null, connection, input, cancellationToken);
 
 	public static Task<OrderStatusReportResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, OrderStatusReportInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(interceptorProvider, null, connection, input, cancellationToken);
+
+	public static Task<OrderStatusReportResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, OrderStatusReportInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<OrderStatusReportResult>(interceptorProvider, connection, OrderStatusReportPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<OrderStatusReportResult>(interceptorProvider, bindingProvider, connection, OrderStatusReportPlan.Instance, input, cancellationToken);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> using the supplied row callback.</summary>
 	public static Task StreamResultResultSet1Async(DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
-		=> StreamResultResultSet1Async(null, connection, input, onRowAsync, cancellationToken);
+		=> StreamResultResultSet1Async(null, null, connection, input, onRowAsync, cancellationToken);
 
-	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+		=> StreamResultResultSet1Async(interceptorProvider, null, connection, input, onRowAsync, cancellationToken);
+
+	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(connection);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
@@ -177,19 +183,19 @@ public static class OrderStatusReportProcedure
 			}
 		}
 
-		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, OrderStatusReportPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
+		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, bindingProvider, connection, OrderStatusReportPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(null, null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, OrderStatusReportInput input, Func<OrderStatusReportResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(interceptorProvider, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(interceptorProvider, null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 }

@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 
 /// <summary>Generated database context providing ADO.NET connection helpers and health probe.</summary>
-public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor
+public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor, IXtraqParameterBindingProvider
 {
     private readonly XtraqDbContextOptions _options;
     private readonly IServiceProvider? _serviceProvider;
@@ -86,4 +86,10 @@ public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionO
             return fallback;
         }
     }
+
+    /// <summary>Configured parameter binding rules for this context.</summary>
+    public ParameterBindingOptions ParameterBindings => _options.ParameterBindings;
+
+    IServiceProvider? IXtraqParameterBindingProvider.Services => _serviceProvider;
+    ParameterBindingOptions IXtraqParameterBindingProvider.ParameterBindings => _options.ParameterBindings;
 }

@@ -97,7 +97,7 @@ internal static partial class UserListPlan
 			cmd.Parameters["@IncludeInactive"].Value = (object?)input.IncludeInactive ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
+			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
 	}
 }
 
@@ -107,7 +107,7 @@ public static class UserListExtensions
 	public static async Task<UserListResult> UserListAsync(this IXtraqDbContext db, UserListInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await UserListProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
+		return await UserListProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> without buffering it into the aggregate payload.</summary>
@@ -116,7 +116,7 @@ public static class UserListExtensions
 		ArgumentNullException.ThrowIfNull(db);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
 		await using var connection = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		await UserListProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
+		await UserListProcedure.StreamResultResultSet1Async(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, connection, input, onRowAsync, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(this IXtraqDbContext db, UserListInput input, Func<UserListResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
@@ -148,18 +148,24 @@ public static class UserListProcedure
 {
 	public const string Name = "[sample].[UserList]";
 	public static Task<UserListResult> ExecuteAsync(DbConnection connection, UserListInput input, CancellationToken cancellationToken = default)
-		=> ExecuteAsync(null, connection, input, cancellationToken);
+		=> ExecuteAsync(null, null, connection, input, cancellationToken);
 
 	public static Task<UserListResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UserListInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(interceptorProvider, null, connection, input, cancellationToken);
+
+	public static Task<UserListResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, UserListInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<UserListResult>(interceptorProvider, connection, UserListPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<UserListResult>(interceptorProvider, bindingProvider, connection, UserListPlan.Instance, input, cancellationToken);
 	}
 
 	/// <summary>Streams result set <c>ResultSet1</c> using the supplied row callback.</summary>
 	public static Task StreamResultResultSet1Async(DbConnection connection, UserListInput input, Func<UserListResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
-		=> StreamResultResultSet1Async(null, connection, input, onRowAsync, cancellationToken);
+		=> StreamResultResultSet1Async(null, null, connection, input, onRowAsync, cancellationToken);
 
-	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UserListInput input, Func<UserListResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UserListInput input, Func<UserListResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
+		=> StreamResultResultSet1Async(interceptorProvider, null, connection, input, onRowAsync, cancellationToken);
+
+	public static async Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, UserListInput input, Func<UserListResultSet1Result, CancellationToken, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(connection);
 		ArgumentNullException.ThrowIfNull(onRowAsync);
@@ -182,19 +188,19 @@ public static class UserListProcedure
 			}
 		}
 
-		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, connection, UserListPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
+		await ProcedureExecutor.StreamResultSetAsync(interceptorProvider, bindingProvider, connection, UserListPlan.Instance, 0, StreamCoreAsync, input, cancellationToken).ConfigureAwait(false);
 	}
 
 	public static Task StreamResultResultSet1Async(DbConnection connection, UserListInput input, Func<UserListResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(null, null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 	public static Task StreamResultResultSet1Async(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, UserListInput input, Func<UserListResultSet1Result, ValueTask> onRowAsync, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(onRowAsync);
-		return StreamResultResultSet1Async(interceptorProvider, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
+		return StreamResultResultSet1Async(interceptorProvider, null, connection, input, (row, ct) => onRowAsync(row), cancellationToken);
 	}
 
 }

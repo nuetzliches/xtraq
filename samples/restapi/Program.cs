@@ -1,18 +1,41 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Claims;
 using Microsoft.Data.SqlClient;
 using global::Xtraq.Samples.RestApi.Xtraq;
 using global::Xtraq.Samples.RestApi.Xtraq.Sample;
+using global::Xtraq.Samples.RestApi.Xtraq.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddXtraqDbContext(options =>
 {
     options.ConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Configure the 'DefaultConnection' connection string in appsettings.json");
     options.CommandTimeout = 30;
+    options.ParameterBindings
+        .BindScalar<int>("@UserId", (services, _) =>
+        {
+            var accessor = services?.GetService<IHttpContextAccessor>();
+            var sub = accessor?.HttpContext?.User?.FindFirstValue("sub");
+            var parsed = int.TryParse(sub, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
+            return ValueTask.FromResult(parsed);
+        }, "sample.UserCompositeJsonSnapshot")
+        .BindTable<AuditLogEntryTableType>("@Entries", (services, _) =>
+        {
+            var accessor = services?.GetService<IHttpContextAccessor>();
+            if (accessor?.HttpContext?.Items is { } items &&
+                items.TryGetValue("auditEntries", out var buffered) &&
+                buffered is IEnumerable<AuditLogEntryTableType> typed)
+            {
+                return ValueTask.FromResult(typed);
+            }
+
+            return ValueTask.FromResult<IEnumerable<AuditLogEntryTableType>>(Array.Empty<AuditLogEntryTableType>());
+        }, "sample.WriteAuditLogEntries");
 });
 
 var app = builder.Build();

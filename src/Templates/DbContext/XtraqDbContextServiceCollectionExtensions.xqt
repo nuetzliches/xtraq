@@ -91,7 +91,7 @@ public static class XtraqDbContextServiceCollectionExtensions
 }
 
 #if XTRAQ_ENTITY_FRAMEWORK
-internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDbContext, IXtraqAmbientTransactionAccessor
+internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDbContext, IXtraqAmbientTransactionAccessor, IXtraqParameterBindingProvider
     where TDbContext : DbContext
 {
     private readonly TDbContext _dbContext;
@@ -121,6 +121,9 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
             return 30;
         }
     }
+
+    IServiceProvider? IXtraqParameterBindingProvider.Services => (_dbContext as IInfrastructure<IServiceProvider>)?.Instance;
+    ParameterBindingOptions IXtraqParameterBindingProvider.ParameterBindings => _options.ParameterBindings;
 
     public DbTransaction? AmbientTransaction
     {

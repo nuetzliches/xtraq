@@ -352,39 +352,8 @@ namespace Xtraq.Metadata
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         bool isTableType = explicitTableType
                             || !string.IsNullOrWhiteSpace(normalizedTableTypeRef)
-                            || (!string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName));
-
-                        if (!isTableType && !string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
-                        {
-                            isTableType = true;
-                        }
-
-                        if (!isTableType && !string.IsNullOrWhiteSpace(typeRef))
-                        {
-                            if (tableTypeRefs.Contains(typeRef))
-                            {
-                                isTableType = true;
-                            }
-                            else
-                            {
-                                var (schemaFromRef, nameFromRef) = TypeMetadataResolver.SplitTypeRef(typeRef);
-                                if (!string.IsNullOrWhiteSpace(schemaFromRef)
-                                    && !string.IsNullOrWhiteSpace(nameFromRef)
-                                    && !string.Equals(schemaFromRef, "sys", StringComparison.OrdinalIgnoreCase)
-                                    && resolved == null)
-                                {
-                                    isTableType = true;
-                                    if (string.IsNullOrWhiteSpace(tableTypeCatalog))
-                                    {
-                                        tableTypeCatalog = null; // TypeMetadataResolver omits catalog; retain previous if any
-                                    }
-                                    legacyTtSchema ??= schemaFromRef;
-                                    legacyTtName ??= nameFromRef;
-                                    tableTypeSchema ??= schemaFromRef;
-                                    tableTypeName ??= nameFromRef;
-                                }
-                            }
-                        }
+                            || (!string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
+                            || (!string.IsNullOrWhiteSpace(typeRef) && tableTypeRefs.Contains(typeRef));
 
                         string? ttSchema = tableTypeSchema;
                         string? ttName = tableTypeName;

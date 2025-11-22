@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "8837C29173938BA6",
+  "Fingerprint": "66A138A8FF85DE33",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -422,7 +422,7 @@
               "Alias": null,
               "SqlTypeName": "bigint",
               "IsNullable": true,
-              "MaxLength": null,
+              "MaxLength": 8,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -485,7 +485,7 @@
               "Alias": null,
               "SqlTypeName": "datetime2(7)",
               "IsNullable": true,
-              "MaxLength": null,
+              "MaxLength": 7,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -584,7 +584,7 @@
             {
               "Name": "Email",
               "Alias": null,
-              "SqlTypeName": "nvarchar(320)",
+              "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": 320,
               "Precision": null,
@@ -605,7 +605,7 @@
             {
               "Name": "DisplayName",
               "Alias": null,
-              "SqlTypeName": "nvarchar(200)",
+              "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": 200,
               "Precision": null,
@@ -795,7 +795,7 @@
       "Schema": "sample",
       "Name": "UserCompositeJsonSnapshot",
       "File": "sample.UserCompositeJsonSnapshot.json",
-      "Hash": "109F151D10B96766",
+      "Hash": "1E67CC86A291D4F5",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1061,7 +1061,7 @@
                   "JsonElementClrType": null,
                   "JsonElementSqlType": null,
                   "FunctionRef": null,
-                  "UserTypeRef": null,
+                  "UserTypeRef": "sample.JsonDocument",
                   "Columns": null
                 }
               ]
@@ -1135,7 +1135,7 @@
               "JsonElementClrType": null,
               "JsonElementSqlType": null,
               "FunctionRef": null,
-              "UserTypeRef": null,
+              "UserTypeRef": "sample.JsonDocument",
               "Columns": null
             }
           ]

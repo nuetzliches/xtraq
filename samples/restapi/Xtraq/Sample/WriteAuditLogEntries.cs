@@ -67,7 +67,7 @@ internal static partial class WriteAuditLogEntriesPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (WriteAuditLogEntriesInput)state!;
-			{ var prm = cmd.Parameters["@Entries"]; var tvp = TvpHelper.BuildRecords(input.Entries) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "shared.AuditLogEntryTableType"; } }
+			{ var prm = cmd.Parameters["@Entries"]; var source = input.Entries; if (source != null) { var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; } if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "shared.AuditLogEntryTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[WriteAuditLogEntries]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
@@ -80,7 +80,7 @@ public static class WriteAuditLogEntriesExtensions
 	public static async Task<WriteAuditLogEntriesResult> WriteAuditLogEntriesAsync(this IXtraqDbContext db, WriteAuditLogEntriesInput input, CancellationToken cancellationToken = default)
 	{
 		await using var conn = await db.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-		return await WriteAuditLogEntriesProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, conn, input, cancellationToken).ConfigureAwait(false);
+		return await WriteAuditLogEntriesProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, conn, input, cancellationToken).ConfigureAwait(false);
 	}
 
 }
@@ -106,11 +106,14 @@ public static class WriteAuditLogEntriesProcedure
 {
 	public const string Name = "[sample].[WriteAuditLogEntries]";
 	public static Task<WriteAuditLogEntriesResult> ExecuteAsync(DbConnection connection, WriteAuditLogEntriesInput input, CancellationToken cancellationToken = default)
-		=> ExecuteAsync(null, connection, input, cancellationToken);
+		=> ExecuteAsync(null, null, connection, input, cancellationToken);
 
 	public static Task<WriteAuditLogEntriesResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, WriteAuditLogEntriesInput input, CancellationToken cancellationToken = default)
+		=> ExecuteAsync(interceptorProvider, null, connection, input, cancellationToken);
+
+	public static Task<WriteAuditLogEntriesResult> ExecuteAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, WriteAuditLogEntriesInput input, CancellationToken cancellationToken = default)
 	{
-		return ProcedureExecutor.ExecuteAsync<WriteAuditLogEntriesResult>(interceptorProvider, connection, WriteAuditLogEntriesPlan.Instance, input, cancellationToken);
+		return ProcedureExecutor.ExecuteAsync<WriteAuditLogEntriesResult>(interceptorProvider, bindingProvider, connection, WriteAuditLogEntriesPlan.Instance, input, cancellationToken);
 	}
 
 }

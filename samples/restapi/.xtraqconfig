@@ -1,6 +1,16 @@
 {
     "Namespace": "",
-    "MinimalApi": true,
+    "MinimalApi": {
+        "Enabled": true,
+        "HydrateParameters": [
+            "@UserId INT",
+            "@Entries shared.AuditLogEntryTableType READONLY"
+        ],
+        "HydrateProcedures": [
+            "sample.UserCompositeJsonSnapshot",
+            "sample.WriteAuditLogEntries"
+        ]
+    },
     "OutputDir": "Xtraq",
     "TargetFramework": "net10",
     "BuildSchemas": []

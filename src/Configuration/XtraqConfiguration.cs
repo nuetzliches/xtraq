@@ -46,6 +46,14 @@ public sealed class XtraqConfiguration
     /// Gets a value indicating whether Entity Framework Core integration helpers should be enabled for generated projects.
     /// </summary>
     public bool EnableEntityFrameworkIntegration { get; init; }
+    /// <summary>
+    /// Optional global parameter hydration list applied to Minimal API endpoints (schema-qualified filters are configured separately).
+    /// </summary>
+    public IReadOnlyList<string> MinimalApiHydrateParameters { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// Optional allow-list of schema-qualified procedures that should participate in automatic parameter hydration.
+    /// </summary>
+    public IReadOnlyList<string> MinimalApiHydrateProcedures { get; init; } = Array.Empty<string>();
 
     /// <summary>
     /// Loads the environment configuration by merging CLI overrides, environment variables, and .env settings.
@@ -152,6 +160,8 @@ public sealed class XtraqConfiguration
         var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_JSON_INCLUDE_NULL_VALUES"));
         var enableMinimalApi = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_MINIMAL_API"));
         var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK"));
+        var hydrateParameters = ParseList(NullIfEmpty(Get("XTRAQ_HYDRATE_PARAMETERS")));
+        var hydrateProcedures = ParseList(NullIfEmpty(Get("XTRAQ_HYDRATE_PROCEDURES")));
 
         var cfg = new XtraqConfiguration
         {
@@ -164,7 +174,9 @@ public sealed class XtraqConfiguration
             ProjectRoot = projectRoot,
             EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues,
             EnableMinimalApiExtensions = enableMinimalApi,
-            EnableEntityFrameworkIntegration = enableEntityFramework
+            EnableEntityFrameworkIntegration = enableEntityFramework,
+            MinimalApiHydrateParameters = hydrateParameters,
+            MinimalApiHydrateProcedures = hydrateProcedures
         };
 
         if (string.IsNullOrEmpty(envFilePath) || !File.Exists(envFilePath))

@@ -42,14 +42,215 @@ internal sealed class ProcedureExecutionPlan
     public ProcedureExecutionPlan(string name, ProcedureParameter[] parameters, ResultSetMapping[] resultSets,
         Func<IReadOnlyDictionary<string, object?>, object?> outputFactory,
         Func<bool,string?,object?,IReadOnlyDictionary<string,object?>,object[],object> aggregateFactory,
-        Action<DbCommand,object?> binder)
-    { Name = name; Parameters = parameters; ResultSets = resultSets; OutputFactory = outputFactory; AggregateFactory = aggregateFactory; Binder = binder; }
+        Action<DbCommand,object?> binder,
+        bool enableParameterBinding = true)
+    { Name = name; Parameters = parameters; ResultSets = resultSets; OutputFactory = outputFactory; AggregateFactory = aggregateFactory; Binder = binder; EnableParameterBinding = enableParameterBinding; }
     public string Name { get; }
     public ProcedureParameter[] Parameters { get; }
     public ResultSetMapping[] ResultSets { get; }
     public Func<IReadOnlyDictionary<string, object?>, object?> OutputFactory { get; }
     public Func<bool,string?,object?,IReadOnlyDictionary<string,object?>,object[],object> AggregateFactory { get; }
     public Action<DbCommand,object?> Binder { get; }
+    public bool EnableParameterBinding { get; }
+}
+
+/// <summary>
+/// Provides optional ambient parameter binding (for example claims, DI-backed services, or file/DB lookups).
+/// </summary>
+public interface IXtraqParameterBindingProvider
+{
+    IServiceProvider? Services { get; }
+    ParameterBindingOptions ParameterBindings { get; }
+}
+
+public readonly record struct ParameterBindingContext(
+    IServiceProvider? Services,
+    DbCommand Command,
+    object? Input,
+    CancellationToken CancellationToken);
+
+internal sealed class ParameterBinding
+{
+    public ParameterBinding(string name, bool isTableType, Func<ParameterBindingContext, ValueTask<object?>> resolver, Func<string, bool>? appliesTo = null)
+    { Name = name; IsTableType = isTableType; Resolver = resolver; AppliesTo = appliesTo; }
+    public string Name { get; }
+    public bool IsTableType { get; }
+    public Func<ParameterBindingContext, ValueTask<object?>> Resolver { get; }
+    public Func<string, bool>? AppliesTo { get; }
+}
+
+public sealed class ParameterBindingOptions
+{
+    private readonly List<ParameterBinding> _bindings = new();
+    internal IReadOnlyList<ParameterBinding> Bindings => _bindings;
+
+    public ParameterBindingOptions BindScalar<T>(string name, Func<IServiceProvider?, CancellationToken, ValueTask<T>> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, async ctx => (object?)await resolver(ctx.Services, ctx.CancellationToken).ConfigureAwait(false), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindScalar<T>(string name, Func<IServiceProvider?, T> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, ctx => new ValueTask<object?>(resolver(ctx.Services)), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTable<T>(string name, Func<IServiceProvider?, CancellationToken, ValueTask<IEnumerable<T>>> resolver, params string[] procedures)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, async ctx => (object?)await resolver(ctx.Services, ctx.CancellationToken).ConfigureAwait(false), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTable<T>(string name, Func<IServiceProvider?, IEnumerable<T>> resolver, params string[] procedures)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, ctx => new ValueTask<object?>(resolver(ctx.Services)), CreateFilter(procedures)));
+        return this;
+    }
+
+    private static Func<string, bool>? CreateFilter(IReadOnlyList<string>? procedures)
+    {
+        if (procedures is null || procedures.Count == 0)
+        {
+            return null;
+        }
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var proc in procedures)
+        {
+            var normalized = NormalizeProcedureName(proc);
+            if (normalized.Length > 0)
+            {
+                set.Add(normalized);
+            }
+        }
+
+        if (set.Count == 0)
+        {
+            return null;
+        }
+
+        return name => set.Contains(NormalizeProcedureName(name));
+    }
+
+    private static string NormalizeProcedureName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = name.Replace("[", string.Empty, StringComparison.Ordinal)
+                          .Replace("]", string.Empty, StringComparison.Ordinal)
+                          .Trim();
+        return cleaned.StartsWith(".", StringComparison.Ordinal) ? cleaned[1..] : cleaned;
+    }
+}
+
+internal static class ParameterBindingEngine
+{
+    public static async ValueTask ApplyAsync(DbCommand cmd, object? input, IXtraqParameterBindingProvider? provider, CancellationToken cancellationToken)
+    {
+        if (provider == null) return;
+        var options = provider.ParameterBindings;
+        if (options == null || options.Bindings.Count == 0) return;
+
+        var procedureName = NormalizeProcedureName(cmd?.CommandText);
+        foreach (var binding in options.Bindings)
+        {
+            var parameter = FindParameter(cmd.Parameters, binding.Name);
+            if (parameter == null) continue;
+            if (HasValue(parameter.Value)) continue;
+            if (binding.AppliesTo != null && !binding.AppliesTo(procedureName)) continue;
+
+            object? resolved;
+            try
+            {
+                resolved = await binding.Resolver(new ParameterBindingContext(provider.Services, cmd, input, cancellationToken)).ConfigureAwait(false);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (binding.IsTableType || IsStructured(parameter))
+            {
+                ApplyStructured(parameter, resolved);
+            }
+            else
+            {
+                parameter.Value = resolved ?? DBNull.Value;
+            }
+        }
+    }
+
+    private static bool HasValue(object? value) => value is not null && value != DBNull.Value;
+
+    private static DbParameter? FindParameter(DbParameterCollection parameters, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var target = name.TrimStart('@');
+        for (int i = 0; i < parameters.Count; i++)
+        {
+            var prm = parameters[i];
+            var candidate = prm.ParameterName?.TrimStart('@');
+            if (candidate != null && candidate.Equals(target, StringComparison.OrdinalIgnoreCase))
+            {
+                return prm;
+            }
+        }
+        return null;
+    }
+
+    private static bool IsStructured(DbParameter parameter)
+    {
+        if (parameter is SqlParameter sqlParam)
+        {
+            return sqlParam.SqlDbType == SqlDbType.Structured || !string.IsNullOrWhiteSpace(sqlParam.TypeName);
+        }
+        return false;
+    }
+
+    private static void ApplyStructured(DbParameter parameter, object? value)
+    {
+        var sqlParam = parameter as SqlParameter;
+        if (value is SqlDataRecord single)
+        {
+            parameter.Value = new[] { single };
+        }
+        else if (value is IEnumerable<SqlDataRecord> records)
+        {
+            parameter.Value = records;
+        }
+        else
+        {
+            parameter.Value = TvpHelper.BuildRecords(value) ?? Array.Empty<SqlDataRecord>();
+        }
+
+        if (sqlParam is not null)
+        {
+            sqlParam.SqlDbType = SqlDbType.Structured;
+        }
+    }
+
+    private static string NormalizeProcedureName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = name.Replace("[", string.Empty, StringComparison.Ordinal)
+                          .Replace("]", string.Empty, StringComparison.Ordinal)
+                          .Trim();
+        return cleaned.StartsWith(".", StringComparison.Ordinal) ? cleaned[1..] : cleaned;
+    }
 }
 
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
@@ -206,9 +407,12 @@ internal sealed class JsonResultEnvelope<T>
 internal static class ProcedureExecutor
 {
     public static Task<T> ExecuteAsync<T>(DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
-        => ExecuteAsync<T>(null, connection, plan, input, ct);
+        => ExecuteAsync<T>(null, null, connection, plan, input, ct);
 
-    public static async Task<T> ExecuteAsync<T>(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
+    public static Task<T> ExecuteAsync<T>(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
+        => ExecuteAsync<T>(interceptorProvider, null, connection, plan, input, ct);
+
+    public static async Task<T> ExecuteAsync<T>(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, ProcedureExecutionPlan plan, object? input, CancellationToken ct)
     {
         if (connection == null) throw new ArgumentNullException(nameof(connection));
         if (plan == null) throw new ArgumentNullException(nameof(plan));
@@ -243,6 +447,10 @@ internal static class ProcedureExecutor
             }
 
             plan.Binder(cmd, input);
+            if (plan.EnableParameterBinding)
+            {
+                await ParameterBindingEngine.ApplyAsync(cmd, input, bindingProvider, ct).ConfigureAwait(false);
+            }
 
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             var rsResults = new List<object>(plan.ResultSets.Length);
@@ -298,9 +506,12 @@ internal static class ProcedureExecutor
     }
 
     public static Task<object?> StreamResultSetAsync(DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
-        => StreamResultSetAsync(null, connection, plan, resultSetIndex, streamAction, input, ct);
+        => StreamResultSetAsync(null, null, connection, plan, resultSetIndex, streamAction, input, ct);
 
-    public static async Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+    public static Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
+        => StreamResultSetAsync(interceptorProvider, null, connection, plan, resultSetIndex, streamAction, input, ct);
+
+    public static async Task<object?> StreamResultSetAsync(IXtraqProcedureInterceptorProvider? interceptorProvider, IXtraqParameterBindingProvider? bindingProvider, DbConnection connection, ProcedureExecutionPlan plan, int resultSetIndex, Func<DbDataReader, CancellationToken, Task> streamAction, object? input, CancellationToken ct)
     {
         if (connection == null) throw new ArgumentNullException(nameof(connection));
         if (plan == null) throw new ArgumentNullException(nameof(plan));
@@ -337,6 +548,10 @@ internal static class ProcedureExecutor
             }
 
             plan.Binder(cmd, input);
+            if (plan.EnableParameterBinding)
+            {
+                await ParameterBindingEngine.ApplyAsync(cmd, input, bindingProvider, ct).ConfigureAwait(false);
+            }
 
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
 
