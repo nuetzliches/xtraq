@@ -1,6 +1,8 @@
-# Xtraq Project - Copilot Instructions
+# Xtraq Project - Assistant Instructions
 
 This is a .NET CLI application project with multi-targeting support for .NET 8 and .NET 10.
+
+> Note for human reviewers and AI assistants (including Codex): Treat this file as canonical project guidance. When generating or editing code/docs in this repo, align with these instructions unless explicitly overridden in the conversation.
 
 ## Project Checklist
 
@@ -51,6 +53,9 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
 - Treat generated artifacts as read-only. Do not edit files under `samples/restapi/Xtraq`, `debug/Xtraq`, or any other `Xtraq` artifact folders—rerun the generator instead.
 - After generation, run `dotnet format` as documented in `docs/content/4.meta/3.formatting-generated-artifacts.md` to keep emitted code aligned with the repository style rules.
 - Follow .NET coding conventions and best practices
+- **Configuration naming (alpha)**: Use the new config keys and env vars: `Api.Mode` (enum: `Minimal|None`), `Api.Requests.Hydrate*`, `EntityFramework.Enabled`, `ResultSet.Json.IncludeNullValues`; env vars `XTRAQ_API_MODE`, `XTRAQ_API_HYDRATE`, `XTRAQ_API_HYDRATE_PROCEDURES`, `XTRAQ_ENTITY_FRAMEWORK_ENABLED`, `XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES`. Old keys are deprecated.
+- **Policies**: Prefer generic hooks (`DispatchExecutionPolicy`, `ResultCallbackExecutionPolicy`) over project-specific policies; keep custom logic outside generated `Xtraq/` folders.
+- **Generators/Templates**: Never hand-edit generated files; adjust templates under `src/Templates` or regenerate via `xtraq build`.
 
 ## Build and Run Instructions
 
