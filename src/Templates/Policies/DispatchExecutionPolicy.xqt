@@ -7,14 +7,15 @@ using System.Threading;
 using System.Threading.Tasks;
 
 /// <summary>
-/// Runs callbacks on success/failure to record history or wrap results without changing executor signatures.
+/// Executes side-effect callbacks after a successful procedure call without transforming the result.
+/// Use this for dispatching notifications, metrics, or history writes. Pair with ResultCallbackExecutionPolicy when you need to transform results.
 /// </summary>
-public sealed class HistoryExecutionPolicy<TInput, TResult> : IProcedureExecutionPolicy
+public sealed class DispatchExecutionPolicy<TInput, TResult> : IProcedureExecutionPolicy
 {
     private readonly Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask> _onSuccess;
     private readonly Func<ProcedureExecutionContext<TInput>, Exception, CancellationToken, ValueTask>? _onFailure;
 
-    public HistoryExecutionPolicy(
+    public DispatchExecutionPolicy(
         Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask> onSuccess,
         Func<ProcedureExecutionContext<TInput>, Exception, CancellationToken, ValueTask>? onFailure = null)
     {
@@ -22,7 +23,7 @@ public sealed class HistoryExecutionPolicy<TInput, TResult> : IProcedureExecutio
         _onFailure = onFailure;
     }
 
-    public HistoryExecutionPolicy(
+    public DispatchExecutionPolicy(
         Func<ProcedureExecutionContext<TInput>, TResult, Task> onSuccess,
         Func<ProcedureExecutionContext<TInput>, Exception, Task>? onFailure = null)
     {

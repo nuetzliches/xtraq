@@ -478,16 +478,16 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 File.WriteAllText(policyPath, policyCode);
             }
         }
-        if (Templates.TryLoad("HistoryExecutionPolicy", out var historyPolicyTpl))
+        if (Templates.TryLoad("DispatchExecutionPolicy", out var dispatchTpl))
         {
-            var policyPath = Path.Combine(baseOutputDir, "HistoryExecutionPolicy.cs");
+            var policyPath = Path.Combine(baseOutputDir, "DispatchExecutionPolicy.cs");
             var writePolicy = !File.Exists(policyPath);
             if (!writePolicy)
             {
                 try
                 {
                     var existing = File.ReadAllText(policyPath);
-                    if (!existing.Contains("HistoryExecutionPolicy", StringComparison.Ordinal) ||
+                    if (!existing.Contains("DispatchExecutionPolicy", StringComparison.Ordinal) ||
                         !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
                     {
                         writePolicy = true;
@@ -502,35 +502,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
             if (writePolicy)
             {
                 var policyModel = new { Namespace = ns, HEADER = headerBlock };
-                var policyCode = Templates.RenderRawTemplate(historyPolicyTpl, policyModel);
-                File.WriteAllText(policyPath, policyCode);
-            }
-        }
-        if (Templates.TryLoad("EntityChangeDispatchExecutionPolicy", out var entityChangeTpl))
-        {
-            var policyPath = Path.Combine(baseOutputDir, "EntityChangeDispatchExecutionPolicy.cs");
-            var writePolicy = !File.Exists(policyPath);
-            if (!writePolicy)
-            {
-                try
-                {
-                    var existing = File.ReadAllText(policyPath);
-                    if (!existing.Contains("EntityChangeDispatchExecutionPolicy", StringComparison.Ordinal) ||
-                        !existing.Contains($"namespace {ns};", StringComparison.Ordinal))
-                    {
-                        writePolicy = true;
-                    }
-                }
-                catch
-                {
-                    writePolicy = true;
-                }
-            }
-
-            if (writePolicy)
-            {
-                var policyModel = new { Namespace = ns, HEADER = headerBlock };
-                var policyCode = Templates.RenderRawTemplate(entityChangeTpl, policyModel);
+                var policyCode = Templates.RenderRawTemplate(dispatchTpl, policyModel);
                 File.WriteAllText(policyPath, policyCode);
             }
         }
