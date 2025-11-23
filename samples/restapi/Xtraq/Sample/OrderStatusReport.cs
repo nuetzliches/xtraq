@@ -13,7 +13,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -219,7 +219,7 @@ public static class OrderStatusReportExtensions
 
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
 /// <summary>Minimal API extension for '[sample].[OrderStatusReport]'.</summary>
 public static class OrderStatusReportRouteHandlerBuilderExtensions
 {

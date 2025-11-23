@@ -696,7 +696,7 @@ public static class OrchestratorHarness
 }
 """;
 
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12, preprocessorSymbols: new[] { "XTRAQ_ENTITY_FRAMEWORK" });
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12, preprocessorSymbols: new[] { "XTRAQ_ENTITY_FRAMEWORK_ENABLED" });
 
         var syntaxTrees = new[]
         {

@@ -1,6 +1,6 @@
 {{ HEADER }}
 #nullable enable
-#if XTRAQ_ENTITY_FRAMEWORK
+#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
 namespace {{ Namespace }};
 
 using System.Reflection;

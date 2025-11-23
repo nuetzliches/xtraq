@@ -78,6 +78,11 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] Deliver an entity-change dispatch hook (policy or interceptor) that mirrors the current proxy attributes (`EntityChangesDispatcher`/`DispatchEntityChanges`/`IgnoreEntityChanges`), inspects request parents, and publishes `EntityChangesHubMessage`s via SignalR after successful executions. _(Generic dispatch policy added; consumer supplies hub callback.)_
 - [x] Extend transaction ergonomics with optional labels and a safe way to borrow the ambient `DbTransaction`/`DbConnection` from the orchestrator so chained procedure calls and auxiliary ADO.NET work share the same scope. _(Pipeline execution context now exposes ambient connection/transaction for downstream use.)_
 
+## Configuration & UX Alignment
+
+- [x] Rename API/EF/JSON config to `Api.Mode`/`Api.Requests.Hydrate*`, `EntityFramework.Enabled`, and `ResultSet.Json.IncludeNullValues`; align env vars (`XTRAQ_API_MODE*`, `XTRAQ_API_HYDRATE*`, `XTRAQ_ENTITY_FRAMEWORK_ENABLED`, `XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES`) and template symbols (`XTRAQ_API_MINIMAL`, `XTRAQ_ENTITY_FRAMEWORK_ENABLED`).
+- [x] Make `.env` optional during init; rely on `.xtraqconfig` for project detection to support offline scenarios.
+
 ## Telemetry
 
 - [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `/meta/cli-telemetry-alignment`: telemetry now requires `--telemetry`, produces local-only JSON reports, and remains offline until a privacy-reviewed ingestion endpoint exists. Tests cover the opt-in behavior.)_

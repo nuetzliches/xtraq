@@ -18,7 +18,7 @@ xtraq [options]
   - `--procedure <schema.name,...>`: restrict execution to a comma-separated allow-list; validation rejects malformed tokens.
   - `--telemetry`: persist telemetry snapshots under `.xtraq/telemetry` after successful runs.
   - `--json-include-null-values`: opt into JSON-null emission; tracked even when explicitly `false` so generators can distinguish overrides.
-  - `--entity-framework`: toggle Entity Framework helper generation (`XTRAQ_ENTITY_FRAMEWORK`).
+- `--entity-framework`: toggle Entity Framework helper generation (`XTRAQ_ENTITY_FRAMEWORK_ENABLED`).
   - `--ci`: suppress Spectre.Console enhancements for plain-text/CI logs.
   - `--project-path`, `--project`, `-p`: supply a directory or `.env` file used to locate `.xtraqconfig`; defaults to the current directory when omitted.
 

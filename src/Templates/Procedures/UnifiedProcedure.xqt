@@ -3,7 +3,7 @@
 namespace {{ Namespace }};
 
 {{ UsingDirectives }}
-#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -275,7 +275,7 @@ public static class {{ ProcedureTypeName }}Extensions
 {{/if}}{{/each}}
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API
+#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
 /// <summary>Minimal API extension for '{{ ProcedureFullName }}'.</summary>
 public static class {{ ProcedureTypeName }}RouteHandlerBuilderExtensions
 {

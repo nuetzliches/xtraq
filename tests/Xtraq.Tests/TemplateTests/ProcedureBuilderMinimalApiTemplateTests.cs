@@ -39,7 +39,7 @@ public sealed class ProcedureBuilderMinimalApiTemplateTests
                 }
             }
         };
-        var builderSource = "#define XTRAQ_MINIMAL_API\n#define NET8_0_OR_GREATER\n" + engine.Render(template, builderModel);
+        var builderSource = "#define XTRAQ_API_MINIMAL\n#define NET8_0_OR_GREATER\n" + engine.Render(template, builderModel);
 
         var harnessSource = """
 // harness

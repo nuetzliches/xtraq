@@ -43,8 +43,11 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_OUTPUT_DIR"] = "Artifacts",
                 ["XTRAQ_BUILD_SCHEMAS"] = "core, identity; audit",
                 ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0",
-                ["XTRAQ_MINIMAL_API"] = "1",
-                ["XTRAQ_ENTITY_FRAMEWORK"] = "1"
+                ["XTRAQ_API_MODE"] = "Minimal",
+                ["XTRAQ_API_HYDRATE"] = "@UserId INT",
+                ["XTRAQ_API_HYDRATE_PROCEDURES"] = "sample.UserCompositeJsonSnapshot",
+                ["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = "1",
+                ["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = "1"
             };
 
             Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
@@ -63,10 +66,15 @@ public sealed class TrackableConfigManagerTests
                 .Select(static item => item.GetString())
                 .ToArray();
             Xunit.Assert.Equal(new[] { "core", "identity", "audit" }, schemas);
-            Xunit.Assert.True(root.TryGetProperty("MinimalApi", out var minimalApiElement));
-            Xunit.Assert.True(minimalApiElement.GetBoolean());
-            Xunit.Assert.True(root.TryGetProperty("EntityFramework", out var entityFrameworkElement));
-            Xunit.Assert.True(entityFrameworkElement.GetBoolean());
+            var apiElement = root.GetProperty("Api");
+            Xunit.Assert.Equal("Minimal", apiElement.GetProperty("Mode").GetString());
+            var requests = apiElement.GetProperty("Requests");
+            Xunit.Assert.Equal("@UserId INT", requests.GetProperty("Hydrate").EnumerateArray().First().GetString());
+            Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", requests.GetProperty("HydrateProcedures").EnumerateArray().First().GetString());
+            var efElement = root.GetProperty("EntityFramework");
+            Xunit.Assert.True(efElement.GetProperty("Enabled").GetBoolean());
+            var resultSet = root.GetProperty("ResultSet");
+            Xunit.Assert.True(resultSet.GetProperty("Json").GetProperty("IncludeNullValues").GetBoolean());
         }
         finally
         {
@@ -109,14 +117,20 @@ public sealed class TrackableConfigManagerTests
         try
         {
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
-            File.WriteAllText(configPath, "{\n  \"MinimalApi\": true,\n  \"EntityFramework\": true\n}\n");
+            File.WriteAllText(configPath, "{\n  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"Hydrate\": [\"@UserId INT\"], \"HydrateProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true },\n  \"ResultSet\": { \"Json\": { \"IncludeNullValues\": true } }\n}\n");
 
             var defaults = Xtraq.Configuration.TrackableConfigManager.ReadDefaults(directory.FullName);
 
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_MINIMAL_API", out var flag));
-            Xunit.Assert.Equal("1", flag);
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_ENTITY_FRAMEWORK", out var efFlag));
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_MODE", out var flag));
+            Xunit.Assert.Equal("Minimal", flag);
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_HYDRATE", out var hydrateFlag));
+            Xunit.Assert.Equal("@UserId INT", hydrateFlag);
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_HYDRATE_PROCEDURES", out var hydrateProcFlag));
+            Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", hydrateProcFlag);
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_ENTITY_FRAMEWORK_ENABLED", out var efFlag));
             Xunit.Assert.Equal("1", efFlag);
+            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES", out var jsonFlag));
+            Xunit.Assert.Equal("1", jsonFlag);
         }
         finally
         {

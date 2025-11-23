@@ -68,12 +68,13 @@ public readonly record struct ParameterBindingContext(
 
 internal sealed class ParameterBinding
 {
-    public ParameterBinding(string name, bool isTableType, Func<ParameterBindingContext, ValueTask<object?>> resolver, Func<string, bool>? appliesTo = null)
-    { Name = name; IsTableType = isTableType; Resolver = resolver; AppliesTo = appliesTo; }
+    public ParameterBinding(string name, bool isTableType, Func<ParameterBindingContext, ValueTask<object?>> resolver, Func<string, bool>? appliesTo = null, Type? inputType = null)
+    { Name = name; IsTableType = isTableType; Resolver = resolver; AppliesTo = appliesTo; InputType = inputType; }
     public string Name { get; }
     public bool IsTableType { get; }
     public Func<ParameterBindingContext, ValueTask<object?>> Resolver { get; }
     public Func<string, bool>? AppliesTo { get; }
+    public Type? InputType { get; }
 }
 
 public sealed class ParameterBindingOptions
@@ -141,6 +142,36 @@ public sealed class ParameterBindingOptions
         return this;
     }
 
+    public ParameterBindingOptions BindScalarFrom<TInput, TValue>(string name, Func<TInput, IServiceProvider?, CancellationToken, ValueTask<TValue>> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, async ctx => ctx.Input is TInput typed ? (object?)await resolver(typed, ctx.Services, ctx.CancellationToken).ConfigureAwait(false) : null, CreateFilter(procedures), typeof(TInput)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindScalarFrom<TInput, TValue>(string name, Func<TInput, IServiceProvider?, TValue> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, ctx => ctx.Input is TInput typed ? new ValueTask<object?>(resolver(typed, ctx.Services)) : new ValueTask<object?>(result: null), CreateFilter(procedures), typeof(TInput)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTableFrom<TInput, TValue>(string name, Func<TInput, IServiceProvider?, CancellationToken, ValueTask<IEnumerable<TValue>>> resolver, params string[] procedures)
+        where TValue : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, async ctx => ctx.Input is TInput typed ? (object?)await resolver(typed, ctx.Services, ctx.CancellationToken).ConfigureAwait(false) : null, CreateFilter(procedures), typeof(TInput)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTableFrom<TInput, TValue>(string name, Func<TInput, IServiceProvider?, IEnumerable<TValue>> resolver, params string[] procedures)
+        where TValue : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, ctx => ctx.Input is TInput typed ? new ValueTask<object?>(resolver(typed, ctx.Services)) : new ValueTask<object?>(result: null), CreateFilter(procedures), typeof(TInput)));
+        return this;
+    }
+
     private static Func<string, bool>? CreateFilter(IReadOnlyList<string>? procedures)
     {
         if (procedures is null || procedures.Count == 0)
@@ -198,6 +229,7 @@ internal static class ParameterBindingEngine
             var parameter = FindParameter(parameters, binding.Name);
             if (parameter == null) continue;
             if (HasValue(parameter.Value)) continue;
+            if (binding.InputType is not null && (input is null || !binding.InputType.IsInstanceOfType(input))) continue;
             if (binding.AppliesTo != null && !binding.AppliesTo(procedureName)) continue;
 
             object? resolved;

@@ -79,7 +79,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
             return builderCode;
         }
 
-        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_MINIMAL_API";
+        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL";
         const string endMarker = "#endif";
 
         var startIndex = builderCode.IndexOf(startMarker, StringComparison.Ordinal);
@@ -2199,7 +2199,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
     private bool ShouldEnableParameterBinding(ProcedureDescriptor proc)
     {
-        var configured = Configuration?.MinimalApiHydrateProcedures;
+        var configured = Configuration?.ApiHydrateProcedures;
         if (configured is { Count: > 0 })
         {
             var opName = proc.OperationName ?? $"{proc.Schema}.{proc.ProcedureName}";

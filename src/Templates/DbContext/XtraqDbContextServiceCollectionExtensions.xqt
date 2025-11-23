@@ -8,7 +8,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
-#if XTRAQ_ENTITY_FRAMEWORK
+#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 #endif
@@ -69,7 +69,7 @@ public static class XtraqDbContextServiceCollectionExtensions
         return services;
     }
 
-#if XTRAQ_ENTITY_FRAMEWORK
+#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
     /// <summary>Replace <see cref="IXtraqDbContext"/> so generated procedures reuse the scoped Entity Framework Core <see cref="DbContext"/> connection and transaction when available.</summary>
     public static IServiceCollection UseXtraqProcedures<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
@@ -90,7 +90,7 @@ public static class XtraqDbContextServiceCollectionExtensions
 #endif
 }
 
-#if XTRAQ_ENTITY_FRAMEWORK
+#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
 internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDbContext, IXtraqAmbientTransactionAccessor, IXtraqParameterBindingProvider
     where TDbContext : DbContext
 {

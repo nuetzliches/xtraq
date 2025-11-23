@@ -383,14 +383,14 @@ internal static class TrackableConfigManager
         var outputDir = ResolveValue(envValues, "XTRAQ_OUTPUT_DIR") ?? existing?.OutputDir ?? "Xtraq";
         var targetFramework = ResolveValue(envValues, "XTRAQ_TARGET_FRAMEWORK") ?? existing?.TargetFramework ?? Constants.DefaultTargetFramework.ToFrameworkString();
 
-        var jsonIncludeNullValues = existing?.JsonIncludeNullValues;
-        var jsonIncludeNullValuesRaw = ResolveValue(envValues, "XTRAQ_JSON_INCLUDE_NULL_VALUES");
-        if (jsonIncludeNullValuesRaw is not null)
+        var includeNullValues = existing?.ResultSet?.Json?.IncludeNullValues;
+        var includeNullValuesRaw = ResolveValue(envValues, "XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES");
+        if (includeNullValuesRaw is not null)
         {
-            var parsed = ParseBoolean(jsonIncludeNullValuesRaw);
+            var parsed = ParseBoolean(includeNullValuesRaw);
             if (parsed.HasValue)
             {
-                jsonIncludeNullValues = parsed;
+                includeNullValues = parsed;
             }
         }
 
@@ -398,33 +398,22 @@ internal static class TrackableConfigManager
             ?? (existing is null ? null : string.Join(',', existing.BuildSchemas));
         var buildSchemas = ParseSchemas(buildSchemasRaw);
 
-        var minimalApi = existing?.MinimalApi;
-        var minimalApiRaw = ResolveValue(envValues, "XTRAQ_MINIMAL_API");
-        if (minimalApiRaw is not null)
-        {
-            var parsed = ParseBoolean(minimalApiRaw);
-            if (parsed.HasValue)
-            {
-                minimalApi = parsed;
-            }
-        }
+        var apiModeRaw = ResolveValue(envValues, "XTRAQ_API_MODE") ?? existing?.Api?.Mode;
+        var apiRequestsHydrateRaw = ResolveValue(envValues, "XTRAQ_API_HYDRATE")
+            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.Hydrate));
+        var apiRequestsHydrate = ParseSchemas(apiRequestsHydrateRaw);
+        var apiRequestsHydrateProceduresRaw = ResolveValue(envValues, "XTRAQ_API_HYDRATE_PROCEDURES")
+            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.HydrateProcedures));
+        var apiRequestsHydrateProcedures = ParseSchemas(apiRequestsHydrateProceduresRaw);
 
-        var hydrateParametersRaw = ResolveValue(envValues, "XTRAQ_HYDRATE_PARAMETERS")
-            ?? (existing is null ? null : string.Join(',', existing.MinimalApiHydrateParameters));
-        var hydrateParameters = ParseSchemas(hydrateParametersRaw);
-
-        var hydrateProceduresRaw = ResolveValue(envValues, "XTRAQ_HYDRATE_PROCEDURES")
-            ?? (existing is null ? null : string.Join(',', existing.MinimalApiHydrateProcedures));
-        var hydrateProcedures = ParseSchemas(hydrateProceduresRaw);
-
-        var entityFramework = existing?.EntityFramework;
-        var entityFrameworkRaw = ResolveValue(envValues, "XTRAQ_ENTITY_FRAMEWORK");
+        var entityFrameworkRaw = ResolveValue(envValues, "XTRAQ_ENTITY_FRAMEWORK_ENABLED");
+        var entityFrameworkEnabled = existing?.EntityFramework?.Enabled;
         if (entityFrameworkRaw is not null)
         {
             var parsed = ParseBoolean(entityFrameworkRaw);
             if (parsed.HasValue)
             {
-                entityFramework = parsed;
+                entityFrameworkEnabled = parsed;
             }
         }
 
@@ -434,11 +423,17 @@ internal static class TrackableConfigManager
             OutputDir = outputDir,
             TargetFramework = targetFramework,
             BuildSchemas = buildSchemas,
-            JsonIncludeNullValues = jsonIncludeNullValues,
-            MinimalApi = minimalApi,
-            EntityFramework = entityFramework,
-            MinimalApiHydrateParameters = hydrateParameters,
-            MinimalApiHydrateProcedures = hydrateProcedures
+            Api = new ApiPayload
+            {
+                Mode = apiModeRaw,
+                Requests = new ApiRequestPayload
+                {
+                    Hydrate = apiRequestsHydrate,
+                    HydrateProcedures = apiRequestsHydrateProcedures
+                }
+            },
+            EntityFramework = new EntityFrameworkPayload { Enabled = entityFrameworkEnabled },
+            ResultSet = new ResultSetPayload { Json = new JsonPayload { IncludeNullValues = includeNullValues } }
         };
     }
 
@@ -477,10 +472,11 @@ internal static class TrackableConfigManager
             var ns = TryReadTrimmedString(root, "Namespace");
             var outputDir = TryReadTrimmedString(root, "OutputDir");
             var targetFramework = TryReadTrimmedString(root, "TargetFramework");
-            var jsonIncludeNullValues = TryReadNullableBoolean(root, "JsonIncludeNullValues");
-            var (minimalApi, minimalApiHydrateParameters, minimalApiHydrateProcedures) = ReadMinimalApiSettings(root);
-            var entityFramework = TryReadNullableBoolean(root, "EntityFramework");
             var schemas = ReadSchemaArray(root, "BuildSchemas");
+
+            var api = ReadApiSettings(root);
+            var entityFramework = ReadEntityFrameworkSettings(root);
+            var resultSet = ReadResultSetSettings(root);
 
             return new TrackableConfigPayload
             {
@@ -488,11 +484,9 @@ internal static class TrackableConfigManager
                 OutputDir = outputDir,
                 TargetFramework = targetFramework,
                 BuildSchemas = schemas,
-                JsonIncludeNullValues = jsonIncludeNullValues,
-                MinimalApi = minimalApi,
+                Api = api,
                 EntityFramework = entityFramework,
-                MinimalApiHydrateParameters = minimalApiHydrateParameters,
-                MinimalApiHydrateProcedures = minimalApiHydrateProcedures
+                ResultSet = resultSet
             };
         }
         catch
@@ -521,18 +515,18 @@ internal static class TrackableConfigManager
         var namespaceValue = SelectString(overrides.Namespace, baseline.Namespace);
         var outputDirValue = SelectString(overrides.OutputDir, baseline.OutputDir);
         var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
-        var jsonIncludeNullValues = overrides.JsonIncludeNullValues ?? baseline.JsonIncludeNullValues;
-        var minimalApi = overrides.MinimalApi ?? baseline.MinimalApi;
-        var entityFramework = overrides.EntityFramework ?? baseline.EntityFramework;
+        var jsonIncludeNullValues = overrides.ResultSet?.Json?.IncludeNullValues ?? baseline.ResultSet?.Json?.IncludeNullValues;
+        var apiMode = SelectString(overrides.Api?.Mode, baseline.Api?.Mode);
+        var apiHydrate = overrides.Api?.Requests?.Hydrate.Count > 0
+            ? overrides.Api!.Requests!.Hydrate
+            : baseline.Api?.Requests?.Hydrate ?? Array.Empty<string>();
+        var apiHydrateProcedures = overrides.Api?.Requests?.HydrateProcedures.Count > 0
+            ? overrides.Api!.Requests!.HydrateProcedures
+            : baseline.Api?.Requests?.HydrateProcedures ?? Array.Empty<string>();
+        var entityFramework = overrides.EntityFramework?.Enabled ?? baseline.EntityFramework?.Enabled;
         var schemas = overrides.BuildSchemas.Count > 0
             ? overrides.BuildSchemas
             : baseline.BuildSchemas;
-        var hydrateParameters = overrides.MinimalApiHydrateParameters.Count > 0
-            ? overrides.MinimalApiHydrateParameters
-            : baseline.MinimalApiHydrateParameters;
-        var hydrateProcedures = overrides.MinimalApiHydrateProcedures.Count > 0
-            ? overrides.MinimalApiHydrateProcedures
-            : baseline.MinimalApiHydrateProcedures;
 
         return new TrackableConfigPayload
         {
@@ -540,11 +534,17 @@ internal static class TrackableConfigManager
             OutputDir = outputDirValue,
             TargetFramework = targetFrameworkValue,
             BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>(),
-            JsonIncludeNullValues = jsonIncludeNullValues,
-            MinimalApi = minimalApi,
-            EntityFramework = entityFramework,
-            MinimalApiHydrateParameters = hydrateParameters.Count > 0 ? hydrateParameters.ToArray() : Array.Empty<string>(),
-            MinimalApiHydrateProcedures = hydrateProcedures.Count > 0 ? hydrateProcedures.ToArray() : Array.Empty<string>()
+            Api = new ApiPayload
+            {
+                Mode = apiMode,
+                Requests = new ApiRequestPayload
+                {
+                    Hydrate = apiHydrate.Count > 0 ? apiHydrate.ToArray() : Array.Empty<string>(),
+                    HydrateProcedures = apiHydrateProcedures.Count > 0 ? apiHydrateProcedures.ToArray() : Array.Empty<string>()
+                }
+            },
+            EntityFramework = new EntityFrameworkPayload { Enabled = entityFramework },
+            ResultSet = new ResultSetPayload { Json = new JsonPayload { IncludeNullValues = jsonIncludeNullValues } }
         };
     }
 
@@ -566,32 +566,69 @@ internal static class TrackableConfigManager
             OutputDir = string.IsNullOrWhiteSpace(source.OutputDir) ? null : source.OutputDir.Trim(),
             TargetFramework = string.IsNullOrWhiteSpace(source.TargetFramework) ? null : source.TargetFramework.Trim(),
             BuildSchemas = source.BuildSchemas.Count > 0 ? source.BuildSchemas.ToArray() : Array.Empty<string>(),
-            JsonIncludeNullValues = source.JsonIncludeNullValues,
-            MinimalApi = source.MinimalApi,
-            EntityFramework = source.EntityFramework,
-            MinimalApiHydrateParameters = source.MinimalApiHydrateParameters.Count > 0 ? source.MinimalApiHydrateParameters.ToArray() : Array.Empty<string>(),
-            MinimalApiHydrateProcedures = source.MinimalApiHydrateProcedures.Count > 0 ? source.MinimalApiHydrateProcedures.ToArray() : Array.Empty<string>()
+            Api = source.Api is null
+                ? null
+                : new ApiPayload
+                {
+                    Mode = source.Api.Mode,
+                    Requests = source.Api.Requests is null
+                        ? null
+                        : new ApiRequestPayload
+                        {
+                            Hydrate = source.Api.Requests.Hydrate.Count > 0 ? source.Api.Requests.Hydrate.ToArray() : Array.Empty<string>(),
+                            HydrateProcedures = source.Api.Requests.HydrateProcedures.Count > 0 ? source.Api.Requests.HydrateProcedures.ToArray() : Array.Empty<string>()
+                        }
+                },
+            EntityFramework = source.EntityFramework is null ? null : new EntityFrameworkPayload { Enabled = source.EntityFramework.Enabled },
+            ResultSet = source.ResultSet is null ? null : new ResultSetPayload { Json = source.ResultSet.Json is null ? null : new JsonPayload { IncludeNullValues = source.ResultSet.Json.IncludeNullValues } }
         };
     }
 
-    private static (bool? MinimalApi, IReadOnlyList<string> HydrateParameters, IReadOnlyList<string> HydrateProcedures) ReadMinimalApiSettings(JsonElement root)
+    private static ApiPayload? ReadApiSettings(JsonElement root)
     {
-        if (root.TryGetProperty("MinimalApi", out var minimalApiElement))
+        if (!root.TryGetProperty("Api", out var apiElement) || apiElement.ValueKind != JsonValueKind.Object)
         {
-            if (minimalApiElement.ValueKind == JsonValueKind.Object)
-            {
-                var enabled = TryReadNullableBoolean(minimalApiElement, "Enabled") ?? true;
-                var hydrateParameters = ReadStringArray(minimalApiElement, "HydrateParameters");
-                var hydrateProcedures = ReadStringArray(minimalApiElement, "HydrateProcedures");
-                return (enabled, hydrateParameters, hydrateProcedures);
-            }
-
-            var enabledValue = TryReadNullableBoolean(root, "MinimalApi");
-            return (enabledValue, Array.Empty<string>(), Array.Empty<string>());
+            return null;
         }
 
-        var minimal = TryReadNullableBoolean(root, "MinimalApi");
-        return (minimal, Array.Empty<string>(), Array.Empty<string>());
+        var mode = TryReadTrimmedString(apiElement, "Mode");
+        ApiRequestPayload? requests = null;
+        if (apiElement.TryGetProperty("Requests", out var requestsElement) && requestsElement.ValueKind == JsonValueKind.Object)
+        {
+            requests = new ApiRequestPayload
+            {
+                Hydrate = ReadStringArray(requestsElement, "Hydrate"),
+                HydrateProcedures = ReadStringArray(requestsElement, "HydrateProcedures")
+            };
+        }
+
+        return new ApiPayload { Mode = mode, Requests = requests };
+    }
+
+    private static EntityFrameworkPayload? ReadEntityFrameworkSettings(JsonElement root)
+    {
+        if (!root.TryGetProperty("EntityFramework", out var efElement) || efElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new EntityFrameworkPayload { Enabled = TryReadNullableBoolean(efElement, "Enabled") };
+    }
+
+    private static ResultSetPayload? ReadResultSetSettings(JsonElement root)
+    {
+        if (!root.TryGetProperty("ResultSet", out var rsElement) || rsElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        JsonPayload? json = null;
+        if (rsElement.TryGetProperty("Json", out var jsonElement) && jsonElement.ValueKind == JsonValueKind.Object)
+        {
+            json = new JsonPayload { IncludeNullValues = TryReadNullableBoolean(jsonElement, "IncludeNullValues") };
+        }
+
+        return new ResultSetPayload { Json = json };
     }
 
     private static IReadOnlyList<string> ReadStringArray(JsonElement root, string propertyName)
@@ -815,29 +852,33 @@ internal static class TrackableConfigManager
             defaults["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', payload.BuildSchemas);
         }
 
-        if (payload.JsonIncludeNullValues.HasValue)
+        if (payload.ResultSet?.Json?.IncludeNullValues is not null)
         {
-            defaults["XTRAQ_JSON_INCLUDE_NULL_VALUES"] = payload.JsonIncludeNullValues.Value ? "1" : "0";
+            defaults["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = payload.ResultSet.Json.IncludeNullValues!.Value ? "1" : "0";
         }
 
-        if (payload.MinimalApi.HasValue)
+        if (!string.IsNullOrWhiteSpace(payload.Api?.Mode))
         {
-            defaults["XTRAQ_MINIMAL_API"] = payload.MinimalApi.Value ? "1" : "0";
+            defaults["XTRAQ_API_MODE"] = payload.Api!.Mode!.Trim();
+            if (string.Equals(payload.Api.Mode, "Minimal", StringComparison.OrdinalIgnoreCase))
+            {
+                defaults["XTRAQ_API_MODE_MINIMAL"] = "1";
+            }
         }
 
-        if (payload.MinimalApiHydrateParameters.Count > 0)
+        if (payload.Api?.Requests?.Hydrate is { Count: > 0 })
         {
-            defaults["XTRAQ_HYDRATE_PARAMETERS"] = string.Join(',', payload.MinimalApiHydrateParameters);
+            defaults["XTRAQ_API_HYDRATE"] = string.Join(',', payload.Api.Requests.Hydrate);
         }
 
-        if (payload.MinimalApiHydrateProcedures.Count > 0)
+        if (payload.Api?.Requests?.HydrateProcedures is { Count: > 0 })
         {
-            defaults["XTRAQ_HYDRATE_PROCEDURES"] = string.Join(',', payload.MinimalApiHydrateProcedures);
+            defaults["XTRAQ_API_HYDRATE_PROCEDURES"] = string.Join(',', payload.Api.Requests.HydrateProcedures);
         }
 
-        if (payload.EntityFramework.HasValue)
+        if (payload.EntityFramework?.Enabled is not null)
         {
-            defaults["XTRAQ_ENTITY_FRAMEWORK"] = payload.EntityFramework.Value ? "1" : "0";
+            defaults["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = payload.EntityFramework.Enabled!.Value ? "1" : "0";
         }
 
         return defaults;
@@ -883,11 +924,36 @@ internal static class TrackableConfigManager
         public string? Namespace { get; init; }
         public string? OutputDir { get; init; }
         public string? TargetFramework { get; init; }
-        public bool? JsonIncludeNullValues { get; init; }
         public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
-        public bool? MinimalApi { get; init; }
-        public bool? EntityFramework { get; init; }
-        public IReadOnlyList<string> MinimalApiHydrateParameters { get; init; } = Array.Empty<string>();
-        public IReadOnlyList<string> MinimalApiHydrateProcedures { get; init; } = Array.Empty<string>();
+        public ApiPayload? Api { get; init; }
+        public EntityFrameworkPayload? EntityFramework { get; init; }
+        public ResultSetPayload? ResultSet { get; init; }
+    }
+
+    private sealed record ApiPayload
+    {
+        public string? Mode { get; init; }
+        public ApiRequestPayload? Requests { get; init; }
+    }
+
+    private sealed record ApiRequestPayload
+    {
+        public IReadOnlyList<string> Hydrate { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<string> HydrateProcedures { get; init; } = Array.Empty<string>();
+    }
+
+    private sealed record EntityFrameworkPayload
+    {
+        public bool? Enabled { get; init; }
+    }
+
+    private sealed record ResultSetPayload
+    {
+        public JsonPayload? Json { get; init; }
+    }
+
+    private sealed record JsonPayload
+    {
+        public bool? IncludeNullValues { get; init; }
     }
 }

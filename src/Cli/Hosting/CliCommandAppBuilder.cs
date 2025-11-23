@@ -81,7 +81,7 @@ internal sealed class CliCommandAppBuilder
 
         _telemetryOption = new Option<bool>("--telemetry", "Persist a database telemetry report to .xtraq/telemetry");
         _jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values", "Emit JsonIncludeNullValues attribute for JSON result properties");
-        _entityFrameworkOption = new Option<bool>("--entity-framework", "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK)");
+        _entityFrameworkOption = new Option<bool>("--entity-framework", "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK_ENABLED)");
         _ciOption = new Option<bool>("--ci", "Disable Spectre.Console enhancements for CI/plain output modes");
 
         _projectOption = new Option<string?>("--project-path", "Project root path (.env file or directory). Defaults to current directory when omitted.");
@@ -626,7 +626,7 @@ internal sealed class CliCommandAppBuilder
 
         if (options.HasEntityFrameworkIntegrationOverride)
         {
-            Environment.SetEnvironmentVariable("XTRAQ_ENTITY_FRAMEWORK", options.EntityFrameworkIntegration ? "1" : null);
+            Environment.SetEnvironmentVariable("XTRAQ_ENTITY_FRAMEWORK_ENABLED", options.EntityFrameworkIntegration ? "1" : null);
         }
     }
 

@@ -53,8 +53,8 @@ public sealed class XtraqConfigurationTests
             Xunit.Assert.Equal("Server=(local);Database=App;", configuration.GeneratorConnectionString);
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH"));
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT"));
-            Xunit.Assert.False(configuration.EnableMinimalApiExtensions);
-            Xunit.Assert.False(configuration.EnableEntityFrameworkIntegration);
+            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.None, configuration.ApiMode);
+            Xunit.Assert.False(configuration.EntityFrameworkEnabled);
         }
         finally
         {
@@ -99,18 +99,18 @@ public sealed class XtraqConfigurationTests
                 "XTRAQ_GENERATOR_DB=Server=(local);Database=App;TrustServerCertificate=True;\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
-                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"MinimalApi\": false,\n  \"EntityFramework\": false\n}\n");
+                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"Api\": { \"Mode\": \"None\" },\n  \"EntityFramework\": { \"Enabled\": false }\n}\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig.local"),
-                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"MinimalApi\": true,\n  \"EntityFramework\": true\n}\n");
+                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"Api\": { \"Mode\": \"Minimal\" },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
             Xunit.Assert.Equal("Local.Namespace", configuration.NamespaceRoot);
             Xunit.Assert.Equal("LocalOutput", configuration.OutputDir);
             Xunit.Assert.Equal(new[] { "LocalOne", "LocalTwo" }, configuration.BuildSchemas);
-            Xunit.Assert.True(configuration.EnableMinimalApiExtensions);
-            Xunit.Assert.True(configuration.EnableEntityFrameworkIntegration);
+            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.Minimal, configuration.ApiMode);
+            Xunit.Assert.True(configuration.EntityFrameworkEnabled);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig.local"), configuration.ConfigPath);
         }
         finally
@@ -186,14 +186,14 @@ public sealed class XtraqConfigurationTests
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
                 "{\n" +
                 "  \"Namespace\": \"Hydration.Namespace\",\n" +
-                "  \"MinimalApi\": { \"Enabled\": true, \"HydrateParameters\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"HydrateProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] }\n" +
+                "  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"Hydrate\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"HydrateProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] } }\n" +
                 "}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
-            Xunit.Assert.True(configuration.EnableMinimalApiExtensions);
-            Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.MinimalApiHydrateParameters);
-            Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.MinimalApiHydrateProcedures);
+            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.Minimal, configuration.ApiMode);
+            Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.ApiHydrateParameters);
+            Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.ApiHydrateProcedures);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig"), configuration.ConfigPath);
         }
         finally

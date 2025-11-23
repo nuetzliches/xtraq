@@ -11,10 +11,6 @@ public sealed class XtraqConfiguration
     /// </summary>
     public string? GeneratorConnectionString { get; init; }
     /// <summary>
-    /// Gets the default connection string used by the generator runtime.
-    /// </summary>
-    public string? DefaultConnection { get; init; }
-    /// <summary>
     /// Gets the root namespace used for generated artifacts.
     /// </summary>
     public string? NamespaceRoot { get; init; }
@@ -35,25 +31,25 @@ public sealed class XtraqConfiguration
     /// </summary>
     public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
     /// <summary>
-    /// Gets a value indicating whether the generator should emit <c>[JsonIncludeNullValues]</c> attributes.
+    /// API integration mode. Minimal = emit Minimal API helpers; None = omit.
     /// </summary>
-    public bool EmitJsonIncludeNullValuesAttribute { get; init; }
+    public ApiMode ApiMode { get; init; } = ApiMode.None;
     /// <summary>
-    /// Gets a value indicating whether Minimal API helpers should be enabled for generated projects.
+    /// Optional global parameter hydration list applied to API endpoints (schema-qualified filters are configured separately).
     /// </summary>
-    public bool EnableMinimalApiExtensions { get; init; }
-    /// <summary>
-    /// Gets a value indicating whether Entity Framework Core integration helpers should be enabled for generated projects.
-    /// </summary>
-    public bool EnableEntityFrameworkIntegration { get; init; }
-    /// <summary>
-    /// Optional global parameter hydration list applied to Minimal API endpoints (schema-qualified filters are configured separately).
-    /// </summary>
-    public IReadOnlyList<string> MinimalApiHydrateParameters { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ApiHydrateParameters { get; init; } = Array.Empty<string>();
     /// <summary>
     /// Optional allow-list of schema-qualified procedures that should participate in automatic parameter hydration.
     /// </summary>
-    public IReadOnlyList<string> MinimalApiHydrateProcedures { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ApiHydrateProcedures { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// Gets a value indicating whether Entity Framework Core integration helpers should be enabled for generated projects.
+    /// </summary>
+    public bool EntityFrameworkEnabled { get; init; }
+    /// <summary>
+    /// Gets a value indicating whether result-set JSON should emit <c>[JsonIncludeNullValues]</c> attributes.
+    /// </summary>
+    public bool ResultSetJsonIncludeNullValues { get; init; }
 
     /// <summary>
     /// Loads the environment configuration by merging CLI overrides, environment variables, and .env settings.
@@ -157,59 +153,33 @@ public sealed class XtraqConfiguration
         }
 
         var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR")) ?? "Xtraq";
-        var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_JSON_INCLUDE_NULL_VALUES"));
-        var enableMinimalApi = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_MINIMAL_API"));
-        var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK"));
-        var hydrateParameters = ParseList(NullIfEmpty(Get("XTRAQ_HYDRATE_PARAMETERS")));
-        var hydrateProcedures = ParseList(NullIfEmpty(Get("XTRAQ_HYDRATE_PROCEDURES")));
+        var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE"));
+        var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
+            ? ApiMode.None
+            : apiModeRaw!.Equals("minimal", StringComparison.OrdinalIgnoreCase) ? ApiMode.Minimal : ApiMode.None;
+        var hydrateParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_HYDRATE")));
+        var hydrateProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_HYDRATE_PROCEDURES")));
+        var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK_ENABLED"));
+        var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"));
 
         var cfg = new XtraqConfiguration
         {
             GeneratorConnectionString = fullConn,
-            DefaultConnection = fullConn,
             NamespaceRoot = NullIfEmpty(Get("XTRAQ_NAMESPACE")),
             OutputDir = outputDirResolved,
             ConfigPath = File.Exists(effectiveConfigPath) ? effectiveConfigPath : null,
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
-            EmitJsonIncludeNullValuesAttribute = emitJsonIncludeNullValues,
-            EnableMinimalApiExtensions = enableMinimalApi,
-            EnableEntityFrameworkIntegration = enableEntityFramework,
-            MinimalApiHydrateParameters = hydrateParameters,
-            MinimalApiHydrateProcedures = hydrateProcedures
+            ApiMode = apiMode,
+            ApiHydrateParameters = hydrateParameters,
+            ApiHydrateProcedures = hydrateProcedures,
+            EntityFrameworkEnabled = enableEntityFramework,
+            ResultSetJsonIncludeNullValues = emitJsonIncludeNullValues
         };
 
         if (string.IsNullOrEmpty(envFilePath) || !File.Exists(envFilePath))
         {
-            if (verbose) Console.WriteLine("[xtraq] Migration: no .env file found.");
-            Console.Write("[xtraq] Create new .env now? (Y/n): ");
-            string? answer = null; try { answer = Console.ReadLine(); } catch { }
-            var create = true;
-            if (!string.IsNullOrWhiteSpace(answer))
-            {
-                var a = answer.Trim();
-                if (a.Equals("n", StringComparison.OrdinalIgnoreCase) || a.Equals("no", StringComparison.OrdinalIgnoreCase)) create = false;
-            }
-            if (!create)
-            {
-                throw new InvalidOperationException(".env file required when running Xtraq.");
-            }
-
-            var disableBootstrap = Environment.GetEnvironmentVariable("XTRAQ_DISABLE_ENV_BOOTSTRAP");
-            if (!string.IsNullOrWhiteSpace(disableBootstrap) && disableBootstrap != "0")
-                throw new InvalidOperationException(".env bootstrap disabled via XTRAQ_DISABLE_ENV_BOOTSTRAP; required for Xtraq.");
-
-            var bootstrapPath = Xtraq.Cli.ProjectEnvironmentBootstrapper.EnsureEnvAsync(projectRoot).GetAwaiter().GetResult();
-            if (!File.Exists(bootstrapPath))
-            {
-                throw new InvalidOperationException(".env bootstrap failed - required for Xtraq.");
-            }
-
-            Xtraq.Configuration.TrackableConfigManager.WriteDefaultProjectPath(projectRoot);
-
-            envFilePath = bootstrapPath;
-            filePairs = LoadDotEnv(envFilePath);
-            PublishEnvironmentVariables(filePairs, overwrite: true);
+            if (verbose) Console.WriteLine("[xtraq] No .env file found; continuing without env bootstrap.");
         }
         Validate(cfg, envFilePath);
         return cfg;
@@ -238,9 +208,7 @@ public sealed class XtraqConfiguration
 
         if (!string.IsNullOrWhiteSpace(envFilePath) && File.Exists(envFilePath))
         {
-            var hasMarker = File.ReadLines(envFilePath).Any(l => l.Contains("XTRAQ_", StringComparison.OrdinalIgnoreCase));
-            if (!hasMarker)
-                throw new InvalidOperationException(".env file has no XTRAQ_ marker lines.");
+            // .env is optional; marker check removed to allow offline/DB-less init.
         }
         if (string.IsNullOrWhiteSpace(cfg.GeneratorConnectionString))
             throw new InvalidOperationException("XTRAQ_GENERATOR_DB must be configured via environment variables or .env.");
@@ -348,4 +316,13 @@ public sealed class XtraqConfiguration
                   .ToList();
     }
 
+}
+
+/// <summary>API integration mode emitted by the generator.</summary>
+public enum ApiMode
+{
+    /// <summary>No API helpers are generated.</summary>
+    None = 0,
+    /// <summary>Generate Minimal API helpers and enable related pipeline templates.</summary>
+    Minimal = 1
 }

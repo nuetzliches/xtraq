@@ -21,31 +21,31 @@ internal abstract class GeneratorBase
 
     protected bool ShouldEmitJsonIncludeNullValues()
     {
-        if (Configuration?.EmitJsonIncludeNullValuesAttribute == true)
+        if (Configuration?.ResultSetJsonIncludeNullValues == true)
         {
             return true;
         }
 
-        return EnvironmentHelper.IsTrue("XTRAQ_JSON_INCLUDE_NULL_VALUES");
+        return EnvironmentHelper.IsTrue("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES");
     }
 
     protected bool ShouldEmitMinimalApiExtensions()
     {
-        if (Configuration?.EnableMinimalApiExtensions == true)
+        if (Configuration?.ApiMode == ApiMode.Minimal)
         {
             return true;
         }
 
-        return EnvironmentHelper.IsTrue("XTRAQ_MINIMAL_API");
+        return EnvironmentHelper.IsTrue("XTRAQ_API_MODE_MINIMAL") || EnvironmentHelper.IsTrue("XTRAQ_API_MINIMAL") || string.Equals(Environment.GetEnvironmentVariable("XTRAQ_API_MODE"), "minimal", StringComparison.OrdinalIgnoreCase);
     }
 
     protected bool ShouldEmitEntityFrameworkIntegration()
     {
-        if (Configuration?.EnableEntityFrameworkIntegration == true)
+        if (Configuration?.EntityFrameworkEnabled == true)
         {
             return true;
         }
 
-        return EnvironmentHelper.IsTrue("XTRAQ_ENTITY_FRAMEWORK");
+        return EnvironmentHelper.IsTrue("XTRAQ_ENTITY_FRAMEWORK_ENABLED");
     }
 }
