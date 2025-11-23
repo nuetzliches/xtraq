@@ -13,7 +13,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -214,7 +214,7 @@ public static class UserFindExtensions
 
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
 /// <summary>Minimal API extension for '[sample].[UserFind]'.</summary>
 public static class UserFindRouteHandlerBuilderExtensions
 {

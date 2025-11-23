@@ -164,9 +164,9 @@ public sealed class XtraqConfigurationTests
             "XTRAQ_PROJECT_ROOT",
             "XTRAQ_NAMESPACE",
             "XTRAQ_GENERATOR_DB",
-            "XTRAQ_MINIMAL_API",
-            "XTRAQ_HYDRATE_PARAMETERS",
-            "XTRAQ_HYDRATE_PROCEDURES"
+            "XTRAQ_API_MODE",
+            "XTRAQ_API_HYDRATE",
+            "XTRAQ_API_HYDRATE_PROCEDURES"
         };
 
         var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);

@@ -7,6 +7,8 @@
 
 Xtraq turns SQL Server stored procedures into strongly typed, production-ready C# libraries. The CLI targets .NET 10.0 by default while staying multi-targeted for .NET 8.0 clients that need the current LTS.
 
+**Status: Release Candidate** — config schema and templates are stable (`Api.*`, `EntityFramework.Enabled`, `ResultSet.Json.IncludeNullValues`). Regenerate artefacts with `xtraq build` to pick up the latest symbols.
+
 ## What Xtraq does
 
 - **Generates C# access layers** from stored procedures, including inputs, result models, context helpers, and execution pipelines.
@@ -39,7 +41,7 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 ## Quick start
 
 1. **Install** – `dotnet tool install --global xtraq`
-2. **Configure** – `xtraq init` writes non-secret defaults to `.xtraqconfig`, ships an `.env.example` template, and keeps sensitive values in a project-scoped `.env` file.
+2. **Configure** – `xtraq init` writes non-secret defaults to `.xtraqconfig` (required). Secrets can live in a project-scoped `.env`, but `.env` is optional for offline/DB-less work.
 3. **Snapshot** – `xtraq snapshot` pulls stored procedure metadata and result shapes into the local cache.
 4. **Generate** – `xtraq build` emits strongly typed C# artefacts ready to commit, package, or publish.
 
@@ -47,6 +49,25 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — primary target framework for new generators and samples.
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — optional when you must build against the current LTS.
+
+## Configuration highlights
+
+```jsonc
+{
+  "Api": {
+    "Mode": "Minimal",
+    "Requests": {
+      "Hydrate": ["@UserId INT"],
+      "HydrateProcedures": ["sample.UserCompositeJsonSnapshot"]
+    }
+  },
+  "EntityFramework": { "Enabled": true },
+  "ResultSet": { "Json": { "IncludeNullValues": false } }
+}
+```
+
+- Environment keys mirror the schema: `XTRAQ_API_MODE`, `XTRAQ_API_HYDRATE`, `XTRAQ_API_HYDRATE_PROCEDURES`, `XTRAQ_ENTITY_FRAMEWORK_ENABLED`, `XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES`.
+- Generated artefacts are read-only — rerun `xtraq build` rather than editing `*/Xtraq/` folders.
 
 ## License
 

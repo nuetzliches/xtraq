@@ -79,7 +79,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
             return builderCode;
         }
 
-        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_API_MINIMAL";
+        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL";
         const string endMarker = "#endif";
 
         var startIndex = builderCode.IndexOf(startMarker, StringComparison.Ordinal);

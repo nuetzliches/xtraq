@@ -36,7 +36,7 @@ internal abstract class GeneratorBase
             return true;
         }
 
-        return EnvironmentHelper.IsTrue("XTRAQ_API_MODE_MINIMAL") || EnvironmentHelper.IsTrue("XTRAQ_API_MINIMAL") || string.Equals(Environment.GetEnvironmentVariable("XTRAQ_API_MODE"), "minimal", StringComparison.OrdinalIgnoreCase);
+        return EnvironmentHelper.IsTrue("XTRAQ_API_MODE_MINIMAL") || string.Equals(Environment.GetEnvironmentVariable("XTRAQ_API_MODE"), "minimal", StringComparison.OrdinalIgnoreCase);
     }
 
     protected bool ShouldEmitEntityFrameworkIntegration()

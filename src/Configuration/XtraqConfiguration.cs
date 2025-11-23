@@ -109,6 +109,12 @@ public sealed class XtraqConfiguration
             throw new InvalidOperationException("Xtraq project is not initialised. Run 'xtraq init'.");
         }
 
+        ValidateConfigSchema(configFilePath);
+        if (File.Exists(localConfigFilePath))
+        {
+            ValidateConfigSchema(localConfigFilePath);
+        }
+
         projectRoot = TrackableConfigManager.ResolveRedirectTargets(configDirectory) ?? configDirectory;
         var trackedDefaults = TrackableConfigManager.ReadDefaults(projectRoot);
 
@@ -233,6 +239,43 @@ public sealed class XtraqConfiguration
         var local = Path.Combine(projectRoot, ".env.local");
         if (File.Exists(local)) return local;
         return primary;
+    }
+
+    private static void ValidateConfigSchema(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            if (root.TryGetProperty("EntityFramework", out var ef) && ef.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException($"The configuration file '{path}' uses legacy 'EntityFramework' boolean. Replace with object: \"EntityFramework\": {{ \"Enabled\": true/false }}.");
+            }
+
+            if (root.TryGetProperty("JsonIncludeNullValues", out _))
+            {
+                throw new InvalidOperationException($"The configuration file '{path}' uses legacy 'JsonIncludeNullValues'. Replace with \"ResultSet\": {{ \"Json\": {{ \"IncludeNullValues\": true/false }} }}.");
+            }
+
+            if (root.TryGetProperty("HydrateParameters", out _) || root.TryGetProperty("HydrateProcedures", out _))
+            {
+                throw new InvalidOperationException($"The configuration file '{path}' uses legacy hydration keys. Use \"Api\": {{ \"Requests\": {{ \"Hydrate\": [...], \"HydrateProcedures\": [...] }} }}.");
+            }
+        }
+        catch (JsonException)
+        {
+            // ignore malformed JSON here; the existing validation will handle errors later
+        }
     }
 
     /// <summary>
