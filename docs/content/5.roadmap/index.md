@@ -71,6 +71,13 @@ Recent changes shipped the CTE-aware resolver, JSON root alias extraction, and t
 - [x] Add an adapter layer (`ProcedureResultEntityAdapter`) that maps procedure rows into tracked EF entities or keyless query types to enable hybrid read patterns without manual mapping. _(Ships via the shared adapter template; documented under Entity Framework integration with attach/keyless examples.)_
 - [x] Support EF interceptors so procedure executions can join ambient transactions and leverage EF's logging providers, keeping configuration consistent across direct EF queries and Xtraq procedure calls. _(ProcedureExecutor now aggregates global and scoped interceptors, and the EF adapter exposes them via `IXtraqProcedureInterceptorProvider` implementations so ambient transactions and logging flow through shared interceptors.)_
 
+## SpocR Manager Migration (legacy managers)
+
+- [x] Add an ambient binder for the legacy `Context` TVP that hydrates user/app/language metadata from DI and merges `RecordId`/`RowVersion`/`Overwrite` flags from request models so generated inputs do not need manual `With(...)` calls. _(Input-aware parameter binding helpers shipped; wire defaults in consuming app.)_
+- [x] Provide a `ResponseResult`/history compatibility policy that wraps Xtraq outputs, invokes the existing `HistoryCreate` procedure with configurable entity/action labels and serialized payloads, and preserves legacy envelopes for controllers. _(Result/History callback policies added to core; domain wiring pending.)_
+- [x] Deliver an entity-change dispatch hook (policy or interceptor) that mirrors the current proxy attributes (`EntityChangesDispatcher`/`DispatchEntityChanges`/`IgnoreEntityChanges`), inspects request parents, and publishes `EntityChangesHubMessage`s via SignalR after successful executions. _(Generic dispatch policy added; consumer supplies hub callback.)_
+- [x] Extend transaction ergonomics with optional labels and a safe way to borrow the ambient `DbTransaction`/`DbConnection` from the orchestrator so chained procedure calls and auxiliary ADO.NET work share the same scope. _(Pipeline execution context now exposes ambient connection/transaction for downstream use.)_
+
 ## Telemetry
 
 - [x] Evaluate whether to migrate CLI telemetry to align with the guidance at https://aka.ms/dotnet-cli-telemetry and document the rollout decision. _(Decision logged in `/meta/cli-telemetry-alignment`: telemetry now requires `--telemetry`, produces local-only JSON reports, and remains offline until a privacy-reviewed ingestion endpoint exists. Tests cover the opt-in behavior.)_

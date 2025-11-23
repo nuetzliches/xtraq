@@ -114,6 +114,36 @@ public sealed class ParameterBindingOptions
         return this;
     }
 
+    public ParameterBindingOptions BindScalarWithInput<T>(string name, Func<object?, IServiceProvider?, CancellationToken, ValueTask<T>> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, async ctx => (object?)await resolver(ctx.Input, ctx.Services, ctx.CancellationToken).ConfigureAwait(false), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindScalarWithInput<T>(string name, Func<object?, IServiceProvider?, T> resolver, params string[] procedures)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, false, ctx => new ValueTask<object?>(resolver(ctx.Input, ctx.Services)), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTableWithInput<T>(string name, Func<object?, IServiceProvider?, CancellationToken, ValueTask<IEnumerable<T>>> resolver, params string[] procedures)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, async ctx => (object?)await resolver(ctx.Input, ctx.Services, ctx.CancellationToken).ConfigureAwait(false), CreateFilter(procedures)));
+        return this;
+    }
+
+    public ParameterBindingOptions BindTableWithInput<T>(string name, Func<object?, IServiceProvider?, IEnumerable<T>> resolver, params string[] procedures)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _bindings.Add(new ParameterBinding(name, true, ctx => new ValueTask<object?>(resolver(ctx.Input, ctx.Services)), CreateFilter(procedures)));
+        return this;
+    }
+
     private static Func<string, bool>? CreateFilter(IReadOnlyList<string>? procedures)
     {
         if (procedures is null || procedures.Count == 0)

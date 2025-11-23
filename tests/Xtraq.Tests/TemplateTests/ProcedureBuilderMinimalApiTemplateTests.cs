@@ -45,6 +45,8 @@ public sealed class ProcedureBuilderMinimalApiTemplateTests
 // harness
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Data;
+using System.Data.Common;
 
 namespace TestNamespace
 {
@@ -56,6 +58,8 @@ namespace TestNamespace
 
     public interface IXtraqTransactionOrchestrator
     {
+        DbConnection? CurrentConnection { get; }
+        DbTransaction? CurrentTransaction { get; }
         ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default);
     }
 
@@ -73,6 +77,8 @@ namespace TestNamespace
 
     public sealed class FakeOrchestrator : IXtraqTransactionOrchestrator
     {
+        public DbConnection? CurrentConnection => null;
+        public DbTransaction? CurrentTransaction => null;
         public ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(new XtraqTransactionScope());
     }

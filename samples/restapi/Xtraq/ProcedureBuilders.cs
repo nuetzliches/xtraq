@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 #endif
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -348,6 +349,8 @@ public interface IProcedureExecutionContext
     object? InputValue { get; }
     string? Label { get; }
     IXtraqTransactionOrchestrator TransactionOrchestrator { get; }
+    DbConnection? AmbientConnection { get; }
+    DbTransaction? AmbientTransaction { get; }
 }
 
 public readonly record struct ProcedureExecutionContext<TInput>(
@@ -357,6 +360,8 @@ public readonly record struct ProcedureExecutionContext<TInput>(
     IXtraqTransactionOrchestrator TransactionOrchestrator) : IProcedureExecutionContext
 {
     object? IProcedureExecutionContext.InputValue => Input;
+    public DbConnection? AmbientConnection => TransactionOrchestrator.CurrentConnection;
+    public DbTransaction? AmbientTransaction => TransactionOrchestrator.CurrentTransaction;
 }
 
 public delegate ValueTask<TResult> ProcedureCallDelegate<TInput, TResult>(

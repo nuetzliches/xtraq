@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Threading;
+using System.Data;
+using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -29,9 +31,11 @@ public sealed class ProcedureBuilderTemplateTests
             .Replace("{{ HEADER }}", "// generated for tests")
             .Replace("{{ Namespace }}", "TestNamespace");
 
-        var harnessSource = @"// harness
+var harnessSource = @"// harness
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -70,6 +74,8 @@ public sealed class XtraqTransactionScope : IAsyncDisposable
 
 public interface IXtraqTransactionOrchestrator
 {
+    DbConnection? CurrentConnection { get; }
+    DbTransaction? CurrentTransaction { get; }
     ValueTask<XtraqTransactionScope> BeginAsync(XtraqTransactionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
@@ -80,6 +86,8 @@ public interface IXtraqTransactionOrchestratorAccessor
 
 public sealed class FakeOrchestrator : IXtraqTransactionOrchestrator
 {
+    public DbConnection? CurrentConnection => null;
+    public DbTransaction? CurrentTransaction => null;
     public int BeginCount { get; private set; }
     public int CommitCount { get; private set; }
     public int RollbackCount { get; private set; }
@@ -343,6 +351,8 @@ public static class BuilderHarness
             typeof(CancellationToken).Assembly,
             typeof(System.Text.Json.JsonSerializer).Assembly,
             typeof(System.Text.RegularExpressions.Regex).Assembly,
+            typeof(DbConnection).Assembly,
+            typeof(DbTransaction).Assembly,
             typeof(Microsoft.Extensions.DependencyInjection.ServiceCollection).Assembly
         };
 

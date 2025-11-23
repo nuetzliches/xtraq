@@ -1,0 +1,54 @@
+{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+/// <summary>
+/// Invokes a dispatcher after successful execution to propagate entity-change notifications (for example SignalR hubs).
+/// </summary>
+public sealed class EntityChangeDispatchExecutionPolicy<TInput, TResult> : IProcedureExecutionPolicy
+{
+    private readonly Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask> _dispatch;
+
+    public EntityChangeDispatchExecutionPolicy(Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask> dispatch)
+    {
+        _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
+    }
+
+    public EntityChangeDispatchExecutionPolicy(Func<ProcedureExecutionContext<TInput>, TResult, Task> dispatch)
+    {
+        if (dispatch is null) throw new ArgumentNullException(nameof(dispatch));
+        _dispatch = (ctx, result, _) => new ValueTask(dispatch(ctx, result));
+    }
+
+    public async ValueTask<TOut> ExecuteAsync<TIn, TOut>(
+        ProcedureExecutionContext<TIn> context,
+        ProcedureCallDelegate<TIn, TOut> next,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+
+        var isTarget = typeof(TIn) == typeof(TInput) && typeof(TOut) == typeof(TResult);
+        if (!isTarget)
+        {
+            return await next(context, cancellationToken).ConfigureAwait(false);
+        }
+
+        var result = await next(context, cancellationToken).ConfigureAwait(false);
+        await _dispatch(Rewrap(context), (TResult)(object)result!, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    private static ProcedureExecutionContext<TInput> Rewrap<TIn>(ProcedureExecutionContext<TIn> context)
+    {
+        var baseContext = (IProcedureExecutionContext)context;
+        return new ProcedureExecutionContext<TInput>(
+            context.DbContext,
+            (TInput)baseContext.InputValue!,
+            baseContext.Label,
+            context.TransactionOrchestrator);
+    }
+}

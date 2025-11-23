@@ -1,0 +1,98 @@
+{{ HEADER }}
+#nullable enable
+namespace {{ Namespace }};
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+/// <summary>
+/// Generic execution policy that can tap or transform the result (or failure) of a procedure call without changing the executor signature.
+/// Useful for wrapping outputs into legacy envelopes or triggering side effects such as history logging.
+/// </summary>
+public sealed class ResultCallbackExecutionPolicy<TInput, TResult> : IProcedureExecutionPolicy
+{
+    private readonly Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask<TResult>>? _onSuccess;
+    private readonly Func<ProcedureExecutionContext<TInput>, Exception, CancellationToken, ValueTask<TResult>>? _onFailure;
+
+    public ResultCallbackExecutionPolicy(
+        Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask<TResult>> onSuccess,
+        Func<ProcedureExecutionContext<TInput>, Exception, CancellationToken, ValueTask<TResult>>? onFailure = null)
+    {
+        _onSuccess = onSuccess ?? throw new ArgumentNullException(nameof(onSuccess));
+        _onFailure = onFailure;
+    }
+
+    public ResultCallbackExecutionPolicy(
+        Func<ProcedureExecutionContext<TInput>, TResult, TResult> onSuccess,
+        Func<ProcedureExecutionContext<TInput>, Exception, TResult>? onFailure = null)
+    {
+        _onSuccess = onSuccess is null ? null : (ctx, result, _) => ValueTask.FromResult(onSuccess(ctx, result));
+        _onFailure = onFailure is null ? null : (ctx, ex, _) => ValueTask.FromResult(onFailure(ctx, ex));
+        if (_onSuccess is null)
+        {
+            throw new ArgumentNullException(nameof(onSuccess));
+        }
+    }
+
+    public async ValueTask<TOut> ExecuteAsync<TIn, TOut>(
+        ProcedureExecutionContext<TIn> context,
+        ProcedureCallDelegate<TIn, TOut> next,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+
+        var isTarget = typeof(TIn) == typeof(TInput) && typeof(TOut) == typeof(TResult);
+        if (!isTarget)
+        {
+            return await next(context, cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            var result = await next(context, cancellationToken).ConfigureAwait(false);
+            if (_onSuccess is null)
+            {
+                return result;
+            }
+
+            var typedContext = Rewrap(context);
+            var transformed = await _onSuccess(typedContext, (TResult)(object)result!, cancellationToken).ConfigureAwait(false);
+            return (TOut)(object)transformed!;
+        }
+        catch (Exception ex)
+        {
+            if (_onFailure is null)
+            {
+                throw;
+            }
+
+            var typedContext = Rewrap(context);
+            var fallback = await _onFailure(typedContext, ex, cancellationToken).ConfigureAwait(false);
+            return (TOut)(object)fallback!;
+        }
+    }
+
+    private static ProcedureExecutionContext<TInput> Rewrap<TIn>(ProcedureExecutionContext<TIn> context)
+    {
+        var baseContext = (IProcedureExecutionContext)context;
+        return new ProcedureExecutionContext<TInput>(
+            context.DbContext,
+            (TInput)baseContext.InputValue!,
+            baseContext.Label,
+            context.TransactionOrchestrator);
+    }
+}
+
+public static class ResultCallbackExecutionPolicy
+{
+    public static ResultCallbackExecutionPolicy<TInput, TResult> Create<TInput, TResult>(
+        Func<ProcedureExecutionContext<TInput>, TResult, CancellationToken, ValueTask<TResult>> onSuccess,
+        Func<ProcedureExecutionContext<TInput>, Exception, CancellationToken, ValueTask<TResult>>? onFailure = null)
+        => new(onSuccess, onFailure);
+
+    public static ResultCallbackExecutionPolicy<TInput, TResult> Create<TInput, TResult>(
+        Func<ProcedureExecutionContext<TInput>, TResult, TResult> onSuccess,
+        Func<ProcedureExecutionContext<TInput>, Exception, TResult>? onFailure = null)
+        => new(onSuccess, onFailure);
+}
