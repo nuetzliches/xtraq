@@ -1,0 +1,35 @@
+name: "Docs / Usage Feedback"
+description: "Report gaps, errors, or confusing docs"
+title: "[Docs]: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us make the docs clearer.
+  - type: input
+    id: location
+    attributes:
+      label: Page / Link
+      description: Path or URL of the page that should be improved.
+      placeholder: docs/content/3.reference/2.api-integration.md
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is unclear or wrong?
+      description: Describe the gap, error, or confusion.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: Wording ideas, extra examples, or screenshots.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Relevant versions, commands, code snippets, or screenshots.

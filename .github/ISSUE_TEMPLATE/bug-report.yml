@@ -1,0 +1,71 @@
+name: "Bug Report"
+description: "Report a malfunction or regression"
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please complete the required fields so we can reproduce quickly.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part is affected?
+      options:
+        - Generator / CLI
+        - Runtime / Library
+        - Templates
+        - Documentation
+        - Samples
+        - CI / Build
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Xtraq version
+      description: Version or commit hash you used.
+      placeholder: e.g., 1.2.3 or 1.2.3-beta / commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, .NET SDK/Runtime, DB engine/version, relevant package versions.
+      placeholder: Windows 11, .NET 8.0.x SDK, SQL Server 2022, ...
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Briefly describe the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps including `xtraq` commands, SQL snippets, or code.
+      placeholder: |
+        1. ...
+        2. ...
+        Expected: ...
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Stacktrace
+      description: Relevant output, error text, or screenshots.
+      render: shell
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional info
+      description: Workarounds, frequency, other hints.

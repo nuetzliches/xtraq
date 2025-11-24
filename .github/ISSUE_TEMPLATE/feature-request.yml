@@ -1,0 +1,54 @@
+name: "Feature Request"
+description: "Suggest a new capability or enhancement"
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the benefit and change you want so we can evaluate it.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part is affected?
+      options:
+        - Generator / CLI
+        - Runtime / Library
+        - Templates
+        - Documentation
+        - Samples
+        - CI / Build
+    validations:
+      required: true
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use Case / Problem
+      description: What goal or problem does this solve?
+      placeholder: Who benefits and why?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Desired behavior, API sketch, or config example.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you tried or other ideas.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Performance, breaking-change, or migration notes.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional info
+      description: References, links, related issues.
