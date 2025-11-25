@@ -204,39 +204,3 @@ internal sealed class JsonFunctionEnhancementService : IJsonFunctionEnhancementS
         return false;
     }
 }
-
-/// <summary>
-/// Extension methods for ProcedureResultColumn to support JSON function enhancements.
-/// These provide a foundation for future enhancements when the data model supports them.
-/// </summary>
-internal static class ProcedureResultColumnExtensions
-{
-    /// <summary>
-    /// Check if this column represents a JSON function call that might need enhancement.
-    /// </summary>
-    public static bool IsJsonFunctionCandidate(this ProcedureResultColumn column)
-    {
-        if (column == null)
-        {
-            return false;
-        }
-
-        return column.ExpressionKind == ProcedureResultColumnExpressionKind.FunctionCall &&
-               (column.ReturnsJson == true ||
-                string.Equals(column.Reference?.Name, "JSON_QUERY", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Check if this column uses the generic JSON_QUERY reference (legacy behavior).
-    /// </summary>
-    public static bool UsesGenericJsonQueryReference(this ProcedureResultColumn column)
-    {
-        if (column?.Reference is not { } reference)
-        {
-            return false;
-        }
-
-        return string.Equals(reference.Name, "JSON_QUERY", StringComparison.OrdinalIgnoreCase) &&
-            reference.Kind == ProcedureReferenceKind.Function;
-    }
-}

@@ -1,5 +1,4 @@
 using System.Data;
-using System.Runtime.CompilerServices;
 
 namespace Xtraq.Telemetry;
 
@@ -369,35 +368,6 @@ internal sealed class DatabaseTelemetryCollector : IDatabaseTelemetryCollector
 /// <summary>
 /// Helper utilities for telemetry instrumentation.
 /// </summary>
-internal static class DatabaseTelemetryCollectorExtensions
-{
-    public static IDatabaseQueryTelemetryScope StartQuery(
-        this IDatabaseTelemetryCollector collector,
-        string operation,
-        string? category,
-        string commandText,
-        CommandType commandType,
-        int parameterCount,
-        string? telemetryOverrideName = null,
-        string? telemetryCategory = null,
-        [CallerMemberName] string caller = "",
-        [CallerFilePath] string? filePath = null,
-        [CallerLineNumber] int lineNumber = 0)
-    {
-        var metadata = new DatabaseQueryTelemetryMetadata(
-            Operation: telemetryOverrideName ?? operation,
-            Category: telemetryCategory ?? category,
-            CommandText: commandText,
-            CommandType: commandType,
-            ParameterCount: parameterCount,
-            Caller: caller,
-            FilePath: filePath,
-            LineNumber: lineNumber == 0 ? null : lineNumber);
-
-        return collector.StartQuery(metadata);
-    }
-}
-
 file sealed class OperationGroupingComparer : IEqualityComparer<(string Operation, string? Category)>
 {
     public static readonly OperationGroupingComparer Instance = new();

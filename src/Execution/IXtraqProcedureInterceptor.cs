@@ -13,12 +13,3 @@ public interface IXtraqProcedureInterceptor
     /// <summary>Called after execution completes (success or failure). Receives state from <see cref="OnBeforeExecuteAsync"/>.</summary>
     Task OnAfterExecuteAsync(string procedureName, DbCommand command, bool success, string? error, TimeSpan duration, object? beforeState, object? aggregate, CancellationToken cancellationToken);
 }
-
-/// <summary>
-/// Default no-op interceptor used when none registered.
-/// </summary>
-internal sealed class NoOpProcedureInterceptor : IXtraqProcedureInterceptor
-{
-    public Task<object?> OnBeforeExecuteAsync(string procedureName, DbCommand command, object? state, CancellationToken cancellationToken) => Task.FromResult<object?>(null);
-    public Task OnAfterExecuteAsync(string procedureName, DbCommand command, bool success, string? error, TimeSpan duration, object? beforeState, object? aggregate, CancellationToken cancellationToken) => Task.CompletedTask;
-}
