@@ -376,7 +376,7 @@ internal static class TrackableConfigManager
         }
     }
 
-    private static TrackableConfigPayload BuildPayload(string projectRoot, IReadOnlyDictionary<string, string?>? envValues)
+    private static Dictionary<string, object?> BuildPayload(string projectRoot, IReadOnlyDictionary<string, string?>? envValues)
     {
         var existing = ReadConfigPayload(projectRoot, ConfigFileName);
         var ns = ResolveValue(envValues, "XTRAQ_NAMESPACE") ?? existing?.Namespace;
@@ -417,7 +417,7 @@ internal static class TrackableConfigManager
             }
         }
 
-        return new TrackableConfigPayload
+        var payload = new TrackableConfigPayload
         {
             Namespace = ns,
             OutputDir = outputDir,
@@ -434,6 +434,125 @@ internal static class TrackableConfigManager
             },
             EntityFramework = new EntityFrameworkPayload { Enabled = entityFrameworkEnabled },
             ResultSet = new ResultSetPayload { Json = new JsonPayload { IncludeNullValues = includeNullValues } }
+        };
+
+        return NormalizePayload(payload);
+    }
+
+    private static Dictionary<string, object?> NormalizePayload(TrackableConfigPayload payload)
+    {
+        var map = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(payload.Namespace))
+        {
+            map["Namespace"] = payload.Namespace.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.OutputDir) && !string.Equals(payload.OutputDir.Trim(), "Xtraq", StringComparison.OrdinalIgnoreCase))
+        {
+            map["OutputDir"] = payload.OutputDir.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.TargetFramework) && !string.Equals(payload.TargetFramework.Trim(), Constants.DefaultTargetFramework.ToFrameworkString(), StringComparison.OrdinalIgnoreCase))
+        {
+            map["TargetFramework"] = payload.TargetFramework.Trim();
+        }
+
+        if (payload.BuildSchemas.Count > 0)
+        {
+            map["BuildSchemas"] = payload.BuildSchemas;
+        }
+
+        var api = NormalizeApiPayload(payload.Api);
+        if (api is not null)
+        {
+            map["Api"] = api;
+        }
+
+        var entityFramework = NormalizeEntityFrameworkPayload(payload.EntityFramework);
+        if (entityFramework is not null)
+        {
+            map["EntityFramework"] = entityFramework;
+        }
+
+        var resultSet = NormalizeResultSetPayload(payload.ResultSet);
+        if (resultSet is not null)
+        {
+            map["ResultSet"] = resultSet;
+        }
+
+        return map;
+    }
+
+    private static Dictionary<string, object?>? NormalizeApiPayload(ApiPayload? api)
+    {
+        if (api is null)
+        {
+            return null;
+        }
+
+        var apiMap = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(api.Mode) && !api.Mode.Trim().Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            apiMap["Mode"] = api.Mode.Trim();
+        }
+
+        var requests = NormalizeApiRequests(api.Requests);
+        if (requests is not null)
+        {
+            apiMap["Requests"] = requests;
+        }
+
+        return apiMap.Count == 0 ? null : apiMap;
+    }
+
+    private static Dictionary<string, object?>? NormalizeApiRequests(ApiRequestPayload? requests)
+    {
+        if (requests is null)
+        {
+            return null;
+        }
+
+        var requestsMap = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        if (requests.Hydrate.Count > 0)
+        {
+            requestsMap["Hydrate"] = requests.Hydrate;
+        }
+
+        if (requests.HydrateProcedures.Count > 0)
+        {
+            requestsMap["HydrateProcedures"] = requests.HydrateProcedures;
+        }
+
+        return requestsMap.Count == 0 ? null : requestsMap;
+    }
+
+    private static Dictionary<string, object?>? NormalizeEntityFrameworkPayload(EntityFrameworkPayload? entityFramework)
+    {
+        if (entityFramework?.Enabled != true)
+        {
+            return null;
+        }
+
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Enabled"] = true
+        };
+    }
+
+    private static Dictionary<string, object?>? NormalizeResultSetPayload(ResultSetPayload? resultSet)
+    {
+        if (resultSet?.Json?.IncludeNullValues != true)
+        {
+            return null;
+        }
+
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Json"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["IncludeNullValues"] = true
+            }
         };
     }
 

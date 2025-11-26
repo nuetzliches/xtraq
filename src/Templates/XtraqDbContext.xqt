@@ -2,13 +2,14 @@
 // {{ GeneratorLabel }}. This file is generated; do not edit directly.
 // Customize via additional partial classes or extension templates.
 #nullable enable
-namespace {{ Namespace }};
-
 using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace {{ Namespace }};
 
 /// <summary>Generated database context providing ADO.NET connection helpers and health probe.</summary>
 public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor, IXtraqParameterBindingProvider

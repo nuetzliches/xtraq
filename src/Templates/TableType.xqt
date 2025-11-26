@@ -1,11 +1,11 @@
 {{ HEADER }}
 #nullable enable
-namespace {{ Namespace }};
-
 using System;
 #if XTRAQ_ENABLE_TABLETYPE_VALIDATION
 using FluentValidation;
 #endif
+
+namespace {{ Namespace }};
 
 /// <summary>
 /// Provides a strongly typed projection over the SQL table type <c>{{ Schema }}.{{ Name }}</c>.

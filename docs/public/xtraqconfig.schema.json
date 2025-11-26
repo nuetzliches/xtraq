@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json",
+  "title": "Xtraq tracked configuration",
+  "description": "JSON schema for .xtraqconfig and .xtraqconfig.local files. All properties are optional; omit defaults to keep the file minimal.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema identifier."
+    },
+    "ProjectPath": {
+      "type": "string",
+      "description": "Optional redirect to the project root that owns .xtraqconfig/.env. Use \".\" for the current directory or relative/absolute paths."
+    },
+    "Namespace": {
+      "type": "string",
+      "description": "Root namespace for generated artifacts."
+    },
+    "OutputDir": {
+      "type": "string",
+      "description": "Relative output directory for generated artifacts."
+    },
+    "TargetFramework": {
+      "type": "string",
+      "pattern": "^net[0-9]+(\\.[0-9]+)?$",
+      "description": "Template hint for generated projects (for example net8.0 or net10.0)."
+    },
+    "BuildSchemas": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+      },
+      "description": "Allow-list of schemas to include during generation. Empty list means include all."
+    },
+    "Api": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Mode": {
+          "type": "string",
+          "enum": ["Minimal", "None"],
+          "description": "API helper generation mode."
+        },
+        "Requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Hydrate": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" },
+              "description": "Global parameter hydrate allow-list for API endpoints."
+            },
+            "HydrateProcedures": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" },
+              "description": "Schema-qualified procedures that should participate in automatic parameter hydration."
+            }
+          }
+        }
+      }
+    },
+    "EntityFramework": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Enabled": {
+          "type": "boolean",
+          "description": "Enable Entity Framework integration helpers."
+        }
+      }
+    },
+    "ResultSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Json": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "IncludeNullValues": {
+              "type": "boolean",
+              "description": "Emit [JsonIncludeNullValues] on result-set properties."
+            }
+          }
+        }
+      }
+    }
+  }
+}

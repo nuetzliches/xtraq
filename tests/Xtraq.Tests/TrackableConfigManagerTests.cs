@@ -32,7 +32,7 @@ public sealed class TrackableConfigManagerTests
     }
 
     [Xunit.Fact]
-    public void Write_WhenEnvValuesProvided_WritesLegacyPayload()
+    public void Write_WhenEnvValuesProvided_WritesOnlyNonDefaultValues()
     {
         var directory = Directory.CreateTempSubdirectory("xtraq-config-write-");
         try
@@ -60,7 +60,7 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.False(root.TryGetProperty("ProjectPath", out _));
             Xunit.Assert.Equal("Acme.Product", root.GetProperty("Namespace").GetString());
             Xunit.Assert.Equal("Artifacts", root.GetProperty("OutputDir").GetString());
-            Xunit.Assert.Equal("net10.0", root.GetProperty("TargetFramework").GetString());
+            Xunit.Assert.False(root.TryGetProperty("TargetFramework", out _));
             var schemas = root.GetProperty("BuildSchemas")
                 .EnumerateArray()
                 .Select(static item => item.GetString())
@@ -75,6 +75,61 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.True(efElement.GetProperty("Enabled").GetBoolean());
             var resultSet = root.GetProperty("ResultSet");
             Xunit.Assert.True(resultSet.GetProperty("Json").GetProperty("IncludeNullValues").GetBoolean());
+        }
+        finally
+        {
+            Directory.Delete(directory.FullName, true);
+        }
+    }
+
+    [Xunit.Fact]
+    public void Write_WhenNonDefaultTargetFrameworkProvided_PersistsOverride()
+    {
+        var directory = Directory.CreateTempSubdirectory("xtraq-config-tf-");
+        try
+        {
+            var envValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["XTRAQ_TARGET_FRAMEWORK"] = "net8.0"
+            };
+
+            Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
+
+            var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
+            Xunit.Assert.True(File.Exists(configPath));
+
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            var root = document.RootElement;
+            Xunit.Assert.True(root.TryGetProperty("TargetFramework", out var framework));
+            Xunit.Assert.Equal("net8.0", framework.GetString());
+            Xunit.Assert.False(root.TryGetProperty("OutputDir", out _));
+            Xunit.Assert.False(root.TryGetProperty("Namespace", out _));
+            Xunit.Assert.False(root.TryGetProperty("BuildSchemas", out _));
+        }
+        finally
+        {
+            Directory.Delete(directory.FullName, true);
+        }
+    }
+
+    [Xunit.Fact]
+    public void Write_WhenEnvIsDefault_WritesEmptyPayload()
+    {
+        var directory = Directory.CreateTempSubdirectory("xtraq-config-default-");
+        try
+        {
+            var envValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["XTRAQ_GENERATOR_DB"] = "Server=(local);Database=App;"
+            };
+
+            Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
+
+            var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
+            Xunit.Assert.True(File.Exists(configPath));
+
+            var content = File.ReadAllText(configPath).Trim();
+            Xunit.Assert.Equal("{}", content);
         }
         finally
         {
