@@ -43,7 +43,7 @@ internal static class CliEnvironmentBootstrapper
         try
         {
             var cwd = Directory.GetCurrentDirectory();
-            LoadSkipVarsFromEnv(Path.Combine(cwd, ".env"));
+            LoadNoUpdateFromEnv(Path.Combine(cwd, ".env"));
             LoadEnvVariables(Path.Combine(cwd, ".env"));
 
             try
@@ -51,7 +51,7 @@ internal static class CliEnvironmentBootstrapper
                 var resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(cwd);
                 if (!string.Equals(resolvedRoot, cwd, StringComparison.OrdinalIgnoreCase))
                 {
-                    LoadSkipVarsFromEnv(Path.Combine(resolvedRoot, ".env"));
+                    LoadNoUpdateFromEnv(Path.Combine(resolvedRoot, ".env"));
                     LoadEnvVariables(Path.Combine(resolvedRoot, ".env"));
                 }
             }
@@ -65,13 +65,13 @@ internal static class CliEnvironmentBootstrapper
                 var (configPath, projectRoot) = CliHostUtilities.NormalizeCliProjectHint(projectHint);
                 if (!string.IsNullOrWhiteSpace(configPath))
                 {
-                    LoadSkipVarsFromEnv(configPath);
+                    LoadNoUpdateFromEnv(configPath);
                     LoadEnvVariables(configPath);
                 }
 
                 if (!string.IsNullOrWhiteSpace(projectRoot) && !string.Equals(projectRoot, cwd, StringComparison.OrdinalIgnoreCase))
                 {
-                    LoadSkipVarsFromEnv(Path.Combine(projectRoot!, ".env"));
+                    LoadNoUpdateFromEnv(Path.Combine(projectRoot!, ".env"));
                     LoadEnvVariables(Path.Combine(projectRoot!, ".env"));
                 }
             }
@@ -81,7 +81,7 @@ internal static class CliEnvironmentBootstrapper
         }
     }
 
-    private static void LoadSkipVarsFromEnv(string path)
+    private static void LoadNoUpdateFromEnv(string path)
     {
         if (!File.Exists(path))
         {
@@ -103,8 +103,7 @@ internal static class CliEnvironmentBootstrapper
             }
 
             var key = line.Substring(0, equalsIndex).Trim();
-            if (!key.Equals("XTRAQ_NO_UPDATE", StringComparison.OrdinalIgnoreCase) &&
-                !key.Equals("XTRAQ_SKIP_UPDATE", StringComparison.OrdinalIgnoreCase))
+            if (!key.Equals("XTRAQ_NO_UPDATE", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

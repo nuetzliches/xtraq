@@ -15,6 +15,7 @@ xtraq [options]
   - `--debug`: switch to the "debug" environment profile and enable extra diagnostics in services.
 - `--debug-alias`: promotes `XTRAQ_LOG_LEVEL` to `debug` so alias scope tracing becomes visible.
   - `--no-cache`: force cache misses for schema metadata (sets `CacheControl.ForceReload = true`).
+  - `--no-update`: suppress update checks and prompts for the current invocation (also honoured via `XTRAQ_NO_UPDATE`).
   - `--procedure <schema.name,...>`: restrict execution to a comma-separated allow-list; validation rejects malformed tokens.
   - `--telemetry`: persist telemetry snapshots under `.xtraq/telemetry` after successful runs.
   - `--json-include-null-values`: opt into JSON-null emission; tracked even when explicitly `false` so generators can distinguish overrides.
@@ -24,7 +25,7 @@ xtraq [options]
 
 **Implicit behaviour**
 
-- Update checks run asynchronously unless suppressed through `XTRAQ_NO_UPDATE`/`XTRAQ_SKIP_UPDATE`.
+- Update checks run asynchronously unless suppressed through `XTRAQ_NO_UPDATE` or `--no-update`.
 - Parsed options are stored in `CommandOptions` so subsequent commands can reuse defaults.
 - `DirectoryUtils.ResetBasePath()` runs after each command so per-command path overrides do not leak between invocations.
 

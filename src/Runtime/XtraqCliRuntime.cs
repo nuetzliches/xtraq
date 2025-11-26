@@ -906,6 +906,18 @@ internal sealed class XtraqCliRuntime(
 
             consoleService.Output($"Updating from {updateInfo.CurrentVersion} to {updateInfo.LatestVersion}...");
 
+            if (OperatingSystem.IsWindows())
+            {
+                var launched = TryLaunchPostExitUpdater();
+                if (launched)
+                {
+                    consoleService.Output("Update queued: it will run after this command exits. Leave the terminal open until it completes.");
+                    return ExecuteResultEnum.Succeeded;
+                }
+
+                consoleService.Warn("Could not queue the post-exit updater; attempting inline update now.");
+            }
+
             var success = await updateService.UpdateAsync().ConfigureAwait(false);
             if (success)
             {
@@ -927,6 +939,44 @@ internal sealed class XtraqCliRuntime(
                 consoleService.Error(ex.StackTrace ?? string.Empty);
             }
             return ExecuteResultEnum.Error;
+        }
+    }
+
+    private bool TryLaunchPostExitUpdater()
+    {
+        try
+        {
+            var currentPid = Process.GetCurrentProcess().Id;
+            string fileName;
+            string arguments;
+
+            if (OperatingSystem.IsWindows())
+            {
+                fileName = "powershell";
+                arguments = $"-NoProfile -Command \"while (Get-Process -Id {currentPid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 200 }}; dotnet tool update -g xtraq\"";
+            }
+            else
+            {
+                fileName = "/bin/sh";
+                arguments = $"-c \"while kill -0 {currentPid} 2>/dev/null; do sleep 0.2; done; dotnet tool update -g xtraq\"";
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = true
+            };
+
+            return Process.Start(startInfo) is not null;
+        }
+        catch (Exception ex)
+        {
+            consoleService.Warn($"post-exit updater failed to start: {ex.Message}");
+            return false;
         }
     }
 

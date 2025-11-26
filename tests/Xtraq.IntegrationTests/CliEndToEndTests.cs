@@ -43,7 +43,7 @@ public sealed class CliEndToEndTests : IAsyncLifetime
         }
 
         using var projectDirectory = TempDirectory.Create("xtraq-e2e-");
-        using var envScope = new EnvironmentVariableScope(("XTRAQ_NO_UPDATE", "1"), ("XTRAQ_SKIP_UPDATE", "1"));
+        using var envScope = new EnvironmentVariableScope(("XTRAQ_NO_UPDATE", "1"));
 
         Console.WriteLine($"{LogPrefix} Preparing project environment at {projectDirectory.Path}...");
         await WriteEnvAsync(projectDirectory.Path);

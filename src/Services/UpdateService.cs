@@ -270,9 +270,8 @@ public class UpdateService
     public static bool IsUpdateDisabled()
     {
         var noUpdate = Environment.GetEnvironmentVariable("XTRAQ_NO_UPDATE");
-        var skipUpdate = Environment.GetEnvironmentVariable("XTRAQ_SKIP_UPDATE");
 
-        return EnvironmentHelper.EqualsTrue(noUpdate) || EnvironmentHelper.EqualsTrue(skipUpdate);
+        return EnvironmentHelper.EqualsTrue(noUpdate);
     }
 }
 

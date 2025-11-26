@@ -26,6 +26,7 @@ internal sealed class CliCommandAppBuilder
     private Option<bool> _debugOption = null!;
     private Option<bool> _debugAliasOption = null!;
     private Option<bool> _noCacheOption = null!;
+    private Option<bool> _noUpdateOption = null!;
     private Option<string?> _procedureOption = null!;
     private Option<bool> _telemetryOption = null!;
     private Option<bool> _jsonIncludeNullValuesOption = null!;
@@ -68,6 +69,7 @@ internal sealed class CliCommandAppBuilder
         _debugAliasOption = new Option<bool>("--debug-alias", "Enable alias scope debug logging (promotes XTRAQ_LOG_LEVEL to debug)");
 
         _noCacheOption = new Option<bool>("--no-cache", "Do not read or write the local procedure metadata cache");
+        _noUpdateOption = new Option<bool>("--no-update", "Skip update checks and prompts for this run");
 
         _procedureOption = new Option<string?>("--procedure", "Process only specific procedures (comma separated schema.name with optional '*' or '?' wildcards)");
         _procedureOption.AddValidator(result =>
@@ -131,6 +133,7 @@ internal sealed class CliCommandAppBuilder
         root.AddGlobalOption(_debugOption);
         root.AddGlobalOption(_debugAliasOption);
         root.AddGlobalOption(_noCacheOption);
+        root.AddGlobalOption(_noUpdateOption);
         root.AddGlobalOption(_procedureOption);
         root.AddGlobalOption(_telemetryOption);
         root.AddGlobalOption(_jsonIncludeNullValuesOption);
@@ -478,7 +481,7 @@ internal sealed class CliCommandAppBuilder
             Verbose = parseResult.GetValueForOption(_verboseOption),
             Debug = parseResult.GetValueForOption(_debugOption),
             NoCache = parseResult.GetValueForOption(_noCacheOption),
-            NoUpdate = false,
+            NoUpdate = parseResult.GetValueForOption(_noUpdateOption),
             Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValueForOption(_procedureOption)),
             Telemetry = parseResult.GetValueForOption(_telemetryOption),
             JsonIncludeNullValues = parseResult.GetValueForOption(_jsonIncludeNullValuesOption),
@@ -510,7 +513,7 @@ internal sealed class CliCommandAppBuilder
             Verbose = invocationContext.ParseResult.GetValueForOption(_verboseOption),
             Debug = invocationContext.ParseResult.GetValueForOption(_debugOption),
             NoCache = invocationContext.ParseResult.GetValueForOption(_noCacheOption),
-            NoUpdate = false,
+            NoUpdate = invocationContext.ParseResult.GetValueForOption(_noUpdateOption),
             Procedure = CliHostUtilities.NormalizeProcedureFilter(invocationContext.ParseResult.GetValueForOption(_procedureOption)),
             Telemetry = invocationContext.ParseResult.GetValueForOption(_telemetryOption),
             JsonIncludeNullValues = invocationContext.ParseResult.GetValueForOption(_jsonIncludeNullValuesOption),
@@ -525,9 +528,10 @@ internal sealed class CliCommandAppBuilder
             PrepareCommandEnvironment(options);
         }
 
+        Task<UpdateInfo?>? updateCheckTask = null;
         if (descriptor.HasFeature(CliCommandFeatures.SchedulesUpdate) && !UpdateService.IsUpdateDisabled())
         {
-            ScheduleUpdateCheck(options);
+            updateCheckTask = ScheduleUpdateCheck(options);
         }
 
         var shouldRefresh = defaultRefresh;
@@ -589,6 +593,11 @@ internal sealed class CliCommandAppBuilder
                 console.Verbose($"telemetry capture failed: {telemetryEx.Message}");
             }
         }
+
+        if (exitCode == ExitCodes.Success)
+        {
+            await PromptForUpdateAsync(updateCheckTask, options, invocationContext.GetCancellationToken()).ConfigureAwait(false);
+        }
     }
 
     private static Argument<string?> CreateOptionalProjectArgument(string description)
@@ -630,31 +639,133 @@ internal sealed class CliCommandAppBuilder
         }
     }
 
-    private void ScheduleUpdateCheck(CliCommandOptions options)
+    private Task<UpdateInfo?>? ScheduleUpdateCheck(CliCommandOptions options)
     {
         if (options.NoUpdate || UpdateService.IsUpdateDisabled())
         {
-            return;
+            return null;
         }
 
-        _ = Task.Run(async () =>
+        return Task.Run(async () =>
         {
             try
             {
                 var updateService = _services.GetRequiredService<UpdateService>();
                 var updateInfo = await updateService.CheckForUpdateAsync().ConfigureAwait(false);
-                if (updateInfo?.IsUpdateAvailable == true)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"[xtraq] Update available: {updateInfo.CurrentVersion} ? {updateInfo.LatestVersion}");
-                    Console.WriteLine("[xtraq] Run 'xtraq update' to upgrade or use --no-update to suppress this message.");
-                }
+                return updateInfo;
             }
             catch
             {
-                // Silently ignore update check failures
+                return null;
             }
         });
+    }
+
+    private async Task PromptForUpdateAsync(Task<UpdateInfo?>? updateCheckTask, CliCommandOptions options, CancellationToken cancellationToken)
+    {
+        if (updateCheckTask is null || options.NoUpdate)
+        {
+            return;
+        }
+
+        UpdateInfo? updateInfo;
+        try
+        {
+            updateInfo = await updateCheckTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (updateInfo?.IsUpdateAvailable != true)
+        {
+            return;
+        }
+
+        var console = _services.GetRequiredService<IConsoleService>();
+
+        if (options.CiMode)
+        {
+            console.Output($"[xtraq] Update available: {updateInfo.CurrentVersion} -> {updateInfo.LatestVersion} (CI mode - skipping prompt). Run 'xtraq update' when appropriate.");
+            return;
+        }
+
+        console.Output(string.Empty);
+        console.Output($"[xtraq] Update available: {updateInfo.CurrentVersion} -> {updateInfo.LatestVersion}");
+
+        var confirm = console.GetYesNo("[xtraq] Apply update now?", true, ConsoleColor.Yellow);
+        if (!confirm)
+        {
+            console.Output("[xtraq] Update skipped. Run 'xtraq update' later or pass --no-update to suppress prompts.");
+            return;
+        }
+
+        // On Windows the shim executable is locked while this process runs; run the updater after exit.
+        if (OperatingSystem.IsWindows())
+        {
+            var launched = TryLaunchPostExitUpdater(console);
+            if (launched)
+            {
+                console.Output("[xtraq] Update will run after this command finishes. Leave the terminal open until it completes.");
+            }
+            else
+            {
+                console.Warn("[xtraq] Could not launch post-exit updater. Please run 'xtraq update' manually.");
+            }
+            return;
+        }
+
+        console.Output("[xtraq] Updating via dotnet tool...");
+
+        var updateService = _services.GetRequiredService<UpdateService>();
+        var succeeded = await updateService.UpdateAsync(cancellationToken).ConfigureAwait(false);
+        if (succeeded)
+        {
+            console.Success($"[xtraq] Updated to {updateInfo.LatestVersion}. Restart your terminal to load the new version.");
+        }
+        else
+        {
+            console.Warn("[xtraq] Update failed. Try again with 'xtraq update' when convenient.");
+        }
+    }
+
+    private bool TryLaunchPostExitUpdater(IConsoleService console)
+    {
+        try
+        {
+            var currentPid = Process.GetCurrentProcess().Id;
+            string fileName;
+            string arguments;
+
+            if (OperatingSystem.IsWindows())
+            {
+                fileName = "powershell";
+                arguments = $"-NoProfile -Command \"while (Get-Process -Id {currentPid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 200 }}; dotnet tool update -g xtraq\"";
+            }
+            else
+            {
+                fileName = "/bin/sh";
+                arguments = $"-c \"while kill -0 {currentPid} 2>/dev/null; do sleep 0.2; done; dotnet tool update -g xtraq\"";
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = true
+            };
+
+            return Process.Start(startInfo) is not null;
+        }
+        catch (Exception ex)
+        {
+            console.Warn($"[xtraq] Post-exit updater failed to start: {ex.Message}");
+            return false;
+        }
     }
 
     private string ResolveProjectPath(ParseResult parseResult, Argument<string?>? commandArgument)
