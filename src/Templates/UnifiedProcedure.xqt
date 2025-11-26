@@ -1,13 +1,13 @@
-﻿{{ HEADER }}
+{{ HEADER }}
 #nullable enable
-namespace {{ Namespace }};
-
 {{ UsingDirectives }}
 #if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 #endif
+
+namespace {{ Namespace }};
 
 /// <summary>
 /// Represents the contract for the stored procedure <c>{{ Schema }}.{{ Name }}</c> including parameters, result sets and execution metadata.

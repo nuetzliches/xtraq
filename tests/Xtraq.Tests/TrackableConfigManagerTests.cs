@@ -11,6 +11,8 @@ namespace Xtraq.Tests.Configuration;
 /// </summary>
 public sealed class TrackableConfigManagerTests
 {
+    private const string SchemaUrl = "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json";
+
     [Xunit.Fact]
     public void BuildEnvMap_WhenProvidedEnvLines_FiltersToXtraqKeys()
     {
@@ -57,6 +59,7 @@ public sealed class TrackableConfigManagerTests
 
             using var document = JsonDocument.Parse(File.ReadAllText(configPath));
             var root = document.RootElement;
+            Xunit.Assert.Equal(SchemaUrl, root.GetProperty("$schema").GetString());
             Xunit.Assert.False(root.TryGetProperty("ProjectPath", out _));
             Xunit.Assert.Equal("Acme.Product", root.GetProperty("Namespace").GetString());
             Xunit.Assert.Equal("Artifacts", root.GetProperty("OutputDir").GetString());
@@ -100,6 +103,7 @@ public sealed class TrackableConfigManagerTests
 
             using var document = JsonDocument.Parse(File.ReadAllText(configPath));
             var root = document.RootElement;
+            Xunit.Assert.Equal(SchemaUrl, root.GetProperty("$schema").GetString());
             Xunit.Assert.True(root.TryGetProperty("TargetFramework", out var framework));
             Xunit.Assert.Equal("net8.0", framework.GetString());
             Xunit.Assert.False(root.TryGetProperty("OutputDir", out _));
@@ -113,7 +117,7 @@ public sealed class TrackableConfigManagerTests
     }
 
     [Xunit.Fact]
-    public void Write_WhenEnvIsDefault_WritesEmptyPayload()
+    public void Write_WhenEnvIsDefault_WritesSchemaOnly()
     {
         var directory = Directory.CreateTempSubdirectory("xtraq-config-default-");
         try
@@ -128,8 +132,13 @@ public sealed class TrackableConfigManagerTests
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
             Xunit.Assert.True(File.Exists(configPath));
 
-            var content = File.ReadAllText(configPath).Trim();
-            Xunit.Assert.Equal("{}", content);
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            var root = document.RootElement;
+            Xunit.Assert.Equal(JsonValueKind.Object, root.ValueKind);
+            var properties = root.EnumerateObject().ToArray();
+            var schemaProperty = Xunit.Assert.Single(properties);
+            Xunit.Assert.Equal("$schema", schemaProperty.Name);
+            Xunit.Assert.Equal(SchemaUrl, schemaProperty.Value.GetString());
         }
         finally
         {

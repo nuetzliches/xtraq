@@ -10,6 +10,7 @@ internal static class TrackableConfigManager
     private const string ConfigFileName = ".xtraqconfig";
     private const string LocalConfigFileName = ".xtraqconfig.local";
     private const int MaxRedirectDepth = 10;
+    private const string SchemaUrl = "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json";
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
@@ -35,10 +36,12 @@ internal static class TrackableConfigManager
         var normalizedConfigDir = SafeGetFullPath(configDirectory);
         var storedPath = NormalizeStoredPath(normalizedConfigDir, string.IsNullOrWhiteSpace(projectPath) ? "." : projectPath);
 
-        var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["ProjectPath"] = storedPath
         };
+
+        AttachSchemaMetadata(payload);
 
         var json = JsonSerializer.Serialize(payload, SerializerOptions);
         var configPath = Path.Combine(normalizedConfigDir, ConfigFileName);
@@ -255,6 +258,7 @@ internal static class TrackableConfigManager
         Directory.CreateDirectory(normalizedRoot);
 
         var payload = BuildPayload(normalizedRoot, envValues);
+        AttachSchemaMetadata(payload);
         var json = JsonSerializer.Serialize(payload, SerializerOptions);
         File.WriteAllText(configPath, json + Environment.NewLine);
     }
@@ -525,6 +529,19 @@ internal static class TrackableConfigManager
         }
 
         return requestsMap.Count == 0 ? null : requestsMap;
+    }
+
+    private static void AttachSchemaMetadata(IDictionary<string, object?> payload)
+    {
+        if (payload is null)
+        {
+            return;
+        }
+
+        if (!payload.ContainsKey("$schema"))
+        {
+            payload["$schema"] = SchemaUrl;
+        }
     }
 
     private static Dictionary<string, object?>? NormalizeEntityFrameworkPayload(EntityFrameworkPayload? entityFramework)

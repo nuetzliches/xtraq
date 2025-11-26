@@ -8,7 +8,12 @@
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "Schema identifier."
+      "description": "JSON Schema reference injected by the CLI for IntelliSense.",
+      "default": "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json",
+      "examples": [
+        "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json",
+        "../docs/public/xtraqconfig.schema.json"
+      ]
     },
     "ProjectPath": {
       "type": "string",

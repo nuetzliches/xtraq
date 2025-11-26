@@ -177,7 +177,7 @@ public sealed class XtraqGenerator
             }
             if (functionDescriptors.Count > 0)
             {
-                var functionsGen = new FunctionJsonOutputGenerator(_renderer, _loader, cfg);
+                var functionsGen = new FunctionJsonResultGenerator(_renderer, _loader, cfg);
                 total += functionsGen.Generate(ns, baseStructuredOut, functionDescriptors);
             }
             var procsGen = new ProceduresGenerator(_renderer, () => schema.GetProcedures(), _loader, projectRoot, cfg, functionJsonResolver: schema.TryGetFunctionJsonDescriptor);

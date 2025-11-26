@@ -558,7 +558,7 @@ internal sealed class XtraqCliRuntime(
 
                 if (functionJsonDescriptors.Count > 0)
                 {
-                    var functionOutputGen = new FunctionJsonOutputGenerator(renderer, loader, cfg);
+                    var functionOutputGen = new FunctionJsonResultGenerator(renderer, loader, cfg);
                     var functionArtifacts = functionOutputGen.Generate(finalNamespace, procedureOutputRoot, functionJsonDescriptors);
                     if (options.Verbose)
                     {

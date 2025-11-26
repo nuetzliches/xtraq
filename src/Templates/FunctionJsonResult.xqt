@@ -1,0 +1,11 @@
+{{ HEADER }}
+#nullable enable
+using System;
+using System.Collections.Generic;
+
+namespace {{ Namespace }};
+
+{{#each Types}}
+{{ this }}
+
+{{/each}}
