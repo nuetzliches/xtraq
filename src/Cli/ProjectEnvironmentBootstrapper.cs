@@ -163,6 +163,74 @@ internal static class ProjectEnvironmentBootstrapper
         {
             File.WriteAllLines(gitignorePath, lines);
         }
+
+        TryEnsureCsprojIncludesXtraq(projectRoot);
+    }
+
+    private static void TryEnsureCsprojIncludesXtraq(string projectRoot)
+    {
+        try
+        {
+            var csprojPath = FindNearestCsproj(projectRoot);
+            if (string.IsNullOrWhiteSpace(csprojPath))
+            {
+                return;
+            }
+
+            var content = File.ReadAllText(csprojPath);
+            if (content.IndexOf(".xtraq", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return;
+            }
+
+            Console.Write($"[xtraq init] Add .xtraq content include to '{Path.GetFileName(csprojPath)}'? [Y/n]: ");
+            var answer = ReadAnswer();
+            if (!IsYes(answer))
+            {
+                return;
+            }
+
+            var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var itemGroup = $"{newline}  <ItemGroup>{newline}    <Content Include=\".xtraq\\\\**\\\\*\" />{newline}  </ItemGroup>{newline}";
+            var insertIndex = content.LastIndexOf("</Project>", StringComparison.OrdinalIgnoreCase);
+            content = insertIndex >= 0
+                ? content.Insert(insertIndex, itemGroup)
+                : content + itemGroup;
+
+            File.WriteAllText(csprojPath, content);
+            Console.WriteLine($"[xtraq init] .xtraq include added to '{csprojPath}'.");
+        }
+        catch (Exception ex)
+        {
+            if (Verbose)
+            {
+                Console.Out.WriteLine($"[xtraq] Failed to update .csproj for .xtraq include: {ex.Message}");
+            }
+        }
+    }
+
+    private static string? FindNearestCsproj(string projectRoot)
+    {
+        try
+        {
+            var current = new DirectoryInfo(projectRoot);
+            while (current is not null)
+            {
+                var proj = current.GetFiles("*.csproj", SearchOption.TopDirectoryOnly).FirstOrDefault();
+                if (proj is not null)
+                {
+                    return proj.FullName;
+                }
+
+                current = current.Parent;
+            }
+        }
+        catch
+        {
+            // ignore discovery errors
+        }
+
+        return null;
     }
 
     private static void TryWriteTrackableConfig(string projectRoot, string envPath)
