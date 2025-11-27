@@ -17,10 +17,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>xtraq</ToolCommandName>
     <PackageId>xtraq</PackageId>
-    <Version>1.0.0-rc.3</Version>
+    <Version>1.0.0-rc.4</Version>
     <Authors>Xtraq Team</Authors>
     <Description>Xtraq CLI Tool with auto-update capabilities</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>Free Use, No Warranty</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/nuetzliches/xtraq</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -35,6 +35,11 @@
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
     <None Include="../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Templates/.env.example" CopyToOutputDirectory="PreserveNewest" Pack="true"
+      PackagePath="templates/.env.example" />
   </ItemGroup>
 
   <ItemGroup>

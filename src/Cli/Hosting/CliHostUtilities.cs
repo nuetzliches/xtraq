@@ -383,18 +383,13 @@ internal static class CliHostUtilities
         }
 
         var configDirectory = Xtraq.Configuration.TrackableConfigManager.LocateConfigDirectory(resolvedRoot);
-        var configPath = Path.Combine(configDirectory, ".xtraqconfig");
-        if (File.Exists(configPath))
-        {
-            var normalizedConfig = NormalizePathSafe(configPath);
-            var defaultConfigPath = string.IsNullOrWhiteSpace(normalizedProjectRoot)
-                ? string.Empty
-                : NormalizePathSafe(Path.Combine(normalizedProjectRoot, ".xtraqconfig"));
+        var baseConfigPath = Path.Combine(configDirectory, ".xtraqconfig");
+        var resolvedConfigPath = Path.Combine(normalizedProjectRoot, ".xtraqconfig");
+        metadata["configPath"] = NormalizePathSafe(resolvedConfigPath);
 
-            if (options.Verbose || !string.Equals(normalizedConfig, defaultConfigPath, StringComparison.OrdinalIgnoreCase))
-            {
-                metadata["configPath"] = normalizedConfig;
-            }
+        if (File.Exists(baseConfigPath) && !string.Equals(baseConfigPath, resolvedConfigPath, StringComparison.OrdinalIgnoreCase))
+        {
+            metadata["configSource"] = NormalizePathSafe(baseConfigPath);
         }
 
         var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")

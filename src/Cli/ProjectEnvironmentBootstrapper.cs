@@ -8,13 +8,18 @@ internal static class ProjectEnvironmentBootstrapper
     private static readonly bool Verbose = Xtraq.Utils.EnvironmentHelper.IsTrue("XTRAQ_VERBOSE");
     private const string EnvFileName = ".env";
     private const string EnvExampleFileName = ".env.example";
-    private const string EnvExampleTemplateRelativePath = "debug\\.env.example";
+    private static readonly string[] EnvExampleTemplateRelativePaths = new[]
+    {
+        Path.Combine("Templates", ".env.example"),          // packaged / build output
+        Path.Combine("src", "Templates", ".env.example"),   // repo root (source)
+        Path.Combine("debug", ".env.example")               // legacy debug location
+    };
 
     /// <summary>
     /// Ensure a .env exists at <paramref name="projectRoot"/>. Can run interactively (prompt) or non-interactively (autoApprove).
     /// When force==true an existing file will be overwritten.
     /// </summary>
-    internal static async Task<string> EnsureEnvAsync(string projectRoot, bool autoApprove = false, bool force = false, string? explicitTemplate = null)
+    internal static async Task<string> EnsureEnvAsync(string projectRoot, bool autoApprove = false, bool force = false, string? explicitTemplate = null, string? connectionString = null)
     {
         Directory.CreateDirectory(projectRoot);
         var envPath = Path.Combine(projectRoot, EnvFileName);
@@ -40,8 +45,13 @@ internal static class ProjectEnvironmentBootstrapper
 
         try
         {
-            File.WriteAllText(envPath, BuildMinimalEnvContent());
+            var content = ResolveExampleTemplateContent(projectRoot, explicitTemplate);
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                content = content.Replace("<your_database_connection_string>", connectionString.Trim());
+            }
             Console.ForegroundColor = ConsoleColor.Green;
+            File.WriteAllText(envPath, content);
             Console.WriteLine($"{(force ? "(re)created" : "Created")} {EnvFileName} at '{envPath}'.");
             Console.ResetColor();
         }
@@ -254,36 +264,54 @@ internal static class ProjectEnvironmentBootstrapper
              + "XTRAQ_GENERATOR_DB=" + Environment.NewLine;
     }
 
-    private static string ResolveExampleTemplateContent(string projectRoot, string? explicitTemplate)
+    internal static string ResolveExampleTemplateContent(string projectRoot, string? explicitTemplate)
     {
         if (!string.IsNullOrEmpty(explicitTemplate))
         {
             return explicitTemplate;
         }
 
-        var candidatePaths = new List<string>
+        var searchRoots = new List<string>();
+        if (!string.IsNullOrWhiteSpace(projectRoot))
         {
-            Path.Combine(projectRoot, EnvExampleTemplateRelativePath)
-        };
+            searchRoots.Add(projectRoot);
+        }
 
         var repoRoot = FindRepoRoot(projectRoot);
         if (!string.IsNullOrWhiteSpace(repoRoot))
         {
-            candidatePaths.Add(Path.Combine(repoRoot, EnvExampleTemplateRelativePath));
+            searchRoots.Add(repoRoot);
         }
 
-        foreach (var candidate in candidatePaths)
+        try
         {
-            try
+            var appBase = AppContext.BaseDirectory;
+            if (!string.IsNullOrWhiteSpace(appBase) && !searchRoots.Contains(appBase, StringComparer.OrdinalIgnoreCase))
             {
-                if (File.Exists(candidate))
-                {
-                    return File.ReadAllText(candidate);
-                }
+                searchRoots.Add(appBase);
             }
-            catch
+        }
+        catch
+        {
+            // ignore issues resolving app base
+        }
+
+        foreach (var root in searchRoots)
+        {
+            foreach (var relative in EnvExampleTemplateRelativePaths)
             {
-                // ignore missing or inaccessible templates
+                try
+                {
+                    var candidate = Path.Combine(root, relative);
+                    if (File.Exists(candidate))
+                    {
+                        return File.ReadAllText(candidate);
+                    }
+                }
+                catch
+                {
+                    // ignore missing or inaccessible templates
+                }
             }
         }
 

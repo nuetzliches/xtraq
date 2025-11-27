@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using Xtraq.Cli.Commands;
+using Xtraq.Configuration;
 using Xtraq.Infrastructure;
 using Xtraq.Runtime;
 using Xtraq.Services;
@@ -322,6 +323,7 @@ internal sealed class CliCommandAppBuilder
         {
             var options = CreateBaseOptions(context.ParseResult);
             _commandOptionsAccessor.Update(options);
+            var console = _services.GetRequiredService<IConsoleService>();
 
             var stopwatch = Stopwatch.StartNew();
             var exitCode = ExitCodes.InternalError;
@@ -346,12 +348,23 @@ internal sealed class CliCommandAppBuilder
                 namespaceProvided = !string.IsNullOrWhiteSpace(nsValue);
                 connectionProvided = !string.IsNullOrWhiteSpace(connection);
 
+                if (!connectionProvided && !options.CiMode)
+                {
+                    console.Output("[xtraq init] No connection string provided.");
+                    var entered = console.GetString("Enter XTRAQ_GENERATOR_DB connection string", defaultValue: string.Empty);
+                    if (!string.IsNullOrWhiteSpace(entered))
+                    {
+                        connection = entered.Trim();
+                        connectionProvided = true;
+                    }
+                }
+
                 var effectivePath = CliHostUtilities.NormalizeProjectPath(targetPath);
                 var resolved = DirectoryUtils.IsPath(effectivePath) ? effectivePath : Path.GetFullPath(effectivePath);
                 Directory.CreateDirectory(resolved);
                 telemetryProjectRoot = resolved;
 
-                var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolved, autoApprove: true, force: force).ConfigureAwait(false);
+                var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolved, autoApprove: true, force: force, connectionString: connection).ConfigureAwait(false);
                 var examplePath = ProjectEnvironmentBootstrapper.EnsureEnvExample(resolved, force);
 
                 try
@@ -523,11 +536,6 @@ internal sealed class CliCommandAppBuilder
             CiMode = invocationContext.ParseResult.GetValueForOption(_ciOption)
         };
 
-        if (descriptor.HasFeature(CliCommandFeatures.RequiresProjectPath))
-        {
-            PrepareCommandEnvironment(options);
-        }
-
         Task<UpdateInfo?>? updateCheckTask = null;
         if (descriptor.HasFeature(CliCommandFeatures.SchedulesUpdate) && !UpdateService.IsUpdateDisabled())
         {
@@ -540,9 +548,28 @@ internal sealed class CliCommandAppBuilder
             shouldRefresh = invocationContext.ParseResult.GetValueForOption(refreshOption);
         }
 
-        _commandOptionsAccessor.Update(options);
+        if (descriptor.HasFeature(CliCommandFeatures.RequiresProjectPath))
+        {
+            PrepareCommandEnvironment(options);
+        }
 
         var console = _services.GetRequiredService<IConsoleService>();
+
+        if (descriptor.Kind != CliCommandKind.Init && descriptor.HasFeature(CliCommandFeatures.RequiresProjectPath))
+        {
+            var needsConnection = descriptor.Kind == CliCommandKind.Snapshot
+                || (descriptor.Kind == CliCommandKind.Build && shouldRefresh);
+
+            var initialized = await EnsureProjectInitializedAsync(projectPath, console, needsConnection).ConfigureAwait(false);
+            if (!initialized)
+            {
+                invocationContext.ExitCode = ExitCodes.InternalError;
+                return;
+            }
+        }
+
+        _commandOptionsAccessor.Update(options);
+
         EmitSessionPreamble(console, descriptor.Name, options, projectPath, shouldRefresh);
 
         var commandContext = new XtraqCommandContext(
@@ -597,6 +624,66 @@ internal sealed class CliCommandAppBuilder
         if (exitCode == ExitCodes.Success)
         {
             await PromptForUpdateAsync(updateCheckTask, options, invocationContext.GetCancellationToken()).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<bool> EnsureProjectInitializedAsync(string projectPath, IConsoleService console, bool requireConnection)
+    {
+        var configDirectory = TrackableConfigManager.LocateConfigDirectory(projectPath);
+        var baseConfigPath = Path.Combine(configDirectory, ".xtraqconfig");
+        if (File.Exists(baseConfigPath))
+        {
+            var resolvedRoot = TrackableConfigManager.ResolveRedirectTargets(configDirectory) ?? configDirectory;
+            var resolvedConfigPath = Path.Combine(resolvedRoot, ".xtraqconfig");
+            if (File.Exists(resolvedConfigPath))
+            {
+                return true;
+            }
+
+            // Redirected root missing tracked config -> treat as uninitialised.
+            configDirectory = resolvedRoot;
+        }
+        else
+        {
+            // No tracked config anywhere.
+            configDirectory = projectPath;
+        }
+
+        console.Error("Failed to load .xtraqconfig: Xtraq project is not initialised.");
+        var consent = console.GetYesNo("Run xtraq init now?", isDefaultConfirmed: false);
+        if (!consent)
+        {
+            return false;
+        }
+
+        string? connection = null;
+        if (requireConnection)
+        {
+            console.Output("[xtraq init] Connection string is required for snapshot/refresh.");
+            var entered = console.GetString("Enter XTRAQ_GENERATOR_DB connection string", defaultValue: string.Empty);
+            if (string.IsNullOrWhiteSpace(entered))
+            {
+                console.Error("Aborted: missing connection string.");
+                return false;
+            }
+
+            connection = entered.Trim();
+        }
+
+        try
+        {
+            var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(configDirectory, autoApprove: true, connectionString: connection).ConfigureAwait(false);
+            var examplePath = ProjectEnvironmentBootstrapper.EnsureEnvExample(configDirectory);
+            ProjectEnvironmentBootstrapper.EnsureProjectGitignore(configDirectory);
+
+            console.Output($"[xtraq init] .env ready at {envPath}");
+            console.Output($"[xtraq init] Template available at {examplePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            console.Error($"Init pipeline failed: {ex.Message}");
+            return false;
         }
     }
 

@@ -48,7 +48,7 @@ internal sealed class XtraqCliRuntime(
         {
             try
             {
-                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides);
+                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides, requireGeneratorConnection: false);
                 if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
                     !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
                 {
@@ -67,7 +67,7 @@ internal sealed class XtraqCliRuntime(
                     return ExecuteResultEnum.Error;
                 }
 
-                var consent = consoleService.GetYesNo("Run xtraq init now?", isDefaultConfirmed: true);
+                var consent = consoleService.GetYesNo("Run xtraq init now?", isDefaultConfirmed: false);
                 if (!consent)
                 {
                     return ExecuteResultEnum.Error;
@@ -96,7 +96,17 @@ internal sealed class XtraqCliRuntime(
             return ExecuteResultEnum.Error;
         }
 
-        dbContext.SetConnectionString(connectionString);
+        try
+        {
+            dbContext.SetConnectionString(connectionString);
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex is SqlException)
+        {
+            consoleService.Error("Invalid connection string for snapshot/refresh:");
+            consoleService.Output($"\t{ex.Message}");
+            consoleService.Output("\tUpdate XTRAQ_GENERATOR_DB in your .env or pass --connection with a valid value.");
+            return ExecuteResultEnum.Error;
+        }
 
         if (options.Verbose)
         {
@@ -364,23 +374,48 @@ internal sealed class XtraqCliRuntime(
         DatabaseTelemetryReport? dbTelemetry = null;
 
         var workingDirectory = DirectoryUtils.GetWorkingDirectory();
+        var attemptedInit = false;
         XtraqConfiguration cfg;
-        try
+        while (true)
         {
-            var cliOverrides = BuildCliOverrides(options);
-            cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides);
-            if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
-                !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                workingDirectory = cfg.ProjectRoot;
-                DirectoryUtils.SetBasePath(workingDirectory);
+                var cliOverrides = BuildCliOverrides(options);
+                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides, requireGeneratorConnection: false);
+                if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
+                    !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
+                {
+                    workingDirectory = cfg.ProjectRoot;
+                    DirectoryUtils.SetBasePath(workingDirectory);
+                }
+                break;
             }
-        }
-        catch (Exception envEx)
-        {
-            consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
-            consoleService.Output("run xtraq init?");
-            return ExecuteResultEnum.Error;
+            catch (Exception envEx)
+            {
+                consoleService.Error($"Failed to load .xtraqconfig: {envEx.Message}");
+
+                if (attemptedInit)
+                {
+                    return ExecuteResultEnum.Error;
+                }
+
+                var consent = consoleService.GetYesNo("Run xtraq init now?", isDefaultConfirmed: false);
+                if (!consent)
+                {
+                    return ExecuteResultEnum.Error;
+                }
+
+                try
+                {
+                    await RunInitPipelineAsync(workingDirectory, consoleService).ConfigureAwait(false);
+                    attemptedInit = true;
+                }
+                catch (Exception initEx)
+                {
+                    consoleService.Error($"Init pipeline failed: {initEx.Message}");
+                    return ExecuteResultEnum.Error;
+                }
+            }
         }
 
         if (!await EnsureSnapshotAsync(workingDirectory))
@@ -392,7 +427,17 @@ internal sealed class XtraqCliRuntime(
         {
             if (!string.IsNullOrWhiteSpace(cfg.GeneratorConnectionString))
             {
-                dbContext.SetConnectionString(cfg.GeneratorConnectionString);
+                try
+                {
+                    dbContext.SetConnectionString(cfg.GeneratorConnectionString);
+                }
+                catch (Exception ex) when (ex is ArgumentException || ex is SqlException)
+                {
+                    consoleService.Error("Invalid connection string:");
+                    consoleService.Output($"\t{ex.Message}");
+                    consoleService.Output("\tUpdate XTRAQ_GENERATOR_DB in your .env or pass --connection with a valid value.");
+                    return ExecuteResultEnum.Error;
+                }
             }
 
             var configuredSchemas = cfg.BuildSchemas ?? Array.Empty<string>();
@@ -1395,7 +1440,7 @@ internal sealed class XtraqCliRuntime(
         var resolvedRoot = string.IsNullOrWhiteSpace(projectRoot) ? Directory.GetCurrentDirectory() : projectRoot;
         Directory.CreateDirectory(resolvedRoot);
 
-        var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolvedRoot, autoApprove: true).ConfigureAwait(false);
+        var envPath = await ProjectEnvironmentBootstrapper.EnsureEnvAsync(resolvedRoot, autoApprove: true, connectionString: null).ConfigureAwait(false);
         var examplePath = ProjectEnvironmentBootstrapper.EnsureEnvExample(resolvedRoot);
         ProjectEnvironmentBootstrapper.EnsureProjectGitignore(resolvedRoot);
 
@@ -1403,5 +1448,7 @@ internal sealed class XtraqCliRuntime(
         consoleService.Output($"[xtraq init] Template available at {examplePath}");
     }
 }
+
+
 
 

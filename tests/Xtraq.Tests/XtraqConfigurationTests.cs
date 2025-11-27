@@ -207,6 +207,50 @@ public sealed class XtraqConfigurationTests
         }
     }
 
+    /// <summary>
+    /// Allows offline build scenarios to load configuration without requiring XTRAQ_GENERATOR_DB.
+    /// </summary>
+    [Xunit.Fact]
+    public void Load_WhenGeneratorConnectionOptional_SucceedsWithoutConnection()
+    {
+        var cleanupKeys = new[]
+        {
+            "XTRAQ_PROJECT_PATH",
+            "XTRAQ_PROJECT_ROOT",
+            "XTRAQ_GENERATOR_DB"
+        };
+
+        var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in cleanupKeys)
+        {
+            snapshot[key] = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, null);
+        }
+
+        var projectRoot = Directory.CreateTempSubdirectory("xtraq-offline-build-").FullName;
+
+        try
+        {
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
+                "{\n  \"Namespace\": \"Offline.Namespace\"\n}\n");
+
+            var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot, requireGeneratorConnection: false);
+
+            Xunit.Assert.Null(configuration.GeneratorConnectionString);
+            Xunit.Assert.Equal("Offline.Namespace", configuration.NamespaceRoot);
+            Xunit.Assert.Equal(projectRoot, configuration.ProjectRoot);
+        }
+        finally
+        {
+            foreach (var kvp in snapshot)
+            {
+                Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
+            }
+
+            TryDeleteDirectory(projectRoot);
+        }
+    }
+
     private static void TryDeleteDirectory(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

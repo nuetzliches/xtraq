@@ -57,9 +57,10 @@ public sealed class XtraqConfiguration
     /// <param name="projectRoot">Optional project root used to resolve relative paths.</param>
     /// <param name="cliOverrides">Optional CLI-supplied key/value overrides.</param>
     /// <param name="explicitConfigPath">Optional explicit configuration file path.</param>
+    /// <param name="requireGeneratorConnection">When <c>true</c>, XTRAQ_GENERATOR_DB must be present (snapshot/refresh). Set to <c>false</c> for offline build-only flows.</param>
     /// <returns>A populated <see cref="XtraqConfiguration"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when required configuration cannot be resolved.</exception>
-    public static XtraqConfiguration Load(string? projectRoot = null, IDictionary<string, string?>? cliOverrides = null, string? explicitConfigPath = null)
+    public static XtraqConfiguration Load(string? projectRoot = null, IDictionary<string, string?>? cliOverrides = null, string? explicitConfigPath = null, bool requireGeneratorConnection = false)
     {
         var verbose = Xtraq.Utils.EnvironmentHelper.IsTrue("XTRAQ_VERBOSE");
 
@@ -187,7 +188,7 @@ public sealed class XtraqConfiguration
         {
             if (verbose) Console.WriteLine("[xtraq] No .env file found; continuing without env bootstrap.");
         }
-        Validate(cfg, envFilePath);
+        Validate(cfg, envFilePath, requireGeneratorConnection);
         return cfg;
     }
 
@@ -196,8 +197,9 @@ public sealed class XtraqConfiguration
     /// </summary>
     /// <param name="cfg">The configuration instance to validate.</param>
     /// <param name="envFilePath">The resolved path to the .env file.</param>
+    /// <param name="requireGeneratorConnection">When true, XTRAQ_GENERATOR_DB is required.</param>
     /// <exception cref="InvalidOperationException">Thrown when validation fails.</exception>
-    private static void Validate(XtraqConfiguration cfg, string? envFilePath)
+    private static void Validate(XtraqConfiguration cfg, string? envFilePath, bool requireGeneratorConnection)
     {
         if (!string.IsNullOrWhiteSpace(cfg.NamespaceRoot))
         {
@@ -216,8 +218,8 @@ public sealed class XtraqConfiguration
         {
             // .env is optional; marker check removed to allow offline/DB-less init.
         }
-        if (string.IsNullOrWhiteSpace(cfg.GeneratorConnectionString))
-            throw new InvalidOperationException("XTRAQ_GENERATOR_DB must be configured via environment variables or .env.");
+        if (requireGeneratorConnection && string.IsNullOrWhiteSpace(cfg.GeneratorConnectionString))
+            throw new InvalidOperationException("XTRAQ_GENERATOR_DB is required for snapshot/refresh operations.");
         foreach (var schema in cfg.BuildSchemas)
         {
             var s = schema.Trim(); if (s.Length == 0) continue;
