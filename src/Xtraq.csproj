@@ -20,7 +20,7 @@
     <Version>1.0.0-rc.4</Version>
     <Authors>Xtraq Team</Authors>
     <Description>Xtraq CLI Tool with auto-update capabilities</Description>
-    <PackageLicenseExpression>Free Use, No Warranty</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/nuetzliches/xtraq</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
     <None Include="../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
