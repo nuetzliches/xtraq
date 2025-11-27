@@ -3,7 +3,6 @@
 // Changes may be overwritten. For customization extend generated partials.
 
 #nullable enable
-namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
 using global::Xtraq.Samples.RestApi.Xtraq;
 using global::Xtraq.Samples.RestApi.Xtraq.Shared;
@@ -19,6 +18,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 #endif
+
+namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
 /// <summary>
 /// Represents the contract for the stored procedure <c>sample.WriteAuditLogEntries</c> including parameters, result sets and execution metadata.

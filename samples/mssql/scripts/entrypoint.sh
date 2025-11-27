@@ -94,6 +94,7 @@ scripts=(
   "/sql/procedures/SyncUserContacts.sql"
   "/sql/procedures/UpdateUserBio.sql"
   "/sql/procedures/ImportOrders.sql"
+  "/sql/procedures/UnionOrderStatuses.sql"
   "/sql/procedures/OrderStatusReport.sql"
   "/sql/procedures/WriteAuditLogEntries.sql"
 )

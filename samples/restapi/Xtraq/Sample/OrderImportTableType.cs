@@ -3,12 +3,12 @@
 // Changes may be overwritten. For customization extend generated partials.
 
 #nullable enable
-namespace Xtraq.Samples.RestApi.Xtraq.Sample;
-
 using System;
 #if XTRAQ_ENABLE_TABLETYPE_VALIDATION
 using FluentValidation;
 #endif
+
+namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
 /// <summary>
 /// Provides a strongly typed projection over the SQL table type <c>Sample.OrderImportTableType</c>.

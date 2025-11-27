@@ -673,6 +673,12 @@ internal sealed class StoredProcedureContentModel
         public int NestedJsonCount { get; set; }
     }
 
+    private sealed class UnionContext
+    {
+        public List<QuerySpecification> Branches { get; } = new();
+        public List<List<ResultColumn>> BranchColumns { get; } = new();
+    }
+
     private sealed class Visitor : TSqlFragmentVisitor
     {
         private readonly string _definition;
@@ -691,6 +697,8 @@ internal sealed class StoredProcedureContentModel
         private readonly Dictionary<string, List<ResultColumn>> _tableVariableColumns = new(StringComparer.OrdinalIgnoreCase); // @VarTable -> columns
         private readonly Dictionary<string, string> _tableVariableAliases = new(StringComparer.OrdinalIgnoreCase); // alias -> @VarTable name
         private readonly Dictionary<string, (string SqlTypeName, int? MaxLength, bool? IsNullable)> _resolvedColumnTypes = new(StringComparer.OrdinalIgnoreCase); // Cache for resolved column types
+        private readonly Dictionary<QuerySpecification, UnionContext> _unionMembership = new(); // Tracks UNION branches
+        private readonly HashSet<QuerySpecification> _unionTailQuerySpecifications = new(); // Right-most branch of a UNION chain
         public Visitor(string definition, Analysis analysis)
         {
             ArgumentNullException.ThrowIfNull(definition);
@@ -698,6 +706,42 @@ internal sealed class StoredProcedureContentModel
             _definition = definition;
             _analysis = analysis;
             try { ExtractTableVariableDeclarations(); } catch { }
+        }
+        public override void ExplicitVisit(BinaryQueryExpression node)
+        {
+            try
+            {
+                var ctx = new UnionContext();
+                void Collect(QueryExpression? expr)
+                {
+                    switch (expr)
+                    {
+                        case null:
+                            return;
+                        case QueryParenthesisExpression qpe:
+                            Collect(qpe.QueryExpression);
+                            break;
+                        case BinaryQueryExpression bqe:
+                            Collect(bqe.FirstQueryExpression);
+                            Collect(bqe.SecondQueryExpression);
+                            break;
+                        case QuerySpecification qs:
+                            if (!ctx.Branches.Contains(qs)) ctx.Branches.Add(qs);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                Collect(node);
+                if (ctx.Branches.Count > 1)
+                {
+                    foreach (var qs in ctx.Branches) _unionMembership[qs] = ctx;
+                    var tail = ctx.Branches[^1];
+                    _unionTailQuerySpecifications.Add(tail);
+                }
+            }
+            catch { }
+            base.ExplicitVisit(node);
         }
         public override void ExplicitVisit(CreateProcedureStatement node) { _procedureDepth++; base.ExplicitVisit(node); _procedureDepth--; }
         public override void ExplicitVisit(CreateOrAlterProcedureStatement node) { _procedureDepth++; base.ExplicitVisit(node); _procedureDepth--; }
@@ -1361,6 +1405,25 @@ internal sealed class StoredProcedureContentModel
                 }
                 if (node.SelectElements?.OfType<SelectStarExpression>().Any() == true) builder.HasSelectStar = true;
                 var isNested = isNestedSelect;
+                // UNION handling: capture branch columns for type/name consolidation before building the result set.
+                _unionMembership.TryGetValue(node, out var unionContext);
+                bool isUnionTail = unionContext != null && _unionTailQuerySpecifications.Contains(node);
+                if (unionContext != null)
+                {
+                    unionContext.BranchColumns.Add(CloneColumns(builder.Columns));
+                }
+                if (unionContext != null && !isUnionTail)
+                {
+                    _tableAliases.Clear(); foreach (var kv in outerAliases) _tableAliases[kv.Key] = kv.Value;
+                    _tableSources.Clear(); foreach (var s in outerSources) _tableSources.Add(s);
+                    return;
+                }
+                if (unionContext != null && isUnionTail)
+                {
+                    var merged = MergeUnionColumns(unionContext);
+                    builder.Columns.Clear();
+                    foreach (var c in merged) builder.Columns.Add(c);
+                }
                 var resultSet = builder.ToResultSet();
                 // Apply table variable typing to nested JSON sets using local alias map + raw expressions
                 if (isNested)
@@ -1386,6 +1449,116 @@ internal sealed class StoredProcedureContentModel
                 _tableSources.Clear(); foreach (var s in outerSources) _tableSources.Add(s);
             }
             catch { }
+        }
+        private static List<ResultColumn> CloneColumns(IEnumerable<ResultColumn> columns)
+        {
+            var list = new List<ResultColumn>();
+            if (columns == null) return list;
+            foreach (var c in columns)
+            {
+                list.Add(new ResultColumn
+                {
+                    Name = c.Name,
+                    Alias = c.Alias,
+                    ExpressionKind = c.ExpressionKind,
+                    SourceSchema = c.SourceSchema,
+                    SourceTable = c.SourceTable,
+                    SourceColumn = c.SourceColumn,
+                    SourceAlias = c.SourceAlias,
+                    SqlTypeName = c.SqlTypeName,
+                    CastTargetType = c.CastTargetType,
+                    CastTargetLength = c.CastTargetLength,
+                    CastTargetPrecision = c.CastTargetPrecision,
+                    CastTargetScale = c.CastTargetScale,
+                    HasIntegerLiteral = c.HasIntegerLiteral,
+                    HasDecimalLiteral = c.HasDecimalLiteral,
+                    IsNullable = c.IsNullable,
+                    ForcedNullable = c.ForcedNullable,
+                    IsNestedJson = c.IsNestedJson,
+                    ReturnsJson = c.ReturnsJson,
+                    ReturnsJsonArray = c.ReturnsJsonArray,
+                    ReturnsUnknownJson = c.ReturnsUnknownJson,
+                    JsonRootProperty = c.JsonRootProperty,
+                    JsonIncludeNullValues = c.JsonIncludeNullValues,
+                    JsonElementClrType = c.JsonElementClrType,
+                    JsonElementSqlType = c.JsonElementSqlType,
+                    Columns = c.Columns,
+                    UserTypeSchemaName = c.UserTypeSchemaName,
+                    UserTypeName = c.UserTypeName,
+                    UserTypeRef = c.UserTypeRef,
+                    MaxLength = c.MaxLength,
+                    IsAmbiguous = c.IsAmbiguous,
+                    RawExpression = c.RawExpression
+                });
+            }
+            return list;
+        }
+
+        private static List<ResultColumn> MergeUnionColumns(UnionContext unionContext)
+        {
+            var merged = new List<ResultColumn>();
+            if (unionContext == null || unionContext.BranchColumns.Count == 0) return merged;
+
+            int width = unionContext.BranchColumns.Max(b => b?.Count ?? 0);
+            for (int i = 0; i < width; i++)
+            {
+                ResultColumn? first = unionContext.BranchColumns[0].Count > i ? unionContext.BranchColumns[0][i] : null;
+                var col = new ResultColumn
+                {
+                    Name = first?.Name ?? string.Empty,
+                    Alias = first?.Alias,
+                    ExpressionKind = first?.ExpressionKind,
+                    ReturnsJson = first?.ReturnsJson,
+                    ReturnsJsonArray = first?.ReturnsJsonArray,
+                    JsonRootProperty = first?.JsonRootProperty,
+                    Columns = first?.Columns ?? Array.Empty<ResultColumn>(),
+                    SourceSchema = first?.SourceSchema,
+                    SourceTable = first?.SourceTable,
+                    SourceColumn = first?.SourceColumn,
+                    SourceAlias = first?.SourceAlias
+                };
+
+                bool anyNullableTrue = false;
+                bool anyNullableFalse = false;
+                foreach (var branch in unionContext.BranchColumns)
+                {
+                    if (branch == null || branch.Count <= i) continue;
+                    var candidate = branch[i];
+                    if (string.IsNullOrWhiteSpace(col.SqlTypeName) && !string.IsNullOrWhiteSpace(candidate.SqlTypeName))
+                        col.SqlTypeName = candidate.SqlTypeName;
+                    col.MaxLength = MaxNullable(col.MaxLength, candidate.MaxLength);
+                    if (candidate.IsNullable == true) anyNullableTrue = true;
+                    if (candidate.IsNullable == false) anyNullableFalse = true;
+                }
+                if (anyNullableTrue) col.IsNullable = true;
+                else if (anyNullableFalse) col.IsNullable = false;
+                else col.IsNullable = first?.IsNullable;
+
+                // Fallback: if no type yet, pick the first available from any branch
+                if (string.IsNullOrWhiteSpace(col.SqlTypeName))
+                {
+                    foreach (var branch in unionContext.BranchColumns)
+                    {
+                        if (branch == null || branch.Count <= i) continue;
+                        var candidate = branch[i];
+                        if (!string.IsNullOrWhiteSpace(candidate.SqlTypeName))
+                        {
+                            col.SqlTypeName = candidate.SqlTypeName;
+                            break;
+                        }
+                    }
+                }
+
+                merged.Add(col);
+            }
+            return merged;
+        }
+
+        private static int? MaxNullable(int? a, int? b)
+        {
+            if (a == null) return b;
+            if (b == null) return a;
+            return Math.Max(a.Value, b.Value);
         }
         private void ApplyTableVariableTypingToNestedResult(QuerySpecification node, ResultSet set)
         {

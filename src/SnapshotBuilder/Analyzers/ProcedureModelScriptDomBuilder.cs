@@ -106,6 +106,12 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             public bool IsFunction { get; set; }
         }
 
+        private sealed class UnionContext
+        {
+            public List<QuerySpecification> Branches { get; } = new();
+            public List<List<ProcedureResultColumn>> BranchColumns { get; } = new();
+        }
+
         private sealed class JsonPathBinding
         {
             public TableAliasInfo Alias { get; init; } = null!;
@@ -146,6 +152,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
         private bool _inTopLevelSelect;
         private int _selectStatementDepth;
         private int _selectInsertSourceDepth;
+        private readonly Dictionary<QuerySpecification, UnionContext> _unionMembership = new();
 
         private sealed class TableTypeBinding
         {
@@ -228,6 +235,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             if (node?.WithCtesAndXmlNamespaces != null)
             {
                 ProcessCommonTableExpressions(node.WithCtesAndXmlNamespaces);
+            }
+
+            if (node?.QueryExpression != null)
+            {
+                PreCollectUnionMembership(node.QueryExpression);
             }
 
             _selectStatementDepth++;
@@ -381,6 +393,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
         public override void ExplicitVisit(QuerySpecification node)
         {
+            if (node == null)
+            {
+                base.ExplicitVisit(node);
+                return;
+            }
             var shouldCapture = ShouldCaptureResultSet();
             if (_cteQuerySpecifications.Contains(node))
             {
@@ -410,7 +427,43 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 _inTopLevelSelect = true;
                 if (producesVisibleResult)
                 {
-                    _resultSets.Add(BuildResultSet(node));
+                    var unionContext = ResolveUnionContext(node);
+                    var hasUnion = unionContext != null;
+                    var isUnionTail = false;
+                    if (hasUnion && unionContext != null && unionContext.Branches.Count > 0)
+                    {
+                        var tail = unionContext.Branches[^1];
+                        if (tail != null)
+                        {
+                            var tailOffset = tail.StartOffset;
+                            var tailLength = tail.FragmentLength;
+                            isUnionTail = ReferenceEquals(tail, node)
+                                || (tailOffset == node!.StartOffset && tailLength == node.FragmentLength);
+                        }
+                    }
+                    var resultSet = BuildResultSet(node);
+
+                    if (hasUnion && unionContext != null)
+                    {
+                        var branchColumns = resultSet.Columns ?? new List<ProcedureResultColumn>();
+                        unionContext.BranchColumns.Add(CloneColumns(branchColumns));
+                        if (isUnionTail)
+                        {
+                            var mergedColumns = MergeUnionColumns(unionContext);
+                            branchColumns.Clear();
+                            branchColumns.AddRange(mergedColumns);
+                            var jsonSource = unionContext.Branches.FirstOrDefault(q => q?.ForClause is JsonForClause);
+                            if (jsonSource != null)
+                            {
+                                ApplyResultSetMetadata(resultSet, jsonSource);
+                            }
+                            _resultSets.Add(resultSet);
+                        }
+                    }
+                    else
+                    {
+                        _resultSets.Add(resultSet);
+                    }
                 }
             }
 
@@ -646,6 +699,173 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             ApplyNullLiteralFallback(resultSet);
 
             return resultSet;
+        }
+
+        private static List<ProcedureResultColumn> CloneColumns(IEnumerable<ProcedureResultColumn>? columns)
+        {
+            var list = new List<ProcedureResultColumn>();
+            if (columns == null)
+            {
+                return list;
+            }
+
+            foreach (var column in columns)
+            {
+                list.Add(new ProcedureResultColumn
+                {
+                    Name = column.Name,
+                    Alias = column.Alias,
+                    SqlTypeName = column.SqlTypeName,
+                    MaxLength = column.MaxLength,
+                    IsNullable = column.IsNullable
+                });
+            }
+
+            return list;
+        }
+
+        private List<ProcedureResultColumn> MergeUnionColumns(UnionContext? unionContext)
+        {
+            var merged = new List<ProcedureResultColumn>();
+            if (unionContext == null || unionContext.BranchColumns.Count == 0)
+            {
+                return merged;
+            }
+
+            var width = unionContext.BranchColumns.Max(b => b?.Count ?? 0);
+            for (var i = 0; i < width; i++)
+            {
+                var first = unionContext.BranchColumns[0].Count > i ? unionContext.BranchColumns[0][i] : null;
+                var column = new ProcedureResultColumn
+                {
+                    Name = first?.Name ?? string.Empty,
+                    Alias = first?.Alias
+                };
+
+                var chosenType = first?.SqlTypeName;
+                var highestPrecedence = GetTypePrecedence(NormalizeTypeNameForPrecedence(chosenType));
+                int? maxLength = first?.MaxLength;
+                var anyNullableTrue = first?.IsNullable == true;
+                var anyNullableFalse = first?.IsNullable == false;
+
+                foreach (var branch in unionContext.BranchColumns)
+                {
+                    if (branch == null || branch.Count <= i)
+                    {
+                        continue;
+                    }
+
+                    var candidate = branch[i];
+                    var normalized = NormalizeTypeNameForPrecedence(candidate.SqlTypeName);
+                    var precedence = GetTypePrecedence(normalized);
+                    if (!string.IsNullOrWhiteSpace(candidate.SqlTypeName) && precedence >= highestPrecedence)
+                    {
+                        if (precedence > highestPrecedence || string.IsNullOrWhiteSpace(chosenType))
+                        {
+                            chosenType = candidate.SqlTypeName;
+                            highestPrecedence = precedence;
+                        }
+                    }
+
+                    maxLength = MaxNullable(maxLength, candidate.MaxLength);
+                    if (candidate.IsNullable == true) anyNullableTrue = true;
+                    if (candidate.IsNullable == false) anyNullableFalse = true;
+                }
+
+                column.SqlTypeName = chosenType;
+                column.MaxLength = maxLength;
+                if (anyNullableTrue) column.IsNullable = true;
+                else if (anyNullableFalse) column.IsNullable = false;
+                else column.IsNullable = first?.IsNullable;
+
+                merged.Add(column);
+            }
+
+            return merged;
+        }
+
+        private void PreCollectUnionMembership(QueryExpression? expression)
+        {
+            if (expression == null)
+            {
+                return;
+            }
+
+            if (expression is QueryParenthesisExpression qpe)
+            {
+                PreCollectUnionMembership(qpe.QueryExpression);
+                return;
+            }
+
+            if (expression is BinaryQueryExpression bqe)
+            {
+                var ctx = new UnionContext();
+                CollectUnionBranches(bqe, ctx);
+                if (ctx.Branches.Count > 1)
+                {
+                    foreach (var qs in ctx.Branches)
+                    {
+                        _unionMembership[qs] = ctx;
+                    }
+                }
+                return;
+            }
+        }
+
+        private static void CollectUnionBranches(QueryExpression? expression, UnionContext target)
+        {
+            switch (expression)
+            {
+                case null:
+                    return;
+                case QueryParenthesisExpression qpe:
+                    CollectUnionBranches(qpe.QueryExpression, target);
+                    break;
+                case BinaryQueryExpression bqe:
+                    CollectUnionBranches(bqe.FirstQueryExpression, target);
+                    CollectUnionBranches(bqe.SecondQueryExpression, target);
+                    break;
+                case QuerySpecification qs:
+                    if (!target.Branches.Contains(qs))
+                    {
+                        target.Branches.Add(qs);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private UnionContext? ResolveUnionContext(QuerySpecification? node)
+        {
+            if (node == null)
+            {
+                return null;
+            }
+
+            if (_unionMembership.TryGetValue(node, out var ctx))
+            {
+                return ctx;
+            }
+
+            if (_unionMembership.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var candidate in _unionMembership.Values)
+            {
+                var match = candidate.Branches.FirstOrDefault(b =>
+                    b != null &&
+                    b.StartOffset == node.StartOffset &&
+                    b.FragmentLength == node.FragmentLength);
+                if (match != null)
+                {
+                    return candidate;
+                }
+            }
+
+            return _unionMembership.Values.FirstOrDefault();
         }
 
         private void ApplyResultSetMetadata(ProcedureResultSet resultSet, QuerySpecification? query)
@@ -1816,6 +2036,29 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             return trimmed.ToLowerInvariant();
         }
 
+        private static string? NormalizeTypeNameForPrecedence(string? typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+            {
+                return null;
+            }
+
+            var trimmed = typeName.Trim();
+            var dotIndex = trimmed.LastIndexOf('.');
+            if (dotIndex >= 0)
+            {
+                trimmed = trimmed[(dotIndex + 1)..];
+            }
+
+            var parenIndex = trimmed.IndexOf('(');
+            if (parenIndex >= 0)
+            {
+                trimmed = trimmed[..parenIndex];
+            }
+
+            return trimmed.ToLowerInvariant();
+        }
+
         private static int GetTypePrecedence(string? normalizedType)
         {
             if (string.IsNullOrWhiteSpace(normalizedType))
@@ -1829,6 +2072,21 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             return 0;
+        }
+
+        private static int? MaxNullable(int? left, int? right)
+        {
+            if (left == null)
+            {
+                return right;
+            }
+
+            if (right == null)
+            {
+                return left;
+            }
+
+            return Math.Max(left.Value, right.Value);
         }
 
         private void PopulateLiteral(ProcedureResultColumn column, Literal literal)

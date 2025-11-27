@@ -2,13 +2,14 @@
 // . This file is generated; do not edit directly.
 // Customize via additional partial classes or extension templates.
 #nullable enable
-namespace Xtraq.Samples.RestApi.Xtraq;
-
 using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Xtraq.Samples.RestApi.Xtraq;
 
 /// <summary>Generated database context providing ADO.NET connection helpers and health probe.</summary>
 public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionOrchestratorAccessor, IXtraqParameterBindingProvider

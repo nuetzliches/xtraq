@@ -1,0 +1,24 @@
+{
+  "Schema": "sample",
+  "Name": "UnionOrderStatuses",
+  "Parameters": [],
+  "ResultSets": [
+    {
+      "ReturnsJson": true,
+      "ReturnsJsonArray": true,
+      "Columns": [
+        {
+          "Name": "Quantity",
+          "Alias": "Quantity",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "Day",
+          "Alias": "Day",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 9
+        }
+      ]
+    }
+  ]
+}

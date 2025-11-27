@@ -53,6 +53,16 @@ public sealed class SampleStoredProcedureParsingTests : Xtraq.TestFramework.SqlS
         Xunit.Assert.True(ordersColumn.ReturnsJsonArray);
     }
 
+    [Xunit.Fact]
+    public void UnionOrderStatuses_ShouldExposeSingleResultSet()
+    {
+        var parsed = ParseSampleProcedure("UnionOrderStatuses.sql");
+        var result = Xunit.Assert.Single(parsed.ResultSets);
+        Xunit.Assert.True(result.ReturnsJson);
+        Xunit.Assert.Contains(result.Columns, c => string.Equals(c.Name, "Quantity", StringComparison.OrdinalIgnoreCase));
+        Xunit.Assert.Contains(result.Columns, c => string.Equals(c.Name, "Day", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static Xtraq.TestFramework.SqlServerTestBase.ParsedProcedure ParseSampleProcedure(string fileName)
     {
         var filePath = Path.Combine(GetRepositoryRoot(), "samples", "sql", "procedures", fileName);
