@@ -505,6 +505,77 @@ internal sealed class SchemaSnapshotFileLayoutService
         return string.Join('.', segments) + ".json";
     }
 
+    /// <summary>
+    /// Removes snapshot artefacts for schemas that are no longer active.
+    /// </summary>
+    internal void PurgeInactiveSchemas(IReadOnlyCollection<string> activeSchemas)
+    {
+        if (activeSchemas == null || activeSchemas.Count == 0)
+        {
+            return;
+        }
+
+        var baseDir = EnsureBaseDir();
+        if (string.IsNullOrWhiteSpace(baseDir) || !Directory.Exists(baseDir))
+        {
+            return;
+        }
+
+        var activeSanitized = new HashSet<string>(
+            activeSchemas
+                .Where(static s => !string.IsNullOrWhiteSpace(s))
+                .Select(static s => Xtraq.Utils.NameSanitizer.SanitizeForFile(s)),
+            StringComparer.OrdinalIgnoreCase);
+
+        void PurgeFolder(string folderName, Func<string, string?> schemaExtractor)
+        {
+            var folder = Path.Combine(baseDir, folderName);
+            if (!Directory.Exists(folder))
+            {
+                return;
+            }
+
+            foreach (var file in Directory.GetFiles(folder, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                var schema = schemaExtractor(Path.GetFileNameWithoutExtension(file));
+                if (string.IsNullOrWhiteSpace(schema))
+                {
+                    continue;
+                }
+
+                if (!activeSanitized.Contains(schema))
+                {
+                    try { File.Delete(file); } catch { /* best effort */ }
+                }
+            }
+        }
+
+        static string? ExtractSchemaFromSegments(string fileNameWithoutExtension)
+        {
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+            {
+                return null;
+            }
+
+            var segments = fileNameWithoutExtension.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length < 2)
+            {
+                return null;
+            }
+
+            // handles catalog.schema.name (types) and schema.name (others)
+            return segments.Length >= 2 ? segments[^2] : null;
+        }
+
+        // procedures, functions, tabletypes, tables, views follow schema.name; types optionally include catalog.schema.name
+        PurgeFolder("procedures", ExtractSchemaFromSegments);
+        PurgeFolder("functions", ExtractSchemaFromSegments);
+        PurgeFolder("tabletypes", ExtractSchemaFromSegments);
+        PurgeFolder("tables", ExtractSchemaFromSegments);
+        PurgeFolder("views", ExtractSchemaFromSegments);
+        PurgeFolder("types", ExtractSchemaFromSegments);
+    }
+
     // Adjustment: retain JSON flags and columns for forwarded result sets (only minimal normalization possible)
     private static string StripForwardedFlags(string json)
     {

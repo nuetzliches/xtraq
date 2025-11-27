@@ -1,6 +1,4 @@
 using System.CommandLine;
-using System.CommandLine.Invocation;
-using System.CommandLine.Parsing;
 using Xtraq.Cli.Commands;
 using Xtraq.Configuration;
 using Xtraq.Infrastructure;
@@ -63,50 +61,94 @@ internal sealed class CliCommandAppBuilder
 
     private void InitializeOptions()
     {
-        _verboseOption = new Option<bool>("--verbose", () => false, "Show additional diagnostic information");
-        _verboseOption.AddAlias("-v");
+        _verboseOption = new Option<bool>("--verbose")
+        {
+            Description = "Show additional diagnostic information",
+            Recursive = true
+        };
+        _verboseOption.Aliases.Add("-v");
 
-        _debugOption = new Option<bool>("--debug", "Use debug environment settings");
-        _debugAliasOption = new Option<bool>("--debug-alias", "Enable alias scope debug logging (promotes XTRAQ_LOG_LEVEL to debug)");
+        _debugOption = new Option<bool>("--debug")
+        {
+            Description = "Use debug environment settings",
+            Recursive = true
+        };
+        _debugAliasOption = new Option<bool>("--debug-alias")
+        {
+            Description = "Enable alias scope debug logging (promotes XTRAQ_LOG_LEVEL to debug)",
+            Recursive = true
+        };
 
-        _noCacheOption = new Option<bool>("--no-cache", "Do not read or write the local procedure metadata cache");
-        _noUpdateOption = new Option<bool>("--no-update", "Skip update checks and prompts for this run");
+        _noCacheOption = new Option<bool>("--no-cache")
+        {
+            Description = "Do not read or write the local procedure metadata cache",
+            Recursive = true
+        };
+        _noUpdateOption = new Option<bool>("--no-update")
+        {
+            Description = "Skip update checks and prompts for this run",
+            Recursive = true
+        };
 
-        _procedureOption = new Option<string?>("--procedure", "Process only specific procedures (comma separated schema.name with optional '*' or '?' wildcards)");
-        _procedureOption.AddValidator(result =>
+        _procedureOption = new Option<string?>("--procedure")
+        {
+            Description = "Process only specific procedures (comma separated schema.name with optional '*' or '?' wildcards)",
+            Recursive = true
+        };
+        _procedureOption.Validators.Add(result =>
         {
             var rawValue = result.GetValueOrDefault<string?>();
             if (!CliHostUtilities.TryNormalizeProcedureFilter(rawValue, out _, out var error) && !string.IsNullOrEmpty(error))
             {
-                result.ErrorMessage = error;
+                result.AddError(error);
             }
         });
 
-        _telemetryOption = new Option<bool>("--telemetry", "Persist a database telemetry report to .xtraq/telemetry");
-        _jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values", "Emit JsonIncludeNullValues attribute for JSON result properties");
-        _entityFrameworkOption = new Option<bool>("--entity-framework", "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK_ENABLED)");
-        _ciOption = new Option<bool>("--ci", "Disable Spectre.Console enhancements for CI/plain output modes");
-
-        _projectOption = new Option<string?>("--project-path", "Project root path (.env file or directory). Defaults to current directory when omitted.");
-        _projectOption.AddAlias("--project");
-        _projectOption.AddAlias("-p");
-        _projectOption.AddValidator(result =>
+        _telemetryOption = new Option<bool>("--telemetry")
         {
-            if (result.IsImplicit)
+            Description = "Persist a database telemetry report to .xtraq/telemetry",
+            Recursive = true
+        };
+        _jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values")
+        {
+            Description = "Emit JsonIncludeNullValues attribute for JSON result properties",
+            Recursive = true
+        };
+        _entityFrameworkOption = new Option<bool>("--entity-framework")
+        {
+            Description = "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK_ENABLED)",
+            Recursive = true
+        };
+        _ciOption = new Option<bool>("--ci")
+        {
+            Description = "Disable Spectre.Console enhancements for CI/plain output modes",
+            Recursive = true
+        };
+
+        _projectOption = new Option<string?>("--project-path")
+        {
+            Description = "Project root path (.env file or directory). Defaults to current directory when omitted.",
+            Recursive = true
+        };
+        _projectOption.Aliases.Add("--project");
+        _projectOption.Aliases.Add("-p");
+        _projectOption.Validators.Add(result =>
+        {
+            if (result.Implicit)
             {
                 return;
             }
 
             if (result.Tokens.Count == 0)
             {
-                result.ErrorMessage = "Option '-p|--project' requires a path argument.";
+                result.AddError("Option '-p|--project' requires a path argument.");
                 return;
             }
 
             var invalidToken = result.Tokens.FirstOrDefault(token => token.Value.StartsWith("-", StringComparison.Ordinal));
             if (invalidToken is not null)
             {
-                result.ErrorMessage = "Option '-p|--project' requires a path argument.";
+                result.AddError("Option '-p|--project' requires a path argument.");
             }
         });
     }
@@ -130,17 +172,17 @@ internal sealed class CliCommandAppBuilder
             TreatUnmatchedTokensAsErrors = true
         };
 
-        root.AddGlobalOption(_verboseOption);
-        root.AddGlobalOption(_debugOption);
-        root.AddGlobalOption(_debugAliasOption);
-        root.AddGlobalOption(_noCacheOption);
-        root.AddGlobalOption(_noUpdateOption);
-        root.AddGlobalOption(_procedureOption);
-        root.AddGlobalOption(_telemetryOption);
-        root.AddGlobalOption(_jsonIncludeNullValuesOption);
-        root.AddGlobalOption(_entityFrameworkOption);
-        root.AddGlobalOption(_ciOption);
-        root.AddGlobalOption(_projectOption);
+        root.Add(_verboseOption);
+        root.Add(_debugOption);
+        root.Add(_debugAliasOption);
+        root.Add(_noCacheOption);
+        root.Add(_noUpdateOption);
+        root.Add(_procedureOption);
+        root.Add(_telemetryOption);
+        root.Add(_jsonIncludeNullValuesOption);
+        root.Add(_entityFrameworkOption);
+        root.Add(_ciOption);
+        root.Add(_projectOption);
 
         ConfigureDefaultHandler(root);
         ConfigureSnapshotCommand(root);
@@ -154,9 +196,9 @@ internal sealed class CliCommandAppBuilder
 
     private void ConfigureDefaultHandler(RootCommand root)
     {
-        root.SetHandler(async invocationContext =>
+        root.SetAction(async (parseResult, cancellationToken) =>
         {
-            await ExecuteCommandAsync(invocationContext, _buildDescriptor, _buildCommandHandler, null, null, defaultRefresh: true).ConfigureAwait(false);
+            return await ExecuteCommandAsync(parseResult, cancellationToken, _buildDescriptor, _buildCommandHandler, null, null, defaultRefresh: true).ConfigureAwait(false);
         });
     }
 
@@ -164,42 +206,45 @@ internal sealed class CliCommandAppBuilder
     {
         var snapshotProjectArgument = CreateOptionalProjectArgument("Optional project root path (.env file or directory). Defaults to current directory when omitted.");
         var snapshotCommand = new Command(_snapshotDescriptor.Name, _snapshotDescriptor.Description);
-        snapshotCommand.AddArgument(snapshotProjectArgument);
-        snapshotCommand.SetHandler(async invocationContext =>
+        snapshotCommand.Add(snapshotProjectArgument);
+        snapshotCommand.SetAction(async (parseResult, cancellationToken) =>
         {
-            await ExecuteCommandAsync(invocationContext, _snapshotDescriptor, _snapshotCommandHandler, snapshotProjectArgument, null, defaultRefresh: false).ConfigureAwait(false);
+            return await ExecuteCommandAsync(parseResult, cancellationToken, _snapshotDescriptor, _snapshotCommandHandler, snapshotProjectArgument, null, defaultRefresh: false).ConfigureAwait(false);
         });
-        root.AddCommand(snapshotCommand);
+        root.Add(snapshotCommand);
     }
 
     private void ConfigureBuildCommand(RootCommand root)
     {
         var buildProjectArgument = CreateOptionalProjectArgument("Optional project root path (.env file or directory). Defaults to current directory when omitted.");
-        var refreshSnapshotOption = new Option<bool>("--refresh-snapshot", () => false, "Refresh snapshot before executing the build command");
+        var refreshSnapshotOption = new Option<bool>("--refresh-snapshot")
+        {
+            Description = "Refresh snapshot before executing the build command"
+        };
 
         var buildCommand = new Command(_buildDescriptor.Name, _buildDescriptor.Description);
-        buildCommand.AddArgument(buildProjectArgument);
-        buildCommand.AddOption(refreshSnapshotOption);
-        buildCommand.SetHandler(async invocationContext =>
+        buildCommand.Add(buildProjectArgument);
+        buildCommand.Add(refreshSnapshotOption);
+        buildCommand.SetAction(async (parseResult, cancellationToken) =>
         {
-            await ExecuteCommandAsync(
-                invocationContext,
+            return await ExecuteCommandAsync(
+                parseResult,
+                cancellationToken,
                 _buildDescriptor,
                 _buildCommandHandler,
                 buildProjectArgument,
                 refreshSnapshotOption,
                 defaultRefresh: false).ConfigureAwait(false);
         });
-        root.AddCommand(buildCommand);
+        root.Add(buildCommand);
     }
 
     private void ConfigureVersionCommand(RootCommand root)
     {
         var versionCommand = new Command(_versionDescriptor.Name, _versionDescriptor.Description);
-        versionCommand.AddOption(_verboseOption);
-        versionCommand.SetHandler(async context =>
+        versionCommand.SetAction(async (parseResult, cancellationToken) =>
         {
-            var options = CreateBaseOptions(context.ParseResult);
+            var options = CreateBaseOptions(parseResult);
             _commandOptionsAccessor.Update(options);
 
             var stopwatch = Stopwatch.StartNew();
@@ -207,7 +252,6 @@ internal sealed class CliCommandAppBuilder
             try
             {
                 var result = CommandResultMapper.Map(await _runtime.GetVersionAsync().ConfigureAwait(false));
-                context.ExitCode = result;
                 exitCode = result;
             }
             catch
@@ -234,24 +278,25 @@ internal sealed class CliCommandAppBuilder
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         null);
-                    await _cliTelemetry.CaptureAsync(telemetryEvent, context.GetCancellationToken()).ConfigureAwait(false);
+                    await _cliTelemetry.CaptureAsync(telemetryEvent, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception telemetryEx)
                 {
                     _services.GetRequiredService<IConsoleService>().Verbose($"telemetry capture failed: {telemetryEx.Message}");
                 }
             }
+
+            return exitCode;
         });
-        root.AddCommand(versionCommand);
+        root.Add(versionCommand);
     }
 
     private void ConfigureUpdateCommand(RootCommand root)
     {
         var updateCommand = new Command(_updateDescriptor.Name, _updateDescriptor.Description);
-        updateCommand.AddOption(_verboseOption);
-        updateCommand.SetHandler(async context =>
+        updateCommand.SetAction(async (parseResult, cancellationToken) =>
         {
-            var options = CreateBaseOptions(context.ParseResult);
+            var options = CreateBaseOptions(parseResult);
             _commandOptionsAccessor.Update(options);
 
             var stopwatch = Stopwatch.StartNew();
@@ -259,7 +304,6 @@ internal sealed class CliCommandAppBuilder
             try
             {
                 var result = CommandResultMapper.Map(await _runtime.UpdateAsync(options).ConfigureAwait(false));
-                context.ExitCode = result;
                 exitCode = result;
             }
             catch
@@ -286,64 +330,78 @@ internal sealed class CliCommandAppBuilder
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         null);
-                    await _cliTelemetry.CaptureAsync(telemetryEvent, context.GetCancellationToken()).ConfigureAwait(false);
+                    await _cliTelemetry.CaptureAsync(telemetryEvent, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception telemetryEx)
                 {
                     _services.GetRequiredService<IConsoleService>().Verbose($"telemetry capture failed: {telemetryEx.Message}");
                 }
             }
+
+            return exitCode;
         });
-        root.AddCommand(updateCommand);
+        root.Add(updateCommand);
     }
 
     private void ConfigureInitCommand(RootCommand root)
     {
         var initCommand = new Command(_initDescriptor.Name, _initDescriptor.Description);
         var initProjectArgument = CreateOptionalProjectArgument("Target directory or .env file. Defaults to current directory when omitted.");
-        initCommand.AddArgument(initProjectArgument);
+        initCommand.Add(initProjectArgument);
 
-        var initForceOption = new Option<bool>("--force", "Overwrite existing .env");
-        initForceOption.AddAlias("-f");
-        initCommand.AddOption(initForceOption);
-
-        var namespaceOption = new Option<string?>("--namespace", "Root namespace (XTRAQ_NAMESPACE)");
-        namespaceOption.AddAlias("-n");
-        initCommand.AddOption(namespaceOption);
-
-        var connectionOption = new Option<string?>("--connection", "Snapshot connection string (XTRAQ_GENERATOR_DB)");
-        connectionOption.AddAlias("-c");
-        initCommand.AddOption(connectionOption);
-
-        var schemasOption = new Option<string?>("--schemas", "Comma separated allow-list (XTRAQ_BUILD_SCHEMAS)");
-        schemasOption.AddAlias("-s");
-        initCommand.AddOption(schemasOption);
-
-        initCommand.SetHandler(async context =>
+        var initForceOption = new Option<bool>("--force")
         {
-            var options = CreateBaseOptions(context.ParseResult);
+            Description = "Overwrite existing .env"
+        };
+        initForceOption.Aliases.Add("-f");
+        initCommand.Add(initForceOption);
+
+        var namespaceOption = new Option<string?>("--namespace")
+        {
+            Description = "Root namespace (XTRAQ_NAMESPACE)"
+        };
+        namespaceOption.Aliases.Add("-n");
+        initCommand.Add(namespaceOption);
+
+        var connectionOption = new Option<string?>("--connection")
+        {
+            Description = "Snapshot connection string (XTRAQ_GENERATOR_DB)"
+        };
+        connectionOption.Aliases.Add("-c");
+        initCommand.Add(connectionOption);
+
+        var schemasOption = new Option<string?>("--schemas")
+        {
+            Description = "Comma separated allow-list (XTRAQ_BUILD_SCHEMAS)"
+        };
+        schemasOption.Aliases.Add("-s");
+        initCommand.Add(schemasOption);
+
+        initCommand.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var options = CreateBaseOptions(parseResult);
             _commandOptionsAccessor.Update(options);
             var console = _services.GetRequiredService<IConsoleService>();
 
             var stopwatch = Stopwatch.StartNew();
             var exitCode = ExitCodes.InternalError;
             string? telemetryProjectRoot = null;
-            var force = context.ParseResult.GetValueForOption(initForceOption);
+            var force = parseResult.GetValue(initForceOption);
             var namespaceProvided = false;
             var connectionProvided = false;
             var schemasProvided = false;
 
             try
             {
-                var targetPath = context.ParseResult.GetValueForArgument(initProjectArgument)?.Trim();
+                var targetPath = parseResult.GetValue(initProjectArgument)?.Trim();
                 if (string.IsNullOrWhiteSpace(targetPath))
                 {
-                    targetPath = context.ParseResult.GetValueForOption(_projectOption)?.Trim();
+                    targetPath = parseResult.GetValue(_projectOption)?.Trim();
                 }
 
-                var nsValue = context.ParseResult.GetValueForOption(namespaceOption)?.Trim();
-                var connection = context.ParseResult.GetValueForOption(connectionOption)?.Trim();
-                var schemas = context.ParseResult.GetValueForOption(schemasOption)?.Trim();
+                var nsValue = parseResult.GetValue(namespaceOption)?.Trim();
+                var connection = parseResult.GetValue(connectionOption)?.Trim();
+                var schemas = parseResult.GetValue(schemasOption)?.Trim();
 
                 namespaceProvided = !string.IsNullOrWhiteSpace(nsValue);
                 connectionProvided = !string.IsNullOrWhiteSpace(connection);
@@ -440,7 +498,6 @@ internal sealed class CliCommandAppBuilder
                 Console.WriteLine("JSON helpers ship enabled by default; no preview flags required.");
                 Console.WriteLine("Next: run 'xtraq snapshot' followed by 'xtraq build' (or just 'xtraq').");
                 DirectoryUtils.ResetBasePath();
-                context.ExitCode = ExitCodes.Success;
                 exitCode = ExitCodes.Success;
             }
             catch
@@ -474,16 +531,18 @@ internal sealed class CliCommandAppBuilder
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         metadata);
-                    await _cliTelemetry.CaptureAsync(telemetryEvent, context.GetCancellationToken()).ConfigureAwait(false);
+                    await _cliTelemetry.CaptureAsync(telemetryEvent, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception telemetryEx)
                 {
                     _services.GetRequiredService<IConsoleService>().Verbose($"telemetry capture failed: {telemetryEx.Message}");
                 }
             }
+
+            return exitCode;
         });
 
-        root.AddCommand(initCommand);
+        root.Add(initCommand);
     }
 
     private CliCommandOptions CreateBaseOptions(ParseResult parseResult)
@@ -491,49 +550,50 @@ internal sealed class CliCommandAppBuilder
         var options = new CliCommandOptions
         {
             Path = Directory.GetCurrentDirectory(),
-            Verbose = parseResult.GetValueForOption(_verboseOption),
-            Debug = parseResult.GetValueForOption(_debugOption),
-            NoCache = parseResult.GetValueForOption(_noCacheOption),
-            NoUpdate = parseResult.GetValueForOption(_noUpdateOption),
-            Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValueForOption(_procedureOption)),
-            Telemetry = parseResult.GetValueForOption(_telemetryOption),
-            JsonIncludeNullValues = parseResult.GetValueForOption(_jsonIncludeNullValuesOption),
-            HasJsonIncludeNullValuesOverride = parseResult.HasOption(_jsonIncludeNullValuesOption),
-            EntityFrameworkIntegration = parseResult.GetValueForOption(_entityFrameworkOption),
-            HasEntityFrameworkIntegrationOverride = parseResult.HasOption(_entityFrameworkOption),
-            CiMode = parseResult.GetValueForOption(_ciOption)
+            Verbose = parseResult.GetValue(_verboseOption),
+            Debug = parseResult.GetValue(_debugOption),
+            NoCache = parseResult.GetValue(_noCacheOption),
+            NoUpdate = parseResult.GetValue(_noUpdateOption),
+            Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValue(_procedureOption)),
+            Telemetry = parseResult.GetValue(_telemetryOption),
+            JsonIncludeNullValues = parseResult.GetValue(_jsonIncludeNullValuesOption),
+            HasJsonIncludeNullValuesOverride = parseResult.GetResult(_jsonIncludeNullValuesOption)?.Implicit is false,
+            EntityFrameworkIntegration = parseResult.GetValue(_entityFrameworkOption),
+            HasEntityFrameworkIntegrationOverride = parseResult.GetResult(_entityFrameworkOption)?.Implicit is false,
+            CiMode = parseResult.GetValue(_ciOption)
         };
 
         return options;
     }
 
-    private async Task ExecuteCommandAsync(
-        InvocationContext invocationContext,
+    private async Task<int> ExecuteCommandAsync(
+        ParseResult parseResult,
+        CancellationToken cancellationToken,
         CliCommandDescriptor descriptor,
         IXtraqCommand command,
         Argument<string?>? commandArgument,
         Option<bool>? refreshOption,
         bool defaultRefresh)
     {
-        ApplyDebugAlias(invocationContext.ParseResult);
+        ApplyDebugAlias(parseResult);
 
         var projectPath = descriptor.HasFeature(CliCommandFeatures.RequiresProjectPath)
-            ? ResolveProjectPath(invocationContext.ParseResult, commandArgument)
+            ? ResolveProjectPath(parseResult, commandArgument)
             : Directory.GetCurrentDirectory();
         var options = new CliCommandOptions
         {
             Path = projectPath,
-            Verbose = invocationContext.ParseResult.GetValueForOption(_verboseOption),
-            Debug = invocationContext.ParseResult.GetValueForOption(_debugOption),
-            NoCache = invocationContext.ParseResult.GetValueForOption(_noCacheOption),
-            NoUpdate = invocationContext.ParseResult.GetValueForOption(_noUpdateOption),
-            Procedure = CliHostUtilities.NormalizeProcedureFilter(invocationContext.ParseResult.GetValueForOption(_procedureOption)),
-            Telemetry = invocationContext.ParseResult.GetValueForOption(_telemetryOption),
-            JsonIncludeNullValues = invocationContext.ParseResult.GetValueForOption(_jsonIncludeNullValuesOption),
-            HasJsonIncludeNullValuesOverride = invocationContext.ParseResult.HasOption(_jsonIncludeNullValuesOption),
-            EntityFrameworkIntegration = invocationContext.ParseResult.GetValueForOption(_entityFrameworkOption),
-            HasEntityFrameworkIntegrationOverride = invocationContext.ParseResult.HasOption(_entityFrameworkOption),
-            CiMode = invocationContext.ParseResult.GetValueForOption(_ciOption)
+            Verbose = parseResult.GetValue(_verboseOption),
+            Debug = parseResult.GetValue(_debugOption),
+            NoCache = parseResult.GetValue(_noCacheOption),
+            NoUpdate = parseResult.GetValue(_noUpdateOption),
+            Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValue(_procedureOption)),
+            Telemetry = parseResult.GetValue(_telemetryOption),
+            JsonIncludeNullValues = parseResult.GetValue(_jsonIncludeNullValuesOption),
+            HasJsonIncludeNullValuesOverride = parseResult.GetResult(_jsonIncludeNullValuesOption)?.Implicit is false,
+            EntityFrameworkIntegration = parseResult.GetValue(_entityFrameworkOption),
+            HasEntityFrameworkIntegrationOverride = parseResult.GetResult(_entityFrameworkOption)?.Implicit is false,
+            CiMode = parseResult.GetValue(_ciOption)
         };
 
         Task<UpdateInfo?>? updateCheckTask = null;
@@ -545,7 +605,7 @@ internal sealed class CliCommandAppBuilder
         var shouldRefresh = defaultRefresh;
         if (descriptor.HasFeature(CliCommandFeatures.SupportsRefreshOption) && refreshOption is not null)
         {
-            shouldRefresh = invocationContext.ParseResult.GetValueForOption(refreshOption);
+            shouldRefresh = parseResult.GetValue(refreshOption);
         }
 
         if (descriptor.HasFeature(CliCommandFeatures.RequiresProjectPath))
@@ -563,8 +623,7 @@ internal sealed class CliCommandAppBuilder
             var initialized = await EnsureProjectInitializedAsync(projectPath, console, needsConnection).ConfigureAwait(false);
             if (!initialized)
             {
-                invocationContext.ExitCode = ExitCodes.InternalError;
-                return;
+                return ExitCodes.InternalError;
             }
         }
 
@@ -583,8 +642,7 @@ internal sealed class CliCommandAppBuilder
         var exitCode = ExitCodes.InternalError;
         try
         {
-            var result = await command.ExecuteAsync(commandContext, invocationContext.GetCancellationToken()).ConfigureAwait(false);
-            invocationContext.ExitCode = result;
+            var result = await command.ExecuteAsync(commandContext, cancellationToken).ConfigureAwait(false);
             exitCode = result;
         }
         catch
@@ -613,7 +671,7 @@ internal sealed class CliCommandAppBuilder
                     shouldRefresh,
                     string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                     null);
-                await _cliTelemetry.CaptureAsync(telemetryEvent, invocationContext.GetCancellationToken()).ConfigureAwait(false);
+                await _cliTelemetry.CaptureAsync(telemetryEvent, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception telemetryEx)
             {
@@ -623,8 +681,10 @@ internal sealed class CliCommandAppBuilder
 
         if (exitCode == ExitCodes.Success)
         {
-            await PromptForUpdateAsync(updateCheckTask, options, invocationContext.GetCancellationToken()).ConfigureAwait(false);
+            await PromptForUpdateAsync(updateCheckTask, options, cancellationToken).ConfigureAwait(false);
         }
+
+        return exitCode;
     }
 
     private async Task<bool> EnsureProjectInitializedAsync(string projectPath, IConsoleService console, bool requireConnection)
@@ -700,12 +760,13 @@ internal sealed class CliCommandAppBuilder
 
     private void ApplyDebugAlias(ParseResult parseResult)
     {
-        if (!parseResult.HasOption(_debugAliasOption))
+        var debugAliasResult = parseResult.GetResult(_debugAliasOption);
+        if (debugAliasResult is null || debugAliasResult.Implicit)
         {
             return;
         }
 
-        var debugAliasValue = parseResult.GetValueForOption(_debugAliasOption);
+        var debugAliasValue = parseResult.GetValue(_debugAliasOption);
         if (debugAliasValue)
         {
             LogLevelConfiguration.PromoteTo(LogLevelThreshold.Debug);
@@ -860,12 +921,12 @@ internal sealed class CliCommandAppBuilder
         string? candidate = null;
         if (commandArgument is not null)
         {
-            candidate = parseResult.GetValueForArgument(commandArgument);
+            candidate = parseResult.GetValue(commandArgument);
         }
 
         if (string.IsNullOrWhiteSpace(candidate))
         {
-            candidate = parseResult.GetValueForOption(_projectOption);
+            candidate = parseResult.GetValue(_projectOption);
         }
 
         return CliHostUtilities.NormalizeProjectPath(candidate);

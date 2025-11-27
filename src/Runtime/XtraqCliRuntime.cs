@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using Xtraq.Configuration;
 using Xtraq.Core;
 using Xtraq.Engine;
+using Xtraq.Extensions;
 using Xtraq.Generators;
 using Xtraq.Metadata;
 using Xtraq.Services;
@@ -521,6 +522,10 @@ internal sealed class XtraqCliRuntime(
                 ? Path.GetFullPath(outputDir)
                 : Path.Combine(workingDirectory, outputDir);
             Directory.CreateDirectory(outputRoot);
+            if (effectiveSchemas.Count > 0)
+            {
+                PurgeOutputSchemas(outputRoot, effectiveSchemas);
+            }
             if (options.Verbose)
             {
                 consoleService.Verbose($"[build] TableTypes output root: {outputRoot}");
@@ -1435,6 +1440,40 @@ internal sealed class XtraqCliRuntime(
 
         public IReadOnlyList<TelemetryRunSummary> Runs { get; init; } = Array.Empty<TelemetryRunSummary>();
     }
+
+    private static void PurgeOutputSchemas(string outputRoot, IReadOnlyCollection<string> activeSchemas)
+    {
+        if (string.IsNullOrWhiteSpace(outputRoot) || activeSchemas is not { Count: > 0 })
+        {
+            return;
+        }
+
+        if (!Directory.Exists(outputRoot))
+        {
+            return;
+        }
+
+        var keep = new HashSet<string>(
+            activeSchemas
+                .Where(static s => !string.IsNullOrWhiteSpace(s))
+                .Select(static s => s.ToPascalCase()),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var dir in Directory.GetDirectories(outputRoot, "*", SearchOption.TopDirectoryOnly))
+        {
+            var name = Path.GetFileName(dir);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            if (!keep.Contains(name))
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort cleanup */ }
+            }
+        }
+    }
+
     private static async Task RunInitPipelineAsync(string projectRoot, IConsoleService consoleService)
     {
         var resolvedRoot = string.IsNullOrWhiteSpace(projectRoot) ? Directory.GetCurrentDirectory() : projectRoot;

@@ -66,11 +66,16 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
 {
     private readonly ISchemaInvalidationOrchestrator _invalidationOrchestrator;
     private readonly IConsoleService _console;
+    private readonly SchemaSnapshotFileLayoutService _snapshotFileLayoutService;
 
-    public SnapshotResolutionService(ISchemaInvalidationOrchestrator invalidationOrchestrator, IConsoleService console)
+    public SnapshotResolutionService(
+        ISchemaInvalidationOrchestrator invalidationOrchestrator,
+        IConsoleService console,
+        SchemaSnapshotFileLayoutService snapshotFileLayoutService)
     {
         _invalidationOrchestrator = invalidationOrchestrator ?? throw new ArgumentNullException(nameof(invalidationOrchestrator));
         _console = console ?? throw new ArgumentNullException(nameof(console));
+        _snapshotFileLayoutService = snapshotFileLayoutService ?? throw new ArgumentNullException(nameof(snapshotFileLayoutService));
     }
 
     /// <inheritdoc />
@@ -150,6 +155,9 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
             var summary = string.Join(", ", missingSnapshots.Select(static obj => obj.FullName));
             _console.Verbose($"[schema-invalidation] Missing procedure snapshots detected ({missingSnapshots.Count}): {summary}");
         }
+
+        // Remove snapshot artefacts that no longer belong to the active schemas; keeps .xtraq clean after removals.
+        TryPurgeInactiveSchemas(effectiveSchemas);
 
         return new SnapshotResolutionPlan
         {
@@ -250,6 +258,18 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
                 return;
             }
             _console.Verbose($"[schema-invalidation] Refresh plan summary: {summary}");
+        }
+    }
+
+    private void TryPurgeInactiveSchemas(IReadOnlyList<string> activeSchemas)
+    {
+        try
+        {
+            _snapshotFileLayoutService.PurgeInactiveSchemas(activeSchemas);
+        }
+        catch
+        {
+            // Cleanup best-effort only
         }
     }
 

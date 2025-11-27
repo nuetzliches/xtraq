@@ -1,4 +1,3 @@
-using System.CommandLine;
 using Xtraq.Cli.Hosting;
 
 namespace Xtraq;
@@ -20,7 +19,8 @@ public static class Program
 
         await using var hostContext = new CliHostBuilder(normalizedArgs).Build();
         var rootCommand = new CliCommandAppBuilder(hostContext).Build();
-        return await rootCommand.InvokeAsync(normalizedArgs).ConfigureAwait(false);
+        var parseResult = rootCommand.Parse(normalizedArgs);
+        return await parseResult.InvokeAsync().ConfigureAwait(false);
     }
 
     /// <summary>

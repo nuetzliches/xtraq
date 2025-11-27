@@ -361,12 +361,22 @@ internal static class CliHostUtilities
         var normalizedProjectRoot = NormalizePathSafe(resolvedRoot);
         var metadata = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
-            ["command"] = string.IsNullOrWhiteSpace(commandName) ? "default" : commandName,
-            ["version"] = ResolveProductVersion(),
-            ["timestampUtc"] = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture),
-            ["workingDirectory"] = workingDirectory,
-            ["projectPath"] = normalizedProjectPath
+            ["version"] = ResolveProductVersion()
         };
+
+        if (!string.Equals(normalizedProjectPath, workingDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            var relativeProject = TryGetRelative(workingDirectory, normalizedProjectPath);
+            metadata["projectPath"] = string.IsNullOrWhiteSpace(relativeProject) ? normalizedProjectPath : relativeProject;
+        }
+
+        metadata["command"] = string.IsNullOrWhiteSpace(commandName) ? "default" : commandName;
+
+        if (options.Verbose)
+        {
+            metadata["workingDirectory"] = workingDirectory;
+            metadata["timestampUtc"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        }
 
         if (!string.IsNullOrWhiteSpace(environment) && !string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase))
         {
@@ -376,20 +386,11 @@ internal static class CliHostUtilities
         if (!string.IsNullOrWhiteSpace(normalizedProjectRoot))
         {
             var differsFromPath = !string.Equals(normalizedProjectRoot, normalizedProjectPath, StringComparison.OrdinalIgnoreCase);
-            if (differsFromPath || options.Verbose)
+            if (options.Verbose && differsFromPath)
             {
-                metadata["projectRoot"] = normalizedProjectRoot;
+                var relativeRoot = TryGetRelative(workingDirectory, normalizedProjectRoot);
+                metadata["projectRoot"] = string.IsNullOrWhiteSpace(relativeRoot) ? normalizedProjectRoot : relativeRoot;
             }
-        }
-
-        var configDirectory = Xtraq.Configuration.TrackableConfigManager.LocateConfigDirectory(resolvedRoot);
-        var baseConfigPath = Path.Combine(configDirectory, ".xtraqconfig");
-        var resolvedConfigPath = Path.Combine(normalizedProjectRoot, ".xtraqconfig");
-        metadata["configPath"] = NormalizePathSafe(resolvedConfigPath);
-
-        if (File.Exists(baseConfigPath) && !string.Equals(baseConfigPath, resolvedConfigPath, StringComparison.OrdinalIgnoreCase))
-        {
-            metadata["configSource"] = NormalizePathSafe(baseConfigPath);
         }
 
         var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
@@ -398,9 +399,10 @@ internal static class CliHostUtilities
         {
             var normalizedHint = NormalizePathSafe(projectHint);
             var differsFromRoot = !string.Equals(normalizedHint, normalizedProjectRoot, StringComparison.OrdinalIgnoreCase);
-            if (differsFromRoot || options.Verbose)
+            if (options.Verbose && differsFromRoot)
             {
-                metadata["projectRootHint"] = normalizedHint;
+                var relativeHint = TryGetRelative(workingDirectory, normalizedHint);
+                metadata["projectRootHint"] = string.IsNullOrWhiteSpace(relativeHint) ? normalizedHint : relativeHint;
             }
         }
 
@@ -470,6 +472,24 @@ internal static class CliHostUtilities
         catch
         {
             return value;
+        }
+    }
+
+    private static string? TryGetRelative(string basePath, string targetPath)
+    {
+        try
+        {
+            var relative = Path.GetRelativePath(basePath, targetPath);
+            if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            {
+                return null;
+            }
+
+            return relative.Replace(Path.DirectorySeparatorChar, '/');
+        }
+        catch
+        {
+            return null;
         }
     }
 
