@@ -194,40 +194,40 @@ internal static class ProcedureModelJsonAnalyzer
         return trimmed;
     }
 
-        private static bool HasStructuredJsonMetadata(ProcedureResultColumn? column)
+    private static bool HasStructuredJsonMetadata(ProcedureResultColumn? column)
+    {
+        return column?.Columns != null && column.Columns.Count > 0;
+    }
+
+    private static JsonProjectionInfo? CombineTopLevelJson(IEnumerable<JsonProjectionInfo> infos)
+    {
+        if (infos == null)
         {
-            return column?.Columns != null && column.Columns.Count > 0;
+            return null;
         }
 
-        private static JsonProjectionInfo? CombineTopLevelJson(IEnumerable<JsonProjectionInfo> infos)
+        var list = infos.ToList();
+        if (list.Count == 0)
         {
-            if (infos == null)
-            {
-                return null;
-            }
-
-            var list = infos.ToList();
-            if (list.Count == 0)
-            {
-                return null;
-            }
-
-            var includeNulls = list.Any(i => i.IncludeNullValues == true);
-            var root = list.Select(i => i.RootProperty).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
-            var returnsArray = list.Select(i => i.ReturnsJsonArray).FirstOrDefault(a => a.HasValue);
-            var withoutArrayWrapper = list.Any(i => i.WithoutArrayWrapper);
-            if (withoutArrayWrapper)
-            {
-                returnsArray = false;
-            }
-            var singleRow = list.Select(i => i.SingleRowGuaranteed).FirstOrDefault(r => r.HasValue);
-
-            return new JsonProjectionInfo(true, returnsArray, root, includeNulls ? true : null, false, false, withoutArrayWrapper, singleRow);
+            return null;
         }
 
-        private sealed class JsonVisitor : TSqlFragmentVisitor
+        var includeNulls = list.Any(i => i.IncludeNullValues == true);
+        var root = list.Select(i => i.RootProperty).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
+        var returnsArray = list.Select(i => i.ReturnsJsonArray).FirstOrDefault(a => a.HasValue);
+        var withoutArrayWrapper = list.Any(i => i.WithoutArrayWrapper);
+        if (withoutArrayWrapper)
         {
-            private static readonly Regex RootRegex = new("ROOT\\s*\\(\\s*'([^']+)'", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            returnsArray = false;
+        }
+        var singleRow = list.Select(i => i.SingleRowGuaranteed).FirstOrDefault(r => r.HasValue);
+
+        return new JsonProjectionInfo(true, returnsArray, root, includeNulls ? true : null, false, false, withoutArrayWrapper, singleRow);
+    }
+
+    private sealed class JsonVisitor : TSqlFragmentVisitor
+    {
+        private static readonly Regex RootRegex = new("ROOT\\s*\\(\\s*'([^']+)'", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private readonly string? _definition;
         private int _queryDepth;
