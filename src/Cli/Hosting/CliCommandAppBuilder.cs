@@ -684,6 +684,7 @@ internal sealed class CliCommandAppBuilder
             await PromptForUpdateAsync(updateCheckTask, options, cancellationToken).ConfigureAwait(false);
         }
 
+        console.FlushDeferredPanels();
         return exitCode;
     }
 
@@ -835,12 +836,18 @@ internal sealed class CliCommandAppBuilder
 
         if (options.CiMode)
         {
-            console.Output($"[xtraq] Update available: {updateInfo.CurrentVersion} -> {updateInfo.LatestVersion} (CI mode - skipping prompt). Run 'xtraq update' when appropriate.");
+            console.RenderPanel("[xtraq] Update available", $"Current: {updateInfo.CurrentVersion}\nLatest: {updateInfo.LatestVersion}\nCI mode - skipping prompt. Run 'xtraq update' when appropriate.");
             return;
         }
 
-        console.Output(string.Empty);
-        console.Output($"[xtraq] Update available: {updateInfo.CurrentVersion} -> {updateInfo.LatestVersion}");
+        var panelMessage = $"Current: {updateInfo.CurrentVersion}\nLatest: {updateInfo.LatestVersion}\nRun 'xtraq update' to apply or pass --no-update to suppress this reminder.";
+        if (console.IsPromptActive)
+        {
+            console.EnqueuePanel("[xtraq] Update available", panelMessage);
+            return;
+        }
+
+        console.RenderPanel("[xtraq] Update available", panelMessage);
 
         var confirm = console.GetYesNo("[xtraq] Apply update now?", true, ConsoleColor.Yellow);
         if (!confirm)

@@ -9,6 +9,7 @@ namespace Xtraq.Services;
 internal interface IConsoleService
 {
     bool IsVerbose { get; }
+    bool IsPromptActive { get; }
 
     void Info(string message);
     void Error(string message);
@@ -109,6 +110,25 @@ internal interface IConsoleService
     /// <param name="workAsync">Asynchronous callback receiving an increment delegate. Invoke the delegate to advance progress.</param>
     /// <param name="cancellationToken">Token used to observe cancellation requests.</param>
     Task RunProgressAsync(string title, int totalUnits, Func<Action<double>, Task> workAsync, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renders a highlighted panel (Spectre when available, otherwise plain text).
+    /// </summary>
+    /// <param name="title">Panel header.</param>
+    /// <param name="message">Body text (supports newlines).</param>
+    void RenderPanel(string title, string message);
+
+    /// <summary>
+    /// Buffers a panel for later emission (to avoid interleaving with prompts).
+    /// </summary>
+    /// <param name="title">Panel header.</param>
+    /// <param name="message">Body text.</param>
+    void EnqueuePanel(string title, string message);
+
+    /// <summary>
+    /// Flushes all buffered panels in FIFO order.
+    /// </summary>
+    void FlushDeferredPanels();
 }
 
 /// <summary>
@@ -132,9 +152,12 @@ internal sealed class ConsoleService : IConsoleService
     private readonly CommandOptions _commandOptions;
     private readonly object _writeLock = new();
     private readonly object _warningLock = new();
+    private readonly object _panelLock = new();
 
     private readonly Dictionary<string, WarningAggregate> _warnings = new(StringComparer.Ordinal);
     private int _warningOrder;
+    private int _promptDepth;
+    private readonly Queue<(string Title, string Message)> _pendingPanels = new();
 
     private bool UseSpectre => !_commandOptions.CiMode;
 
@@ -144,6 +167,7 @@ internal sealed class ConsoleService : IConsoleService
     }
 
     public bool IsVerbose => _commandOptions?.Verbose ?? false;
+    public bool IsPromptActive => Volatile.Read(ref _promptDepth) > 0;
 
     private static TextWriter StdOut => Console.Out;
     private static TextWriter StdErr => Console.Error;
@@ -251,52 +275,68 @@ internal sealed class ConsoleService : IConsoleService
 
     public bool GetYesNo(string prompt, bool isDefaultConfirmed, ConsoleColor? promptColor = null, ConsoleColor? promptBgColor = null)
     {
-        var defaultLabel = isDefaultConfirmed ? "Y/n" : "y/N";
-        while (true)
+        Interlocked.Increment(ref _promptDepth);
+        try
         {
-            Write(StdOut, $"{prompt} ", promptColor, promptBgColor);
-            Write(StdOut, $"[{defaultLabel}]", ConsoleColor.White);
-            Write(StdOut, ": ", null);
-
-            var line = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(line))
+            var defaultLabel = isDefaultConfirmed ? "Y/n" : "y/N";
+            while (true)
             {
-                return isDefaultConfirmed;
-            }
+                Write(StdOut, $"{prompt} ", promptColor, promptBgColor);
+                Write(StdOut, $"[{defaultLabel}]", ConsoleColor.White);
+                Write(StdOut, ": ", null);
 
-            line = line.Trim();
-            if (line.Equals("y", StringComparison.OrdinalIgnoreCase) ||
-                line.Equals("yes", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+                var line = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    return isDefaultConfirmed;
+                }
 
-            if (line.Equals("n", StringComparison.OrdinalIgnoreCase) ||
-                line.Equals("no", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
+                line = line.Trim();
+                if (line.Equals("y", StringComparison.OrdinalIgnoreCase) ||
+                    line.Equals("yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
 
-            Warn("Please answer with 'y' or 'n'.");
+                if (line.Equals("n", StringComparison.OrdinalIgnoreCase) ||
+                    line.Equals("no", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                Warn("Please answer with 'y' or 'n'.");
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _promptDepth);
         }
     }
 
     public string GetString(string prompt, string defaultValue = "", ConsoleColor? promptColor = null)
     {
-        Write(StdOut, $"{prompt} ", promptColor);
-        if (!string.IsNullOrEmpty(defaultValue))
+        Interlocked.Increment(ref _promptDepth);
+        try
         {
-            Write(StdOut, $"[{defaultValue}] ", ConsoleColor.White);
-        }
+            Write(StdOut, $"{prompt} ", promptColor);
+            if (!string.IsNullOrEmpty(defaultValue))
+            {
+                Write(StdOut, $"[{defaultValue}] ", ConsoleColor.White);
+            }
 
-        Write(StdOut, ": ", null);
-        var response = Console.ReadLine();
-        if (string.IsNullOrEmpty(response))
+            Write(StdOut, ": ", null);
+            var response = Console.ReadLine();
+            if (string.IsNullOrEmpty(response))
+            {
+                response = defaultValue;
+            }
+
+            return response ?? string.Empty;
+        }
+        finally
         {
-            response = defaultValue;
+            Interlocked.Decrement(ref _promptDepth);
         }
-
-        return response ?? string.Empty;
     }
 
     public void PrintTitle(string title)
@@ -770,6 +810,72 @@ internal sealed class ConsoleService : IConsoleService
         }).GetAwaiter().GetResult();
     }
 
+    public void RenderPanel(string title, string message)
+    {
+        var safeTitle = string.IsNullOrWhiteSpace(title) ? "[xtraq]" : title;
+        var safeMessage = message ?? string.Empty;
+
+        if (UseSpectre)
+        {
+            var body = new Text(safeMessage, new Style(Color.LightSkyBlue1))
+            {
+                Justification = Justify.Left
+            };
+            var panel = new Panel(body)
+            {
+                Header = new PanelHeader(Escape(safeTitle)),
+                Border = BoxBorder.Rounded,
+                BorderStyle = new Style(Color.CadetBlue),
+                Padding = new Padding(1, 0, 1, 0)
+            };
+
+            AnsiConsole.Write(panel);
+            AnsiConsole.WriteLine();
+            return;
+        }
+
+        lock (_writeLock)
+        {
+            TrySetColors(ConsoleColor.Cyan, null);
+            StdOut.WriteLine($"=== {safeTitle} ===");
+            TryResetColors();
+            foreach (var line in safeMessage.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            {
+                StdOut.WriteLine(line);
+            }
+            StdOut.WriteLine(new string('=', Math.Max(8, safeTitle.Length + 6)));
+        }
+    }
+
+    public void EnqueuePanel(string title, string message)
+    {
+        lock (_panelLock)
+        {
+            _pendingPanels.Enqueue((title, message));
+        }
+    }
+
+    public void FlushDeferredPanels()
+    {
+        Queue<(string Title, string Message)> snapshot;
+        lock (_panelLock)
+        {
+            if (_pendingPanels.Count == 0)
+            {
+                return;
+            }
+
+            snapshot = new Queue<(string Title, string Message)>(_pendingPanels);
+            _pendingPanels.Clear();
+        }
+
+        while (snapshot.Count > 0)
+        {
+            var (title, message) = snapshot.Dequeue();
+            RenderPanel(title, message);
+        }
+    }
+
     private Choice GetSelectionInternal(string prompt, List<string> options, bool multiline)
     {
         if (options == null || options.Count == 0)
@@ -777,33 +883,41 @@ internal sealed class ConsoleService : IConsoleService
             throw new ArgumentException("Options list cannot be empty", nameof(options));
         }
 
-        if (multiline)
+        Interlocked.Increment(ref _promptDepth);
+        try
         {
-            Output(prompt);
-            for (var i = 0; i < options.Count; i++)
+            if (multiline)
             {
-                Output($"  [{i + 1}] {options[i]}");
-            }
-        }
-        else
-        {
-            Output($"{prompt} [{string.Join(", ", options)}]");
-        }
-
-        while (true)
-        {
-            Write(StdOut, "Select option (number): ", ConsoleColor.Green);
-            var line = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(line) && int.TryParse(line, out var index))
-            {
-                index -= 1;
-                if (index >= 0 && index < options.Count)
+                Output(prompt);
+                for (var i = 0; i < options.Count; i++)
                 {
-                    return new Choice(index, options[index]);
+                    Output($"  [{i + 1}] {options[i]}");
                 }
             }
+            else
+            {
+                Output($"{prompt} [{string.Join(", ", options)}]");
+            }
 
-            Warn("Invalid selection, please enter the number shown in the list.");
+            while (true)
+            {
+                Write(StdOut, "Select option (number): ", ConsoleColor.Green);
+                var line = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(line) && int.TryParse(line, out var index))
+                {
+                    index -= 1;
+                    if (index >= 0 && index < options.Count)
+                    {
+                        return new Choice(index, options[index]);
+                    }
+                }
+
+                Warn("Invalid selection, please enter the number shown in the list.");
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _promptDepth);
         }
     }
 
