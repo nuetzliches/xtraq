@@ -473,7 +473,7 @@ internal sealed class XtraqCliRuntime(
             IReadOnlyList<Xtraq.Metadata.ProcedureDescriptor> procedures = Array.Empty<Xtraq.Metadata.ProcedureDescriptor>();
             try
             {
-                schemaProvider = new SnapshotSchemaMetadataProvider(workingDirectory, consoleService);
+                schemaProvider = new SchemaMetadataProvider(workingDirectory);
                 procedures = schemaProvider.GetProcedures();
                 if (options.Verbose)
                 {

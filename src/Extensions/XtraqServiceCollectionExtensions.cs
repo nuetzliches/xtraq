@@ -53,7 +53,7 @@ public static class XtraqServiceCollectionExtensions
             var layout = provider.GetRequiredService<SchemaSnapshotFileLayoutService>();
             var enhanced = provider.GetRequiredService<IEnhancedSchemaMetadataProvider>();
             var projectRoot = DirectoryUtils.GetWorkingDirectory();
-            return new SnapshotSchemaMetadataProvider(projectRoot, console, layout, enhanced);
+            return new SchemaMetadataProvider(projectRoot, console, layout, enhanced);
         });
         services.AddSingleton<UpdateService>();
 
