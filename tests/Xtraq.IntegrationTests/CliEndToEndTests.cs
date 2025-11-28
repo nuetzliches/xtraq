@@ -64,6 +64,14 @@ public sealed class CliEndToEndTests : IAsyncLifetime
             Assert.True(Directory.Exists(snapshotDirectory), "Snapshot directory was not created.");
             Assert.NotEmpty(Directory.GetFiles(snapshotDirectory, "*.json", SearchOption.TopDirectoryOnly));
 
+            var tableTypeSnapshot = Path.Combine(snapshotDirectory, "tabletypes", "shared.AuditLogEntryTableType.json");
+            Assert.True(File.Exists(tableTypeSnapshot), "shared.AuditLogEntryTableType.json missing under tabletypes/ after snapshot generation.");
+            Assert.False(File.Exists(Path.Combine(snapshotDirectory, "types", "shared.AuditLogEntryTableType.json")), "shared.AuditLogEntryTableType.json should not be treated as a user-defined type snapshot.");
+
+            var userTypeSnapshot = Path.Combine(snapshotDirectory, "types", "shared.pkInt.json");
+            Assert.True(File.Exists(userTypeSnapshot), "shared.pkInt.json missing under types/ after snapshot generation.");
+            Assert.False(File.Exists(Path.Combine(snapshotDirectory, "tabletypes", "shared.pkInt.json")), "shared.pkInt.json should not appear under tabletypes/.");
+
             Console.WriteLine($"{LogPrefix} Running build command...");
             var buildExit = await InvokeCliWithRetryAsync(sampleProjectPath, "build", Array.Empty<string>());
             Console.WriteLine($"{LogPrefix} Build command exited with {buildExit}.");

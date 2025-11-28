@@ -4,10 +4,7 @@
   "Parameters": [
     {
       "Name": "Orders",
-      "TypeRef": "sample.OrderImportTableType",
-      "TableTypeRef": "sample.OrderImportTableType",
-      "TableTypeSchema": "sample",
-      "TableTypeName": "OrderImportTableType"
+      "TableTypeRef": "sample.OrderImportTableType"
     }
   ],
   "ResultSets": [

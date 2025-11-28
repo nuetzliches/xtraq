@@ -418,6 +418,12 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
             normalizedTableTypeRef = TableTypeRefFormatter.Normalize(legacyRef);
         }
 
+        if (!string.IsNullOrWhiteSpace(normalizedTypeRef) && !string.IsNullOrWhiteSpace(normalizedTableTypeRef)
+            && string.Equals(normalizedTypeRef, normalizedTableTypeRef, StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedTypeRef = null;
+        }
+
         var (inferredCatalog, inferredSchema, inferredName) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
 
         return new SnapshotInput

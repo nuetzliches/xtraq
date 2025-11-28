@@ -12,7 +12,6 @@ internal static class ProjectEnvironmentBootstrapper
     {
         Path.Combine("Templates", ".env.example"),          // packaged / build output
         Path.Combine("src", "Templates", ".env.example"),   // repo root (source)
-        Path.Combine("debug", ".env.example")               // legacy debug location
     };
 
     /// <summary>

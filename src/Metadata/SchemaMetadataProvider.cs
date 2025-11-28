@@ -340,66 +340,81 @@ namespace Xtraq.Metadata
                         var tableTypeSchema = legacyTtSchema ?? tableTypeSchemaFromRef;
                         var tableTypeName = legacyTtName ?? tableTypeNameFromRef;
 
-                        if (string.IsNullOrWhiteSpace(typeRef))
+                        var inferredTableTypeRef = normalizedTableTypeRef;
+                        if (string.IsNullOrWhiteSpace(inferredTableTypeRef) && !string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
                         {
-                            if (!string.IsNullOrWhiteSpace(normalizedTableTypeRef))
-                            {
-                                typeRef = normalizedTableTypeRef;
-                            }
-                            else if (!string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
-                            {
-                                typeRef = TableTypeRefFormatter.Combine(tableTypeCatalog, tableTypeSchema, tableTypeName)
-                                    ?? TableTypeRefFormatter.Combine(tableTypeSchema, tableTypeName);
-                            }
+                            inferredTableTypeRef = TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(tableTypeCatalog, tableTypeSchema, tableTypeName))
+                                ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(tableTypeSchema, tableTypeName));
                         }
+
+                        var legacyTableTypeRef = (!string.IsNullOrWhiteSpace(typeRef) && tableTypeRefs.Contains(typeRef)) ? typeRef : null;
 
                         var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? ip.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         bool isTableType = explicitTableType
-                            || !string.IsNullOrWhiteSpace(normalizedTableTypeRef)
-                            || (!string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
-                            || (!string.IsNullOrWhiteSpace(typeRef) && tableTypeRefs.Contains(typeRef));
+                            || !string.IsNullOrWhiteSpace(inferredTableTypeRef)
+                            || legacyTableTypeRef is not null;
 
                         string? ttSchema = tableTypeSchema;
                         string? ttName = tableTypeName;
                         string? ttCatalog = tableTypeCatalog;
                         if (isTableType)
                         {
-                            var split = TypeMetadataResolver.SplitTypeRef(typeRef);
-                            if (string.IsNullOrWhiteSpace(ttCatalog) && !string.IsNullOrWhiteSpace(tableTypeCatalog))
+                            var referenceToUse = inferredTableTypeRef ?? legacyTableTypeRef;
+                            if (referenceToUse is not null && !string.IsNullOrWhiteSpace(typeRef))
                             {
-                                ttCatalog = tableTypeCatalog;
+                                var normalizedReference = TableTypeRefFormatter.Normalize(referenceToUse);
+                                var normalizedTypeRef = TableTypeRefFormatter.Normalize(typeRef);
+                                if (!string.IsNullOrWhiteSpace(normalizedReference) && !string.IsNullOrWhiteSpace(normalizedTypeRef)
+                                    && string.Equals(normalizedReference, normalizedTypeRef, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    typeRef = null;
+                                }
                             }
-                            if (string.IsNullOrWhiteSpace(ttSchema)) ttSchema = split.Schema ?? schema;
-                            if (string.IsNullOrWhiteSpace(ttName)) ttName = split.Name ?? clean;
+
+                            var split = TableTypeRefFormatter.Split(referenceToUse);
+                            ttCatalog ??= split.Catalog ?? tableTypeCatalog;
+                            ttSchema ??= split.Schema ?? tableTypeSchema ?? schema;
+                            ttName ??= split.Name ?? tableTypeName ?? clean;
+
+                            if (referenceToUse is null && !string.IsNullOrWhiteSpace(ttSchema) && !string.IsNullOrWhiteSpace(ttName))
+                            {
+                                referenceToUse = TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName))
+                                    ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(ttSchema, ttName));
+                            }
+
+                            inferredTableTypeRef = referenceToUse;
                         }
                         else if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef))
                         {
                             sqlType = typeRef;
                         }
 
+                        var effectiveTableTypeRef = inferredTableTypeRef ?? legacyTableTypeRef;
                         FieldDescriptor fd;
                         if (isTableType && !string.IsNullOrWhiteSpace(ttName))
                         {
                             var pascal = NamePolicy.Sanitize(ttName!);
                             var attrs = new List<string> { "[TableType]" };
                             if (!string.IsNullOrWhiteSpace(ttSchema)) attrs.Add($"[TableTypeSchema({ttSchema})]");
-                            var sqlIdentifier = string.IsNullOrWhiteSpace(typeRef) ? ttName! : typeRef!;
+                            var sqlIdentifier = effectiveTableTypeRef
+                                ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName)
+                                ?? TableTypeRefFormatter.Combine(ttSchema ?? schema, ttName)
+                                ?? ttName!;
                             var clrType = $"IReadOnlyList<{pascal}>?";
                             fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs, HasDefaultValue: hasDefaultValue);
 
-                            var referenceSplit = TableTypeRefFormatter.Split(typeRef ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName));
+                            var referenceSource = effectiveTableTypeRef
+                                ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName)
+                                ?? TableTypeRefFormatter.Combine(ttSchema ?? schema, ttName);
+                            var referenceSplit = TableTypeRefFormatter.Split(referenceSource);
                             var referenceSchema = string.IsNullOrWhiteSpace(ttSchema)
                                 ? (referenceSplit.Schema ?? schema)
                                 : ttSchema;
                             var referenceCatalog = string.IsNullOrWhiteSpace(referenceSplit.Catalog) ? null : referenceSplit.Catalog;
-                            var normalizedReference = TableTypeRefFormatter.Normalize(typeRef)
-                                ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(referenceCatalog, referenceSchema, ttName));
-                            if (string.IsNullOrWhiteSpace(normalizedReference))
-                            {
-                                normalizedReference = TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(referenceSchema, ttName));
-                            }
+                            var normalizedReference = TableTypeRefFormatter.Normalize(referenceSource)
+                                ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(referenceSchema ?? schema, ttName));
                             tableTypeParameters.Add(new TableTypeParameterDescriptor(
                                 ParameterName: clean,
                                 TableTypeSchema: referenceSchema ?? schema,

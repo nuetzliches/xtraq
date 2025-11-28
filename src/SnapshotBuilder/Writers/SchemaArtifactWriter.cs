@@ -39,10 +39,12 @@ internal sealed class SchemaArtifactWriter
         SnapshotBuildOptions options,
         IReadOnlyList<ProcedureAnalysisResult> updatedProcedures,
         ISet<string> requiredTypeRefs,
+        ISet<string> requiredTableTypeRefs,
         ISet<string> requiredTableRefs,
         CancellationToken cancellationToken)
     {
         requiredTypeRefs ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        requiredTableTypeRefs ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         requiredTableRefs ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var summary = new SchemaArtifactSummary();
         var schemaSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -79,8 +81,8 @@ internal sealed class SchemaArtifactWriter
             }
         }
 
-        ExtendSchemaSetWithDependencies(schemaSet, requiredTypeRefs, requiredTableRefs);
-        var dependencyFilter = SchemaDependencyFilter.Build(updatedProcedures!, requiredTypeRefs, requiredTableRefs);
+        ExtendSchemaSetWithDependencies(schemaSet, requiredTableTypeRefs, requiredTableRefs);
+        var dependencyFilter = SchemaDependencyFilter.Build(updatedProcedures!, requiredTableTypeRefs, requiredTableRefs);
         foreach (var schema in dependencyFilter.Schemas)
         {
             if (!string.IsNullOrWhiteSpace(schema))
@@ -115,7 +117,7 @@ internal sealed class SchemaArtifactWriter
             summary.Tables.AddRange(tableSummary.Tables);
         }
 
-        var tableTypeSchemas = BuildTableTypeSchemaSet(schemaSet, requiredTypeRefs);
+        var tableTypeSchemas = BuildTableTypeSchemaSet(schemaSet, requiredTableTypeRefs);
         IReadOnlyList<TableTypeMetadata> tableTypes = Array.Empty<TableTypeMetadata>();
         if (tableTypeSchemas.Count > 0)
         {
@@ -137,7 +139,7 @@ internal sealed class SchemaArtifactWriter
         tableTypes ??= Array.Empty<TableTypeMetadata>();
 
         // Ensure referenced table types from procedure dependencies are materialized even if the database scan missed them.
-        if (tableTypes is not null && requiredTypeRefs.Count > 0)
+        if (tableTypes is not null && requiredTableTypeRefs.Count > 0)
         {
             var sanitizedTableTypes = tableTypes
                 .Where(static tt => tt?.TableType != null)
@@ -150,7 +152,7 @@ internal sealed class SchemaArtifactWriter
                 StringComparer.OrdinalIgnoreCase);
             var synthetic = new List<TableTypeMetadata>();
 
-            foreach (var typeRef in requiredTypeRefs)
+            foreach (var typeRef in requiredTableTypeRefs)
             {
                 if (string.IsNullOrWhiteSpace(typeRef))
                 {
@@ -407,16 +409,19 @@ internal sealed class SchemaArtifactWriter
         return summary;
     }
 
-    private static void ExtendSchemaSetWithDependencies(HashSet<string> target, ISet<string>? requiredTypeRefs, ISet<string>? requiredTableRefs)
+    private static void ExtendSchemaSetWithDependencies(
+        HashSet<string> target,
+        ISet<string>? requiredTableTypeRefs,
+        ISet<string>? requiredTableRefs)
     {
         if (target == null)
         {
             return;
         }
 
-        if (requiredTypeRefs != null)
+        if (requiredTableTypeRefs != null)
         {
-            foreach (var typeRef in requiredTypeRefs)
+            foreach (var typeRef in requiredTableTypeRefs)
             {
                 if (string.IsNullOrWhiteSpace(typeRef))
                 {
@@ -449,18 +454,18 @@ internal sealed class SchemaArtifactWriter
         }
     }
 
-    private static HashSet<string> BuildTableTypeSchemaSet(ISet<string>? schemaSet, ISet<string>? requiredTypeRefs)
+    private static HashSet<string> BuildTableTypeSchemaSet(ISet<string>? schemaSet, ISet<string>? requiredTableTypeRefs)
     {
         var result = schemaSet != null
             ? new HashSet<string>(schemaSet, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (requiredTypeRefs == null || requiredTypeRefs.Count == 0)
+        if (requiredTableTypeRefs == null || requiredTableTypeRefs.Count == 0)
         {
             return result;
         }
 
-        foreach (var typeRef in requiredTypeRefs)
+        foreach (var typeRef in requiredTableTypeRefs)
         {
             if (string.IsNullOrWhiteSpace(typeRef))
             {

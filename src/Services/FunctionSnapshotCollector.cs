@@ -244,7 +244,7 @@ internal sealed class FunctionSnapshotCollector
 
                 var rawTableTypeRef = TableTypeRefFormatter.Combine(p.user_type_schema_name, p.user_type_name);
                 var normalizedTableTypeRef = TableTypeRefFormatter.Normalize(rawTableTypeRef);
-                var (tableTypeCatalog, tableTypeSchema, tableTypeName) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                var (tableTypeCatalog, _, _) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
 
                 // Recognize return parameter: For scalar functions, SQL Server provides a parameter without name ("" or null) as return pseudo-parameter
                 if (!(fn.IsTableValued ?? false) && (string.IsNullOrWhiteSpace(name)))
@@ -265,8 +265,6 @@ internal sealed class FunctionSnapshotCollector
                     Name = name,
                     TableTypeRef = normalizedTableTypeRef,
                     TableTypeCatalog = tableTypeCatalog,
-                    TableTypeSchema = tableTypeSchema,
-                    TableTypeName = tableTypeName,
                     TypeRef = parameterTypeRef,
                     IsOutput = null, // pruned (immer false)
                     IsNullable = finalNullable,

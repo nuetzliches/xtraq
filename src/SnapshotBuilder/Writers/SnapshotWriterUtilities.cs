@@ -299,6 +299,33 @@ internal static class SnapshotWriterUtilities
         }
     }
 
+    internal static void RegisterTableTypeRef(ISet<string>? collector, string? tableTypeRef)
+    {
+        if (collector == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(tableTypeRef))
+        {
+            return;
+        }
+
+        var normalized = TableTypeRefFormatter.Normalize(tableTypeRef);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return;
+        }
+
+        collector.Add(normalized);
+
+        var segments = normalized.Split('.', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 3)
+        {
+            collector.Add(string.Concat(segments[1], ".", segments[2]));
+        }
+    }
+
     internal static void RegisterTableRef(ISet<string>? collector, ProcedureResultColumn column)
     {
         if (collector == null || column == null)

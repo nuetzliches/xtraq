@@ -18,7 +18,7 @@ internal sealed class SchemaDependencyFilter
 
     public static SchemaDependencyFilter Build(
         IReadOnlyList<ProcedureAnalysisResult> procedures,
-        ISet<string>? requiredTypeRefs,
+        ISet<string>? requiredTableTypeRefs,
         ISet<string>? requiredTableRefs)
     {
         var filter = new SchemaDependencyFilter();
@@ -45,7 +45,7 @@ internal sealed class SchemaDependencyFilter
         }
 
         filter.AddTableRefs(requiredTableRefs);
-        filter.AddTypeRefs(requiredTypeRefs);
+        filter.AddTableTypeRefs(requiredTableTypeRefs);
         return filter;
     }
 
@@ -122,14 +122,14 @@ internal sealed class SchemaDependencyFilter
         }
     }
 
-    private void AddTypeRefs(ISet<string>? typeRefs)
+    private void AddTableTypeRefs(ISet<string>? tableTypeRefs)
     {
-        if (typeRefs == null || typeRefs.Count == 0)
+        if (tableTypeRefs == null || tableTypeRefs.Count == 0)
         {
             return;
         }
 
-        foreach (var typeRef in typeRefs)
+        foreach (var typeRef in tableTypeRefs)
         {
             if (string.IsNullOrWhiteSpace(typeRef))
             {

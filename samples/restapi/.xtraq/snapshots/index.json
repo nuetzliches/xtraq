@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "31D0676346EF3D68",
+  "Fingerprint": "CC7D0774FAE67AA3",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -20,7 +20,7 @@
       "Schema": "sample",
       "Name": "ImportOrders",
       "File": "sample.ImportOrders.json",
-      "Hash": "988558AF64BACABD",
+      "Hash": "C2B3A64B89D133A3",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -422,7 +422,7 @@
               "Alias": null,
               "SqlTypeName": "bigint",
               "IsNullable": true,
-              "MaxLength": null,
+              "MaxLength": 8,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -485,7 +485,7 @@
               "Alias": null,
               "SqlTypeName": "datetime2(7)",
               "IsNullable": true,
-              "MaxLength": null,
+              "MaxLength": 7,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -509,7 +509,7 @@
       "Schema": "sample",
       "Name": "SyncUserContacts",
       "File": "sample.SyncUserContacts.json",
-      "Hash": "86FD50D45561B1DC",
+      "Hash": "0D4FA892320A8991",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -584,7 +584,7 @@
             {
               "Name": "Email",
               "Alias": null,
-              "SqlTypeName": "nvarchar(320)",
+              "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": 320,
               "Precision": null,
@@ -605,7 +605,7 @@
             {
               "Name": "DisplayName",
               "Alias": null,
-              "SqlTypeName": "nvarchar(200)",
+              "SqlTypeName": "nvarchar",
               "IsNullable": false,
               "MaxLength": 200,
               "Precision": null,
@@ -2376,7 +2376,7 @@
       "Schema": "sample",
       "Name": "WriteAuditLogEntries",
       "File": "sample.WriteAuditLogEntries.json",
-      "Hash": "A2787CA5F8C6D8F1",
+      "Hash": "02D9F4338E35393D",
       "ResultSets": null
     }
   ],
@@ -2410,12 +2410,6 @@
       "Name": "AuditLogEntryTableType",
       "File": "shared.AuditLogEntryTableType.json",
       "Hash": "F7FF2E1D58FB6BFF"
-    },
-    {
-      "Schema": "shared",
-      "Name": "pkInt",
-      "File": "shared.pkInt.json",
-      "Hash": "F35ADCF18D812EE1"
     }
   ],
   "UserDefinedTypes": [

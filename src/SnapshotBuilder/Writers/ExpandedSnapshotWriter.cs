@@ -76,6 +76,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
 
         var writePlans = new ConcurrentBag<ProcedureWritePlan>();
         var requiredTypeRefs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        var requiredTableTypeRefs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
         var requiredTableRefs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(
@@ -98,6 +99,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                 var filePath = Path.Combine(proceduresRoot, fileName);
 
                 var localTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var localTableTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var localTableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
@@ -105,6 +107,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                     item.Parameters,
                     item.Procedure,
                     localTypeRefs,
+                    localTableTypeRefs,
                     localTableRefs,
                     _jsonEnhancementService);
 
@@ -120,6 +123,14 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                     if (!string.IsNullOrWhiteSpace(typeRef))
                     {
                         requiredTypeRefs.TryAdd(typeRef, 0);
+                    }
+                }
+
+                foreach (var tableTypeRef in localTableTypeRefs)
+                {
+                    if (!string.IsNullOrWhiteSpace(tableTypeRef))
+                    {
+                        requiredTableTypeRefs.TryAdd(tableTypeRef, 0);
                     }
                 }
 
@@ -141,6 +152,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
             options,
             analyzedProcedures,
             new HashSet<string>(requiredTypeRefs.Keys, StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(requiredTableTypeRefs.Keys, StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(requiredTableRefs.Keys, StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
 
@@ -156,6 +168,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
             var parameters = plan.Source.Parameters ?? Array.Empty<StoredProcedureInput>();
             var procedure = plan.Source.Procedure;
             var localTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var localTableTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var localTableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var content = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
@@ -163,6 +176,7 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                 parameters,
                 procedure,
                 localTypeRefs,
+                localTableTypeRefs,
                 localTableRefs,
                 _jsonEnhancementService);
 
@@ -171,6 +185,14 @@ internal sealed class ExpandedSnapshotWriter : ISnapshotWriter
                 if (!string.IsNullOrWhiteSpace(typeRef))
                 {
                     requiredTypeRefs.TryAdd(typeRef, 0);
+                }
+            }
+
+            foreach (var tableTypeRef in localTableTypeRefs)
+            {
+                if (!string.IsNullOrWhiteSpace(tableTypeRef))
+                {
+                    requiredTableTypeRefs.TryAdd(tableTypeRef, 0);
                 }
             }
 

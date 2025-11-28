@@ -49,7 +49,7 @@ app.MapGet("/api/users", async (IXtraqDbContext db, CancellationToken ct) =>
 {
     try
     {
-        var result = await db.UserListAsync(new UserListInput(null), ct).ConfigureAwait(false);
+        var result = await db.UserListAsync(new UserListInput(false), ct).ConfigureAwait(false);
         var users = result.Result
             .Select(r => SampleApiHelpers.CreateUserSummary(r.UserId, r.Alias, r.DisplayName, r.Email, r.IsActive, r.PreferredLocale, r.CreatedAtUtc))
             .ToList();

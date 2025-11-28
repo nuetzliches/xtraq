@@ -1,0 +1,30 @@
+{
+  "Schema": "shared",
+  "Name": "AuditLogEntryTableType",
+  "Columns": [
+    {
+      "Name": "Source",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 120
+    },
+    {
+      "Name": "Message",
+      "TypeRef": "sys.nvarchar",
+      "MaxLength": 4000
+    },
+    {
+      "Name": "Severity",
+      "TypeRef": "sys.tinyint"
+    },
+    {
+      "Name": "CorrelationId",
+      "TypeRef": "sys.uniqueidentifier",
+      "IsNullable": true
+    },
+    {
+      "Name": "Details",
+      "TypeRef": "sys.nvarchar",
+      "IsNullable": true
+    }
+  ]
+}

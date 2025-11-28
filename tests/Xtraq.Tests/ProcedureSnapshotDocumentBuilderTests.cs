@@ -35,6 +35,7 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
             System.Array.Empty<StoredProcedureInput>(),
             procedure,
             requiredTypeRefs: null,
+            requiredTableTypeRefs: null,
             requiredTableRefs: null,
             jsonEnhancementService: null);
 

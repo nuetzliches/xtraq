@@ -1,0 +1,8 @@
+{
+  "Schema": "shared",
+  "Name": "pkInt",
+  "BaseSqlTypeName": "int",
+  "MaxLength": 4,
+  "Precision": 10,
+  "IsNullable": false
+}

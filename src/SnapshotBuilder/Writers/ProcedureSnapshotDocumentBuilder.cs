@@ -15,6 +15,7 @@ internal static class ProcedureSnapshotDocumentBuilder
         IReadOnlyList<StoredProcedureInput> parameters,
         ProcedureModel? procedure,
         ISet<string>? requiredTypeRefs,
+        ISet<string>? requiredTableTypeRefs,
         ISet<string>? requiredTableRefs,
         IJsonFunctionEnhancementService? jsonEnhancementService = null)
     {
@@ -25,7 +26,7 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("Schema", descriptor?.Schema ?? string.Empty);
             writer.WriteString("Name", descriptor?.Name ?? string.Empty);
 
-            WriteParameters(writer, parameters, requiredTypeRefs);
+            WriteParameters(writer, parameters, requiredTypeRefs, requiredTableTypeRefs);
             WriteResultSets(writer, procedure?.ResultSets, requiredTypeRefs, requiredTableRefs, jsonEnhancementService, descriptor);
 
             writer.WriteEndObject();
@@ -34,7 +35,11 @@ internal static class ProcedureSnapshotDocumentBuilder
         return stream.ToArray();
     }
 
-    private static void WriteParameters(Utf8JsonWriter writer, IReadOnlyList<StoredProcedureInput> parameters, ISet<string>? requiredTypeRefs)
+    private static void WriteParameters(
+        Utf8JsonWriter writer,
+        IReadOnlyList<StoredProcedureInput> parameters,
+        ISet<string>? requiredTypeRefs,
+        ISet<string>? requiredTableTypeRefs)
     {
         writer.WritePropertyName("Parameters");
         writer.WriteStartArray();
@@ -54,6 +59,8 @@ internal static class ProcedureSnapshotDocumentBuilder
                     writer.WriteString("Name", name);
                 }
 
+                var isTableType = input.IsTableType || (input.TableTypeColumns?.Count > 0);
+
                 var rawTypeRef = SnapshotWriterUtilities.BuildTypeRef(input);
                 var userTypeRef = SnapshotWriterUtilities.BuildUserTypeRef(input);
                 var baseTypeRef = SnapshotWriterUtilities.BuildBaseTypeRef(input);
@@ -63,60 +70,64 @@ internal static class ProcedureSnapshotDocumentBuilder
                 int? effectiveScale = input.Scale;
                 var userTypeNullable = input.UserTypeIsNullable;
 
-                var primaryTypeRef = input.IsTableType
+                var primaryTypeRef = isTableType
                     ? (TableTypeRefFormatter.Normalize(rawTypeRef) ?? rawTypeRef)
                     : (TableTypeRefFormatter.Normalize(baseTypeRef) ?? baseTypeRef ?? TableTypeRefFormatter.Normalize(rawTypeRef) ?? rawTypeRef);
 
-                var typeRefToPersist = primaryTypeRef;
-                if (!string.IsNullOrWhiteSpace(typeRefToPersist))
+                string? typeRefToPersist = isTableType ? null : primaryTypeRef;
+
+                if (!isTableType)
                 {
-                    writer.WriteString("TypeRef", typeRefToPersist);
-                    SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, typeRefToPersist);
+                    if (!string.IsNullOrWhiteSpace(typeRefToPersist))
+                    {
+                        writer.WriteString("TypeRef", typeRefToPersist);
+                        SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, typeRefToPersist);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(userTypeRef) && !string.Equals(userTypeRef, typeRefToPersist, StringComparison.OrdinalIgnoreCase))
+                    {
+                        writer.WriteString("UserTypeRef", userTypeRef);
+                        SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, userTypeRef);
+                    }
+
+                    var resolvedUserType = ResolveUserType(userTypeRef, effectiveMaxLen, effectivePrecision, effectiveScale);
+                    if (resolvedUserType.HasValue)
+                    {
+                        var normalizedSql = SnapshotWriterUtilities.NormalizeSqlTypeName(resolvedUserType.Value.SqlType);
+                        if (!string.IsNullOrWhiteSpace(normalizedSql))
+                        {
+                            typeRefToPersist ??= SnapshotWriterUtilities.BuildTypeRef("sys", normalizedSql);
+                        }
+
+                        effectiveMaxLen ??= resolvedUserType.Value.MaxLength;
+                        effectivePrecision ??= resolvedUserType.Value.Precision;
+                        effectiveScale ??= resolvedUserType.Value.Scale;
+
+                        if (resolvedUserType.Value.IsNullable == false)
+                        {
+                            isNullable = false;
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(userTypeRef))
+                    {
+                        if (userTypeNullable.HasValue)
+                        {
+                            isNullable = userTypeNullable.Value;
+                        }
+                        else if (resolvedUserType.HasValue && resolvedUserType.Value.IsNullable.HasValue)
+                        {
+                            isNullable = resolvedUserType.Value.IsNullable!.Value;
+                        }
+                        else
+                        {
+                            // Default to non-nullable for UDTs unless explicitly declared nullable.
+                            isNullable = false;
+                        }
+                    }
                 }
 
-                if (!string.IsNullOrWhiteSpace(userTypeRef) && !string.Equals(userTypeRef, typeRefToPersist, StringComparison.OrdinalIgnoreCase))
-                {
-                    writer.WriteString("UserTypeRef", userTypeRef);
-                    SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, userTypeRef);
-                }
-
-                var resolvedUserType = ResolveUserType(userTypeRef, effectiveMaxLen, effectivePrecision, effectiveScale);
-                if (resolvedUserType.HasValue)
-                {
-                    var normalizedSql = SnapshotWriterUtilities.NormalizeSqlTypeName(resolvedUserType.Value.SqlType);
-                    if (!string.IsNullOrWhiteSpace(normalizedSql))
-                    {
-                        typeRefToPersist ??= SnapshotWriterUtilities.BuildTypeRef("sys", normalizedSql);
-                    }
-
-                    effectiveMaxLen ??= resolvedUserType.Value.MaxLength;
-                    effectivePrecision ??= resolvedUserType.Value.Precision;
-                    effectiveScale ??= resolvedUserType.Value.Scale;
-
-                    if (resolvedUserType.Value.IsNullable == false)
-                    {
-                        isNullable = false;
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(userTypeRef))
-                {
-                    if (userTypeNullable.HasValue)
-                    {
-                        isNullable = userTypeNullable.Value;
-                    }
-                    else if (resolvedUserType.HasValue && resolvedUserType.Value.IsNullable.HasValue)
-                    {
-                        isNullable = resolvedUserType.Value.IsNullable!.Value;
-                    }
-                    else
-                    {
-                        // Default to non-nullable for UDTs unless explicitly declared nullable.
-                        isNullable = false;
-                    }
-                }
-
-                if (input.IsTableType)
+                if (isTableType)
                 {
                     var candidateRef = TableTypeRefFormatter.Normalize(rawTypeRef)
                         ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(input.UserTypeSchemaName, input.UserTypeName))
@@ -124,33 +135,18 @@ internal static class ProcedureSnapshotDocumentBuilder
 
                     if (!string.IsNullOrWhiteSpace(candidateRef))
                     {
-                        var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(candidateRef);
                         writer.WriteString("TableTypeRef", candidateRef);
+                        SnapshotWriterUtilities.RegisterTableTypeRef(requiredTableTypeRefs, candidateRef);
+
+                        var (catalogSegment, _, _) = TableTypeRefFormatter.Split(candidateRef);
                         if (!string.IsNullOrWhiteSpace(catalogSegment))
                         {
                             writer.WriteString("TableTypeCatalog", catalogSegment);
                         }
-                        if (!string.IsNullOrWhiteSpace(schemaSegment))
-                        {
-                            writer.WriteString("TableTypeSchema", schemaSegment);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(input.UserTypeSchemaName))
-                        {
-                            writer.WriteString("TableTypeSchema", input.UserTypeSchemaName);
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(nameSegment))
-                        {
-                            writer.WriteString("TableTypeName", nameSegment);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(input.UserTypeName))
-                        {
-                            writer.WriteString("TableTypeName", input.UserTypeName);
-                        }
                     }
                 }
 
-                if (!input.IsTableType)
+                if (!isTableType)
                 {
                     if (SnapshotWriterUtilities.ShouldEmitIsNullable(isNullable, typeRefToPersist))
                     {

@@ -258,21 +258,6 @@ public sealed class XtraqConfiguration
             {
                 return;
             }
-
-            if (root.TryGetProperty("EntityFramework", out var ef) && ef.ValueKind != JsonValueKind.Object)
-            {
-                throw new InvalidOperationException($"The configuration file '{path}' uses legacy 'EntityFramework' boolean. Replace with object: \"EntityFramework\": {{ \"Enabled\": true/false }}.");
-            }
-
-            if (root.TryGetProperty("JsonIncludeNullValues", out _))
-            {
-                throw new InvalidOperationException($"The configuration file '{path}' uses legacy 'JsonIncludeNullValues'. Replace with \"ResultSet\": {{ \"Json\": {{ \"IncludeNullValues\": true/false }} }}.");
-            }
-
-            if (root.TryGetProperty("HydrateParameters", out _) || root.TryGetProperty("HydrateProcedures", out _))
-            {
-                throw new InvalidOperationException($"The configuration file '{path}' uses legacy hydration keys. Use \"Api\": {{ \"Requests\": {{ \"Hydrate\": [...], \"HydrateProcedures\": [...] }} }}.");
-            }
         }
         catch (JsonException)
         {

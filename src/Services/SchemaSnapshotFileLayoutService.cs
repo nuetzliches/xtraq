@@ -237,30 +237,18 @@ internal sealed class SchemaSnapshotFileLayoutService
                 {
                     if (prm == null) continue;
                     var normalizedTableTypeRef = TableTypeRefFormatter.Normalize(prm.TableTypeRef);
-                    if (string.IsNullOrEmpty(normalizedTableTypeRef))
-                    {
-                        var legacyRef = TableTypeRefFormatter.Combine(prm.TableTypeSchema, prm.TableTypeName);
-                        normalizedTableTypeRef = TableTypeRefFormatter.Normalize(legacyRef);
-                    }
 
                     if (!string.IsNullOrWhiteSpace(normalizedTableTypeRef))
                     {
                         prm.TableTypeRef = normalizedTableTypeRef;
-                        var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+                        var (catalogSegment, _, _) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
                         var normalizedCatalog = NormalizeOrNull(prm.TableTypeCatalog);
                         var normalizedCatalogSegment = NormalizeOrNull(catalogSegment);
                         prm.TableTypeCatalog = normalizedCatalog ?? normalizedCatalogSegment;
-                        prm.TableTypeSchema ??= schemaSegment;
-                        prm.TableTypeName ??= nameSegment;
                     }
                     else
                     {
                         prm.TableTypeRef = null;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(prm.TypeRef))
-                    {
-                        prm.TypeRef = normalizedTableTypeRef;
                     }
 
                     if (string.IsNullOrWhiteSpace(prm.TypeRef))
@@ -270,6 +258,10 @@ internal sealed class SchemaSnapshotFileLayoutService
                     else
                     {
                         prm.TypeRef = prm.TypeRef.Trim();
+                        if (!string.IsNullOrWhiteSpace(prm.TableTypeRef) && AreTypeRefsEqual(prm.TypeRef, prm.TableTypeRef))
+                        {
+                            prm.TypeRef = null;
+                        }
                     }
                     if (prm.IsOutput == false) prm.IsOutput = null;
                     if (prm.HasDefaultValue != true) prm.HasDefaultValue = null;
@@ -521,19 +513,33 @@ internal sealed class SchemaSnapshotFileLayoutService
             return;
         }
 
+        var dependencySchemas = CollectDependencySchemas(baseDir);
+
         var activeSanitized = new HashSet<string>(
             activeSchemas
                 .Where(static s => !string.IsNullOrWhiteSpace(s))
                 .Select(static s => Xtraq.Utils.NameSanitizer.SanitizeForFile(s)),
             StringComparer.OrdinalIgnoreCase);
 
-        void PurgeFolder(string folderName, Func<string, string?> schemaExtractor)
+        var activeWithDependencies = new HashSet<string>(activeSanitized, StringComparer.OrdinalIgnoreCase);
+        foreach (var schema in dependencySchemas)
+        {
+            if (string.IsNullOrWhiteSpace(schema))
+            {
+                continue;
+            }
+            activeWithDependencies.Add(Xtraq.Utils.NameSanitizer.SanitizeForFile(schema));
+        }
+
+        void PurgeFolder(string folderName, Func<string, string?> schemaExtractor, bool includeDependencies)
         {
             var folder = Path.Combine(baseDir, folderName);
             if (!Directory.Exists(folder))
             {
                 return;
             }
+
+            var allowed = includeDependencies ? activeWithDependencies : activeSanitized;
 
             foreach (var file in Directory.GetFiles(folder, "*.json", SearchOption.TopDirectoryOnly))
             {
@@ -543,7 +549,7 @@ internal sealed class SchemaSnapshotFileLayoutService
                     continue;
                 }
 
-                if (!activeSanitized.Contains(schema))
+                if (!allowed.Contains(schema))
                 {
                     try { File.Delete(file); } catch { /* best effort */ }
                 }
@@ -568,12 +574,61 @@ internal sealed class SchemaSnapshotFileLayoutService
         }
 
         // procedures, functions, tabletypes, tables, views follow schema.name; types optionally include catalog.schema.name
-        PurgeFolder("procedures", ExtractSchemaFromSegments);
-        PurgeFolder("functions", ExtractSchemaFromSegments);
-        PurgeFolder("tabletypes", ExtractSchemaFromSegments);
-        PurgeFolder("tables", ExtractSchemaFromSegments);
-        PurgeFolder("views", ExtractSchemaFromSegments);
-        PurgeFolder("types", ExtractSchemaFromSegments);
+        PurgeFolder("procedures", ExtractSchemaFromSegments, includeDependencies: false);
+        PurgeFolder("functions", ExtractSchemaFromSegments, includeDependencies: false);
+        // Keep table type and scalar type artefacts for cross-schema dependencies even when the allow-list excludes their schema.
+        PurgeFolder("tabletypes", ExtractSchemaFromSegments, includeDependencies: true);
+        PurgeFolder("tables", ExtractSchemaFromSegments, includeDependencies: false);
+        PurgeFolder("views", ExtractSchemaFromSegments, includeDependencies: false);
+        PurgeFolder("types", ExtractSchemaFromSegments, includeDependencies: true);
+    }
+
+    private HashSet<string> CollectDependencySchemas(string baseDir)
+    {
+        var schemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(baseDir))
+        {
+            return schemas;
+        }
+
+        var indexPath = Path.Combine(baseDir, "index.json");
+        if (!File.Exists(indexPath))
+        {
+            return schemas;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(indexPath);
+            var index = JsonSerializer.Deserialize<ExpandedSnapshotIndex>(stream, _jsonOptions);
+            if (index?.TableTypes != null)
+            {
+                foreach (var tt in index.TableTypes)
+                {
+                    if (!string.IsNullOrWhiteSpace(tt?.Schema))
+                    {
+                        schemas.Add(tt.Schema);
+                    }
+                }
+            }
+
+            if (index?.UserDefinedTypes != null)
+            {
+                foreach (var udt in index.UserDefinedTypes)
+                {
+                    if (!string.IsNullOrWhiteSpace(udt?.Schema))
+                    {
+                        schemas.Add(udt.Schema);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // best-effort only
+        }
+
+        return schemas;
     }
 
     // Adjustment: retain JSON flags and columns for forwarded result sets (only minimal normalization possible)
@@ -786,45 +841,47 @@ internal sealed class SchemaSnapshotFileLayoutService
 
                         snapshotInput.TableTypeRef = normalizedTableTypeRef;
 
-                        var resolvedTypeRef = string.IsNullOrWhiteSpace(snapshotInput.TypeRef)
-                            ? normalizedTableTypeRef
-                            : snapshotInput.TypeRef;
-
+                        var resolvedTypeRef = NormalizeOrNull(snapshotInput.TypeRef);
                         if (string.IsNullOrWhiteSpace(resolvedTypeRef))
                         {
                             resolvedTypeRef = CombineTypeRef(parameter.TypeSchema, parameter.TypeName);
+                        }
 
-                            if (string.IsNullOrWhiteSpace(resolvedTypeRef) && !string.IsNullOrWhiteSpace(parameter.SqlTypeName))
+                        if (string.IsNullOrWhiteSpace(resolvedTypeRef) && !string.IsNullOrWhiteSpace(parameter.SqlTypeName))
+                        {
+                            var normalized = NormalizeSqlTypeName(parameter.SqlTypeName);
+                            if (!string.IsNullOrWhiteSpace(normalized))
                             {
-                                var normalized = NormalizeSqlTypeName(parameter.SqlTypeName);
-                                if (!string.IsNullOrWhiteSpace(normalized))
-                                {
-                                    resolvedTypeRef = CombineTypeRef("sys", normalized);
-                                }
+                                resolvedTypeRef = CombineTypeRef("sys", normalized);
                             }
                         }
 
-                        snapshotInput.TypeRef = resolvedTypeRef;
-
                         var (schema, name) = SplitTypeRef(resolvedTypeRef);
-                        var tableTypeSegments = TableTypeRefFormatter.Split(snapshotInput.TableTypeRef);
                         var kind = DetermineTypeRefKind(baseDir, schema, name, parameter.IsTableType);
 
                         if (kind == ParameterTypeRefKind.TableType || !string.IsNullOrWhiteSpace(snapshotInput.TableTypeRef))
                         {
+                            snapshotInput.TypeRef = null;
                             snapshotInput.TableTypeRef ??= resolvedTypeRef;
-                            var (ttCatalog, ttSchema, ttName) = tableTypeSegments;
+                            var effectiveTableTypeRef = snapshotInput.TableTypeRef;
+                            var (ttCatalog, ttSchema, ttName) = TableTypeRefFormatter.Split(effectiveTableTypeRef);
                             snapshotInput.TableTypeSchema = parameter.TableTypeSchema ?? ttSchema ?? schema;
                             snapshotInput.TableTypeName = parameter.TableTypeName ?? ttName ?? name;
                             snapshotInput.TableTypeCatalog = NormalizeOrNull(parameter.TableTypeCatalog) ?? NormalizeOrNull(ttCatalog);
                         }
-                        else if (!string.IsNullOrWhiteSpace(schema) || !string.IsNullOrWhiteSpace(name))
+                        else if (!string.IsNullOrWhiteSpace(resolvedTypeRef))
                         {
+                            snapshotInput.TypeRef = NormalizeOrNull(resolvedTypeRef);
                             snapshotInput.TypeSchema = parameter.TypeSchema ?? schema;
                             snapshotInput.TypeName = parameter.TypeName ?? name;
+                            snapshotInput.TableTypeRef = null;
+                            snapshotInput.TableTypeSchema = null;
+                            snapshotInput.TableTypeName = null;
+                            snapshotInput.TableTypeCatalog = null;
                         }
                         else
                         {
+                            snapshotInput.TypeRef = null;
                             snapshotInput.TypeSchema = parameter.TypeSchema;
                             snapshotInput.TypeName = parameter.TypeName;
                         }
@@ -1042,8 +1099,6 @@ internal sealed class SchemaSnapshotFileLayoutService
             IsOutput = input.IsOutput == true ? true : null,
             HasDefaultValue = input.HasDefaultValue == true ? true : null,
             TableTypeCatalog = NormalizeOrNull(input.TableTypeCatalog),
-            TableTypeSchema = input.TableTypeSchema,
-            TableTypeName = input.TableTypeName,
             TypeSchema = input.TypeSchema,
             TypeName = input.TypeName
         };
@@ -1057,22 +1112,18 @@ internal sealed class SchemaSnapshotFileLayoutService
         if (!string.IsNullOrWhiteSpace(normalizedTableTypeRef))
         {
             parameter.TableTypeRef = normalizedTableTypeRef;
-            var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
+            var (catalogSegment, _, _) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
             var normalizedCatalog = NormalizeOrNull(parameter.TableTypeCatalog);
             var normalizedCatalogSegment = NormalizeOrNull(catalogSegment);
             parameter.TableTypeCatalog = normalizedCatalog ?? normalizedCatalogSegment;
-            parameter.TableTypeSchema ??= schemaSegment;
-            parameter.TableTypeName ??= nameSegment;
         }
 
         var scalarTypeRef = CombineTypeRef(input.TypeSchema, input.TypeName);
 
-        var resolvedTypeRef = input.TypeRef;
+        var resolvedTypeRef = NormalizeOrNull(input.TypeRef);
         if (string.IsNullOrWhiteSpace(resolvedTypeRef))
         {
-            resolvedTypeRef = !string.IsNullOrWhiteSpace(normalizedTableTypeRef)
-                ? normalizedTableTypeRef
-                : (!string.IsNullOrWhiteSpace(scalarTypeRef) ? scalarTypeRef : null);
+            resolvedTypeRef = NormalizeOrNull(scalarTypeRef);
         }
 
         if (string.IsNullOrWhiteSpace(resolvedTypeRef) && !string.IsNullOrWhiteSpace(input.TypeName))
@@ -1083,6 +1134,11 @@ internal sealed class SchemaSnapshotFileLayoutService
                 var schemaComponent = string.IsNullOrWhiteSpace(input.TypeSchema) ? "sys" : input.TypeSchema;
                 resolvedTypeRef = CombineTypeRef(schemaComponent, normalized);
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(parameter.TableTypeRef) && AreTypeRefsEqual(parameter.TableTypeRef, resolvedTypeRef))
+        {
+            resolvedTypeRef = null;
         }
 
         parameter.TypeRef = resolvedTypeRef;
@@ -1139,6 +1195,23 @@ internal sealed class SchemaSnapshotFileLayoutService
     {
         if (string.IsNullOrWhiteSpace(sqlTypeName)) return null;
         return sqlTypeName.Trim().ToLowerInvariant();
+    }
+
+    private static bool AreTypeRefsEqual(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        var normalizedLeft = TableTypeRefFormatter.Normalize(left);
+        var normalizedRight = TableTypeRefFormatter.Normalize(right);
+        if (normalizedLeft is null || normalizedRight is null)
+        {
+            return false;
+        }
+
+        return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ParameterTypeRefKind DetermineTypeRefKind(string baseDir, string? schema, string? name, bool? legacyHint)

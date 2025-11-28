@@ -4,10 +4,7 @@
   "Parameters": [
     {
       "Name": "Contacts",
-      "TypeRef": "sample.UserContactTableType",
-      "TableTypeRef": "sample.UserContactTableType",
-      "TableTypeSchema": "sample",
-      "TableTypeName": "UserContactTableType"
+      "TableTypeRef": "sample.UserContactTableType"
     }
   ],
   "ResultSets": [

@@ -9,7 +9,7 @@ xtraq [options]
 ```
 
 - The root command no longer accepts a positional project argument. Use `--project-path`/`--project`/`-p` or the explicit subcommand arguments instead.
-- Running `xtraq` with no additional arguments routes to `xtraq build --refresh-snapshot`, mirroring the legacy "snapshot + build" workflow.
+- Running `xtraq` with no additional arguments routes to `xtraq build --refresh-snapshot`.
 - Global options:
   - `--verbose`, `-v`: enable verbose console output plus additional logging downstream.
   - `--debug`: switch to the "debug" environment profile and enable extra diagnostics in services.
