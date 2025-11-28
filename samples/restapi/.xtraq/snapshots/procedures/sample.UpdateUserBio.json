@@ -4,13 +4,13 @@
   "Parameters": [
     {
       "Name": "UserId",
-      "TypeRef": "sys.int",
-      "IsNullable": true
+      "TypeRef": "sys.int"
     },
     {
       "Name": "Bio",
-      "TypeRef": "sample.UserBioType",
-      "IsNullable": true
+      "TypeRef": "sys.nvarchar",
+      "UserTypeRef": "sample.UserBioType",
+      "MaxLength": 4000
     }
   ],
   "ResultSets": [

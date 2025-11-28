@@ -4,13 +4,11 @@
   "Parameters": [
     {
       "Name": "FromUtc",
-      "TypeRef": "sys.datetime2",
-      "IsNullable": true
+      "TypeRef": "sys.datetime2"
     },
     {
       "Name": "ToUtc",
-      "TypeRef": "sys.datetime2",
-      "IsNullable": true
+      "TypeRef": "sys.datetime2"
     }
   ],
   "ResultSets": [

@@ -1,8 +1,10 @@
 using Xtraq.Data.Models;
+using Xtraq.Metadata;
 using Xtraq.Services;
 using Xtraq.SnapshotBuilder.Models;
 using Xtraq.SnapshotBuilder.Utils;
 using Xtraq.Utils;
+using ProcedureDescriptor = Xtraq.SnapshotBuilder.Models.ProcedureDescriptor;
 
 namespace Xtraq.SnapshotBuilder.Writers;
 
@@ -55,6 +57,11 @@ internal static class ProcedureSnapshotDocumentBuilder
                 var rawTypeRef = SnapshotWriterUtilities.BuildTypeRef(input);
                 var userTypeRef = SnapshotWriterUtilities.BuildUserTypeRef(input);
                 var baseTypeRef = SnapshotWriterUtilities.BuildBaseTypeRef(input);
+                var isNullable = input.IsNullable;
+                int? effectiveMaxLen = input.MaxLength <= 0 ? null : input.MaxLength;
+                int? effectivePrecision = input.Precision;
+                int? effectiveScale = input.Scale;
+                var userTypeNullable = input.UserTypeIsNullable;
 
                 var primaryTypeRef = input.IsTableType
                     ? (TableTypeRefFormatter.Normalize(rawTypeRef) ?? rawTypeRef)
@@ -71,6 +78,42 @@ internal static class ProcedureSnapshotDocumentBuilder
                 {
                     writer.WriteString("UserTypeRef", userTypeRef);
                     SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, userTypeRef);
+                }
+
+                var resolvedUserType = ResolveUserType(userTypeRef, effectiveMaxLen, effectivePrecision, effectiveScale);
+                if (resolvedUserType.HasValue)
+                {
+                    var normalizedSql = SnapshotWriterUtilities.NormalizeSqlTypeName(resolvedUserType.Value.SqlType);
+                    if (!string.IsNullOrWhiteSpace(normalizedSql))
+                    {
+                        typeRefToPersist ??= SnapshotWriterUtilities.BuildTypeRef("sys", normalizedSql);
+                    }
+
+                    effectiveMaxLen ??= resolvedUserType.Value.MaxLength;
+                    effectivePrecision ??= resolvedUserType.Value.Precision;
+                    effectiveScale ??= resolvedUserType.Value.Scale;
+
+                    if (resolvedUserType.Value.IsNullable == false)
+                    {
+                        isNullable = false;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(userTypeRef))
+                {
+                    if (userTypeNullable.HasValue)
+                    {
+                        isNullable = userTypeNullable.Value;
+                    }
+                    else if (resolvedUserType.HasValue && resolvedUserType.Value.IsNullable.HasValue)
+                    {
+                        isNullable = resolvedUserType.Value.IsNullable!.Value;
+                    }
+                    else
+                    {
+                        // Default to non-nullable for UDTs unless explicitly declared nullable.
+                        isNullable = false;
+                    }
                 }
 
                 if (input.IsTableType)
@@ -109,26 +152,24 @@ internal static class ProcedureSnapshotDocumentBuilder
 
                 if (!input.IsTableType)
                 {
-                    if (SnapshotWriterUtilities.ShouldEmitIsNullable(input.IsNullable, typeRefToPersist))
+                    if (SnapshotWriterUtilities.ShouldEmitIsNullable(isNullable, typeRefToPersist))
                     {
                         writer.WriteBoolean("IsNullable", true);
                     }
 
-                    if (SnapshotWriterUtilities.ShouldEmitMaxLength(input.MaxLength, typeRefToPersist))
+                    if (SnapshotWriterUtilities.ShouldEmitMaxLength(effectiveMaxLen, typeRefToPersist))
                     {
-                        writer.WriteNumber("MaxLength", input.MaxLength);
+                        writer.WriteNumber("MaxLength", effectiveMaxLen.GetValueOrDefault());
                     }
 
-                    var precision = input.Precision;
-                    if (SnapshotWriterUtilities.ShouldEmitPrecision(precision, typeRefToPersist))
+                    if (SnapshotWriterUtilities.ShouldEmitPrecision(effectivePrecision, typeRefToPersist))
                     {
-                        writer.WriteNumber("Precision", precision.GetValueOrDefault());
+                        writer.WriteNumber("Precision", effectivePrecision.GetValueOrDefault());
                     }
 
-                    var scale = input.Scale;
-                    if (SnapshotWriterUtilities.ShouldEmitScale(scale, typeRefToPersist))
+                    if (SnapshotWriterUtilities.ShouldEmitScale(effectiveScale, typeRefToPersist))
                     {
-                        writer.WriteNumber("Scale", scale.GetValueOrDefault());
+                        writer.WriteNumber("Scale", effectiveScale.GetValueOrDefault());
                     }
                 }
 
@@ -691,6 +732,32 @@ internal static class ProcedureSnapshotDocumentBuilder
         {
             yield return new Xtraq.Metadata.TypeMetadataResolver();
         }
+    }
+
+    private static ResolvedType? ResolveUserType(string? typeRef, int? maxLength, int? precision, int? scale)
+    {
+        if (string.IsNullOrWhiteSpace(typeRef))
+        {
+            return null;
+        }
+
+        foreach (var resolver in EnumerateTypeMetadataResolvers())
+        {
+            try
+            {
+                var resolved = resolver.Resolve(typeRef, maxLength, precision, scale);
+                if (resolved.HasValue)
+                {
+                    return resolved;
+                }
+            }
+            catch
+            {
+                // ignore resolver failures and continue
+            }
+        }
+
+        return null;
     }
 
     private static bool LooksLikeBooleanCase(string rawExpression)

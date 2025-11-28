@@ -4,8 +4,7 @@
   "Parameters": [
     {
       "Name": "UserId",
-      "TypeRef": "sys.int",
-      "IsNullable": true
+      "TypeRef": "sys.int"
     }
   ],
   "ResultSets": [

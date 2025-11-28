@@ -36,8 +36,8 @@ public sealed record class UpdateUserBioRequest
 }
 
 public readonly record struct UpdateUserBioInput(
-    int? UserId,
-    string? Bio
+    int UserId,
+    string Bio
 );
 
 /// <summary>
@@ -83,8 +83,8 @@ internal static class UpdateUserBioRequestMapper
         }
 
         return new UpdateUserBioInput(
-            UserId,
-            Bio
+            UserId ?? default,
+            Bio ?? default!
         );
     }
 
@@ -133,8 +133,8 @@ internal static partial class UpdateUserBioPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, true),
-            new("@Bio", System.Data.DbType.String, 4000, false, true),
+            new("@UserId", System.Data.DbType.Int32, null, false, false),
+            new("@Bio", System.Data.DbType.String, 4000, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -160,8 +160,8 @@ internal static partial class UpdateUserBioPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UpdateUserBioInput)state!;
-			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
-			cmd.Parameters["@Bio"].Value = (object?)input.Bio ?? DBNull.Value;
+			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@Bio"].Value = input.Bio;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UpdateUserBio]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

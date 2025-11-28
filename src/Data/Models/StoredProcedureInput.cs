@@ -19,6 +19,9 @@ internal sealed class StoredProcedureInput : Column
     [SqlFieldName("user_type_schema_name")]
     public new string? UserTypeSchemaName { get; set; }
 
+    [SqlFieldName("user_type_is_nullable")]
+    public bool? UserTypeIsNullable { get; set; }
+
     public List<Column> TableTypeColumns { get; set; } = new();
 
     [SqlFieldName("has_default_value")]

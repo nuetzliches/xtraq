@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "F4F52BC55B65DCB7",
+  "Fingerprint": "31D0676346EF3D68",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -9,10 +9,10 @@
     "ProcedureTotal": 13,
     "ProcedureSkipped": 0,
     "ProcedureLoaded": 13,
-    "UdttTotal": 3,
+    "UdttTotal": 6,
     "TableTotal": 0,
     "ViewTotal": 0,
-    "UserDefinedTypeTotal": 2,
+    "UserDefinedTypeTotal": 3,
     "FunctionTotal": 2
   },
   "Procedures": [
@@ -58,7 +58,7 @@
       "Schema": "sample",
       "Name": "OrderListAsJson",
       "File": "sample.OrderListAsJson.json",
-      "Hash": "BBD4EFC011AEC217",
+      "Hash": "21E61588112260EF",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -96,7 +96,7 @@
       "Schema": "sample",
       "Name": "OrderListByUserAsJson",
       "File": "sample.OrderListByUserAsJson.json",
-      "Hash": "FAC8794AABC473EF",
+      "Hash": "06083B731AD25D31",
       "ResultSets": [
         {
           "ReturnsJson": true,
@@ -387,7 +387,7 @@
       "Schema": "sample",
       "Name": "OrderStatusReport",
       "File": "sample.OrderStatusReport.json",
-      "Hash": "27B50EFE677E2D39",
+      "Hash": "4560D944239D6601",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -422,7 +422,7 @@
               "Alias": null,
               "SqlTypeName": "bigint",
               "IsNullable": true,
-              "MaxLength": 8,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -485,7 +485,7 @@
               "Alias": null,
               "SqlTypeName": "datetime2(7)",
               "IsNullable": true,
-              "MaxLength": 7,
+              "MaxLength": null,
               "Precision": null,
               "Scale": null,
               "SourceSchema": "sample",
@@ -584,7 +584,7 @@
             {
               "Name": "Email",
               "Alias": null,
-              "SqlTypeName": "nvarchar",
+              "SqlTypeName": "nvarchar(320)",
               "IsNullable": false,
               "MaxLength": 320,
               "Precision": null,
@@ -605,7 +605,7 @@
             {
               "Name": "DisplayName",
               "Alias": null,
-              "SqlTypeName": "nvarchar",
+              "SqlTypeName": "nvarchar(200)",
               "IsNullable": false,
               "MaxLength": 200,
               "Precision": null,
@@ -753,7 +753,7 @@
       "Schema": "sample",
       "Name": "UpdateUserBio",
       "File": "sample.UpdateUserBio.json",
-      "Hash": "B960C4FE69C6C86F",
+      "Hash": "C3FC5953F722EC5C",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -854,7 +854,7 @@
       "Schema": "sample",
       "Name": "UserCompositeJsonSnapshot",
       "File": "sample.UserCompositeJsonSnapshot.json",
-      "Hash": "1E67CC86A291D4F5",
+      "Hash": "B7A40FB10E9D5C53",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1205,7 +1205,7 @@
       "Schema": "sample",
       "Name": "UserDetailsWithOrders",
       "File": "sample.UserDetailsWithOrders.json",
-      "Hash": "64C62790066ADAC4",
+      "Hash": "FE58F05F48712153",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1588,7 +1588,7 @@
       "Schema": "sample",
       "Name": "UserFind",
       "File": "sample.UserFind.json",
-      "Hash": "84703155DE702623",
+      "Hash": "1D96FD18736C7E8A",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1815,7 +1815,7 @@
       "Schema": "sample",
       "Name": "UserList",
       "File": "sample.UserList.json",
-      "Hash": "F28ABB9B93E3428B",
+      "Hash": "FE937C2A29DDD8C7",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -2383,9 +2383,21 @@
   "TableTypes": [
     {
       "Schema": "sample",
+      "Name": "JsonDocument",
+      "File": "sample.JsonDocument.json",
+      "Hash": "73BDA4D45070378F"
+    },
+    {
+      "Schema": "sample",
       "Name": "OrderImportTableType",
       "File": "sample.OrderImportTableType.json",
       "Hash": "8185E69B90F70DF7"
+    },
+    {
+      "Schema": "sample",
+      "Name": "UserBioType",
+      "File": "sample.UserBioType.json",
+      "Hash": "2C4474D6AFEC7EA5"
     },
     {
       "Schema": "sample",
@@ -2398,6 +2410,12 @@
       "Name": "AuditLogEntryTableType",
       "File": "shared.AuditLogEntryTableType.json",
       "Hash": "F7FF2E1D58FB6BFF"
+    },
+    {
+      "Schema": "shared",
+      "Name": "pkInt",
+      "File": "shared.pkInt.json",
+      "Hash": "F35ADCF18D812EE1"
     }
   ],
   "UserDefinedTypes": [
@@ -2414,6 +2432,13 @@
       "Name": "UserBioType",
       "File": "sample.UserBioType.json",
       "Hash": "5C237DF1588C7CA5"
+    },
+    {
+      "Catalog": null,
+      "Schema": "shared",
+      "Name": "pkInt",
+      "File": "shared.pkInt.json",
+      "Hash": "E726BA6F15510502"
     }
   ],
   "FunctionsVersion": 2,

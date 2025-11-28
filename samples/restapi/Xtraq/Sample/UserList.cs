@@ -35,7 +35,7 @@ public sealed record class UserListRequest
 }
 
 public readonly record struct UserListInput(
-    bool? IncludeInactive
+    bool IncludeInactive
 );
 
 /// <summary>
@@ -81,7 +81,7 @@ internal static class UserListRequestMapper
         }
 
         return new UserListInput(
-            IncludeInactive
+            IncludeInactive ?? default
         );
     }
 
@@ -130,7 +130,7 @@ internal static partial class UserListPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@IncludeInactive", System.Data.DbType.Boolean, null, false, true),
+            new("@IncludeInactive", System.Data.DbType.Boolean, null, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -156,7 +156,7 @@ internal static partial class UserListPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserListInput)state!;
-			cmd.Parameters["@IncludeInactive"].Value = (object?)input.IncludeInactive ?? DBNull.Value;
+			cmd.Parameters["@IncludeInactive"].Value = input.IncludeInactive;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

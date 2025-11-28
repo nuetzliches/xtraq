@@ -244,7 +244,7 @@ internal sealed class SchemaArtifactWriter
         var scalarTypes = new List<UserDefinedTypeRow>();
         try
         {
-            var localScalarTypes = await _userDefinedTypeMetadataProvider.GetUserDefinedTypesAsync(schemaSet, cancellationToken).ConfigureAwait(false);
+            var localScalarTypes = await _userDefinedTypeMetadataProvider.GetUserDefinedTypesAsync(schemaSet != null && schemaSet.Count > 0 ? schemaSet : new HashSet<string>(), cancellationToken).ConfigureAwait(false);
             if (localScalarTypes != null && localScalarTypes.Count > 0)
             {
                 scalarTypes.AddRange(localScalarTypes);
@@ -261,10 +261,15 @@ internal sealed class SchemaArtifactWriter
             scalarTypes.AddRange(remoteScalarTypes);
         }
 
+        if (options?.Verbose == true)
+        {
+            _console.Verbose($"[snapshot-udt] scalar count={scalarTypes.Count}");
+        }
+
         var scalarRoot = Path.Combine(schemaRoot, "types");
         Directory.CreateDirectory(scalarRoot);
         var validScalarFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var filterActive = requiredTypeRefs.Count > 0;
+        var emittedScalarKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var type in scalarTypes)
         {
@@ -280,17 +285,20 @@ internal sealed class SchemaArtifactWriter
                 ? null
                 : string.Concat(type.catalog_name, ".", baseKey);
 
-            if (filterActive && !requiredTypeRefs.Contains(baseKey) && !requiredTypeRefs.Contains(notNullKey) && (catalogKey == null || !requiredTypeRefs.Contains(catalogKey)))
-            {
-                continue;
-            }
-
             var jsonBytes = BuildScalarTypeJson(type);
             var fileName = string.IsNullOrWhiteSpace(type.catalog_name)
                 ? SnapshotWriterUtilities.BuildArtifactFileName(type.schema_name, type.user_type_name)
                 : SnapshotWriterUtilities.BuildArtifactFileName(type.catalog_name, type.schema_name, type.user_type_name);
+            if (options?.Verbose == true)
+            {
+                _console.Verbose($"[snapshot-udt] emit {baseKey} file={fileName}");
+            }
             var filePath = Path.Combine(scalarRoot, fileName);
             var outcome = await _artifactWriter(filePath, jsonBytes, cancellationToken).ConfigureAwait(false);
+            if (options?.Verbose == true)
+            {
+                _console.Verbose($"[snapshot-udt] wrote={outcome.Wrote} exists={File.Exists(filePath)} path={filePath}");
+            }
             if (outcome.Wrote)
             {
                 summary.FilesWritten++;
@@ -301,6 +309,7 @@ internal sealed class SchemaArtifactWriter
             }
 
             validScalarFiles.Add(fileName);
+            emittedScalarKeys.Add(baseKey);
             summary.UserDefinedTypes.Add(new IndexUserDefinedTypeEntry
             {
                 Catalog = type.catalog_name,
@@ -311,7 +320,69 @@ internal sealed class SchemaArtifactWriter
             });
         }
 
-        PruneExtraneousFiles(scalarRoot, validScalarFiles);
+        // Ensure required scalar types are materialized even if the bulk metadata query missed them.
+        if (requiredTypeRefs.Count > 0)
+        {
+            foreach (var typeRef in requiredTypeRefs)
+            {
+                if (string.IsNullOrWhiteSpace(typeRef))
+                {
+                    continue;
+                }
+
+                var parts = SnapshotWriterUtilities.SplitTypeRefParts(typeRef);
+                if (string.IsNullOrWhiteSpace(parts.Schema) || string.IsNullOrWhiteSpace(parts.Name))
+                {
+                    continue;
+                }
+
+                if (string.Equals(parts.Schema, "sys", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var baseKey = SnapshotWriterUtilities.BuildKey(parts.Schema!, parts.Name!);
+                if (emittedScalarKeys.Contains(baseKey))
+                {
+                    continue;
+                }
+
+                var lookup = await _userDefinedTypeMetadataProvider.GetUserDefinedTypeAsync(parts.Catalog, parts.Schema!, parts.Name!, cancellationToken).ConfigureAwait(false);
+                if (lookup == null)
+                {
+                    continue;
+                }
+
+                var jsonBytes = BuildScalarTypeJson(lookup);
+                var fileName = string.IsNullOrWhiteSpace(parts.Catalog)
+                    ? SnapshotWriterUtilities.BuildArtifactFileName(parts.Schema!, parts.Name!)
+                    : SnapshotWriterUtilities.BuildArtifactFileName(parts.Catalog!, parts.Schema!, parts.Name!);
+                var filePath = Path.Combine(scalarRoot, fileName);
+                var outcome = await _artifactWriter(filePath, jsonBytes, cancellationToken).ConfigureAwait(false);
+                if (outcome.Wrote)
+                {
+                    summary.FilesWritten++;
+                }
+                else
+                {
+                    summary.FilesUnchanged++;
+                }
+
+                validScalarFiles.Add(fileName);
+                emittedScalarKeys.Add(baseKey);
+                summary.UserDefinedTypes.Add(new IndexUserDefinedTypeEntry
+                {
+                    Catalog = lookup.catalog_name,
+                    Schema = lookup.schema_name,
+                    Name = lookup.user_type_name,
+                    File = fileName,
+                    Hash = outcome.Hash
+                });
+            }
+        }
+
+        // Do not prune scalar type files; keep cross-schema dependencies available for offline builds.
+        //PruneExtraneousFiles(scalarRoot, validScalarFiles);
 
         summary.TableTypes.Sort((a, b) =>
         {

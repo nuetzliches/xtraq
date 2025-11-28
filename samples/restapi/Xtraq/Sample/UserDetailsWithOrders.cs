@@ -35,7 +35,7 @@ public sealed record class UserDetailsWithOrdersRequest
 }
 
 public readonly record struct UserDetailsWithOrdersInput(
-    int? UserId
+    int UserId
 );
 
 /// <summary>
@@ -99,7 +99,7 @@ internal static class UserDetailsWithOrdersRequestMapper
         }
 
         return new UserDetailsWithOrdersInput(
-            UserId
+            UserId ?? default
         );
     }
 
@@ -148,7 +148,7 @@ internal static partial class UserDetailsWithOrdersPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, true),
+            new("@UserId", System.Data.DbType.Int32, null, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -181,7 +181,7 @@ internal static partial class UserDetailsWithOrdersPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserDetailsWithOrdersInput)state!;
-			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
+			cmd.Parameters["@UserId"].Value = input.UserId;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserDetailsWithOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

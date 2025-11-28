@@ -35,7 +35,7 @@ public sealed record class OrderListByUserAsJsonRequest
 }
 
 public readonly record struct OrderListByUserAsJsonInput(
-    int? UserId
+    int UserId
 );
 
 /// <summary>
@@ -91,7 +91,7 @@ internal static class OrderListByUserAsJsonRequestMapper
         }
 
         return new OrderListByUserAsJsonInput(
-            UserId
+            UserId ?? default
         );
     }
 
@@ -140,7 +140,7 @@ internal static partial class OrderListByUserAsJsonPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, true),
+            new("@UserId", System.Data.DbType.Int32, null, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -193,7 +193,7 @@ internal static partial class OrderListByUserAsJsonPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderListByUserAsJsonInput)state!;
-			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
+			cmd.Parameters["@UserId"].Value = input.UserId;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderListByUserAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

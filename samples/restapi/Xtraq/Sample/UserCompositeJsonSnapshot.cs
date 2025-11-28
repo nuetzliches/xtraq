@@ -36,8 +36,8 @@ public sealed record class UserCompositeJsonSnapshotRequest
 }
 
 public readonly record struct UserCompositeJsonSnapshotInput(
-    int? UserId,
-    int? RecentPaymentCount
+    int UserId,
+    int RecentPaymentCount
 );
 
 /// <summary>
@@ -132,8 +132,8 @@ internal static class UserCompositeJsonSnapshotRequestMapper
         }
 
         return new UserCompositeJsonSnapshotInput(
-            UserId,
-            RecentPaymentCount
+            UserId ?? default,
+            RecentPaymentCount ?? default
         );
     }
 
@@ -182,8 +182,8 @@ internal static partial class UserCompositeJsonSnapshotPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, true),
-            new("@RecentPaymentCount", System.Data.DbType.Int32, null, false, true),
+            new("@UserId", System.Data.DbType.Int32, null, false, false),
+            new("@RecentPaymentCount", System.Data.DbType.Int32, null, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -289,8 +289,8 @@ internal static partial class UserCompositeJsonSnapshotPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserCompositeJsonSnapshotInput)state!;
-			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
-			cmd.Parameters["@RecentPaymentCount"].Value = (object?)input.RecentPaymentCount ?? DBNull.Value;
+			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@RecentPaymentCount"].Value = input.RecentPaymentCount;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserCompositeJsonSnapshot]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
