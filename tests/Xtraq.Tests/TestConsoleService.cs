@@ -6,6 +6,7 @@ namespace Xtraq.Tests;
 internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
 {
     private readonly System.Collections.Generic.List<string> _messages = new();
+    private readonly System.Collections.Generic.Queue<(string Title, string Message)> _pendingPanels = new();
     private bool _verbose;
 
     /// <summary>
@@ -19,6 +20,9 @@ internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
 
     /// <inheritdoc />
     public bool IsVerbose => _verbose;
+
+    /// <inheritdoc />
+    public bool IsPromptActive { get; private set; }
 
     /// <inheritdoc />
     public void Info(string message) => Record(message);
@@ -68,9 +72,12 @@ internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
     /// <inheritdoc />
     public Xtraq.Services.Choice GetSelection(string prompt, System.Collections.Generic.List<string> options)
     {
-        Record(prompt);
-        var selection = options.Count > 0 ? options[0] : string.Empty;
-        return new Xtraq.Services.Choice(0, selection);
+        return WithPrompt(() =>
+        {
+            Record(prompt);
+            var selection = options.Count > 0 ? options[0] : string.Empty;
+            return new Xtraq.Services.Choice(0, selection);
+        });
     }
 
     /// <inheritdoc />
@@ -79,15 +86,21 @@ internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
     /// <inheritdoc />
     public bool GetYesNo(string prompt, bool isDefaultConfirmed, System.ConsoleColor? promptColor = null, System.ConsoleColor? promptBgColor = null)
     {
-        Record(prompt);
-        return isDefaultConfirmed;
+        return WithPrompt(() =>
+        {
+            Record(prompt);
+            return isDefaultConfirmed;
+        });
     }
 
     /// <inheritdoc />
     public string GetString(string prompt, string defaultValue = "", System.ConsoleColor? promptColor = null)
     {
-        Record(prompt);
-        return defaultValue;
+        return WithPrompt(() =>
+        {
+            Record(prompt);
+            return defaultValue;
+        });
     }
 
     /// <inheritdoc />
@@ -243,6 +256,36 @@ internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
         work?.Invoke(_ => { });
     }
 
+    /// <inheritdoc />
+    public void RenderPanel(string title, string message)
+    {
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            Record(title);
+        }
+
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            Record(message);
+        }
+    }
+
+    /// <inheritdoc />
+    public void EnqueuePanel(string title, string message)
+    {
+        _pendingPanels.Enqueue((title, message));
+    }
+
+    /// <inheritdoc />
+    public void FlushDeferredPanels()
+    {
+        while (_pendingPanels.Count > 0)
+        {
+            var (title, message) = _pendingPanels.Dequeue();
+            RenderPanel(title, message);
+        }
+    }
+
     /// <summary>
     /// Provides all recorded messages for assertions.
     /// </summary>
@@ -254,6 +297,32 @@ internal sealed class TestConsoleService : Xtraq.Services.IConsoleService
         if (!string.IsNullOrEmpty(message))
         {
             _messages.Add(message);
+        }
+    }
+
+    private void WithPrompt(System.Action action)
+    {
+        IsPromptActive = true;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            IsPromptActive = false;
+        }
+    }
+
+    private T WithPrompt<T>(System.Func<T> action)
+    {
+        IsPromptActive = true;
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            IsPromptActive = false;
         }
     }
 

@@ -1,6 +1,5 @@
 using Microsoft.Data.SqlClient;
 using Xunit;
-using Xunit.Sdk;
 
 namespace Xtraq.IntegrationTests;
 
@@ -31,15 +30,14 @@ public sealed class CliEndToEndTests : IAsyncLifetime
     private bool _dockerAvailable;
     private string? _skipReason;
 
-    [Fact]
+    [DockerFact]
     [Trait("Category", "CliE2E")]
     public async Task SnapshotAndBuild_Should_Generate_Procedures_And_DbContext()
     {
         if (!_dockerAvailable)
         {
             var reason = _skipReason ?? "Docker unavailable";
-            Console.WriteLine($"{LogPrefix} Skipped: {reason}");
-            throw SkipException.ForSkip(reason);
+            throw new InvalidOperationException($"Docker setup failed: {reason}");
         }
 
         using var projectDirectory = TempDirectory.Create("xtraq-e2e-");
