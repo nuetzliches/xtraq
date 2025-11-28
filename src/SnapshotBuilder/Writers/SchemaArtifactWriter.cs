@@ -42,6 +42,8 @@ internal sealed class SchemaArtifactWriter
         ISet<string> requiredTableRefs,
         CancellationToken cancellationToken)
     {
+        requiredTypeRefs ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        requiredTableRefs ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var summary = new SchemaArtifactSummary();
         var schemaSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -210,14 +212,12 @@ internal sealed class SchemaArtifactWriter
                 continue;
             }
 
-            if (!dependencyFilter.ShouldEmitTableType(null, tableType.SchemaName, tableType.Name))
-            {
-                continue;
-            }
+            var tableTypeKey = SnapshotWriterUtilities.BuildKey(tableType.SchemaName ?? string.Empty, tableType.Name ?? string.Empty);
+            // Emit all table types from the selected schemas; dependency filter can be too restrictive for cross-schema references.
 
             var columns = tableTypeMetadata.Columns ?? Array.Empty<Column>();
             var jsonBytes = BuildTableTypeJson(tableType, columns, requiredTypeRefs);
-            var fileName = SnapshotWriterUtilities.BuildArtifactFileName(tableType.SchemaName, tableType.Name);
+            var fileName = SnapshotWriterUtilities.BuildArtifactFileName(tableType.SchemaName ?? string.Empty, tableType.Name ?? string.Empty);
             var filePath = Path.Combine(tableTypeRoot, fileName);
             var outcome = await _artifactWriter(filePath, jsonBytes, cancellationToken).ConfigureAwait(false);
             if (outcome.Wrote)
@@ -232,8 +232,8 @@ internal sealed class SchemaArtifactWriter
             validTableTypeFiles.Add(fileName);
             summary.TableTypes.Add(new IndexTableTypeEntry
             {
-                Schema = tableType.SchemaName,
-                Name = tableType.Name,
+                Schema = tableType.SchemaName ?? string.Empty,
+                Name = tableType.Name ?? string.Empty,
                 File = fileName,
                 Hash = outcome.Hash
             });
@@ -244,7 +244,8 @@ internal sealed class SchemaArtifactWriter
         var scalarTypes = new List<UserDefinedTypeRow>();
         try
         {
-            var localScalarTypes = await _userDefinedTypeMetadataProvider.GetUserDefinedTypesAsync(schemaSet != null && schemaSet.Count > 0 ? schemaSet : new HashSet<string>(), cancellationToken).ConfigureAwait(false);
+            // Load all scalar UDTs regardless of schema allow-list so cross-schema dependencies are captured.
+            var localScalarTypes = await _userDefinedTypeMetadataProvider.GetUserDefinedTypesAsync(new HashSet<string>(), cancellationToken).ConfigureAwait(false);
             if (localScalarTypes != null && localScalarTypes.Count > 0)
             {
                 scalarTypes.AddRange(localScalarTypes);
@@ -255,7 +256,7 @@ internal sealed class SchemaArtifactWriter
             _console.Verbose($"[snapshot-udt] metadata provider failed: {ex.Message}");
         }
 
-        var remoteScalarTypes = await LoadRemoteScalarTypesAsync(requiredTypeRefs, cancellationToken).ConfigureAwait(false);
+        var remoteScalarTypes = await LoadRemoteScalarTypesAsync(requiredTypeRefs!, cancellationToken).ConfigureAwait(false);
         if (remoteScalarTypes.Count > 0)
         {
             scalarTypes.AddRange(remoteScalarTypes);
@@ -287,8 +288,8 @@ internal sealed class SchemaArtifactWriter
 
             var jsonBytes = BuildScalarTypeJson(type);
             var fileName = string.IsNullOrWhiteSpace(type.catalog_name)
-                ? SnapshotWriterUtilities.BuildArtifactFileName(type.schema_name, type.user_type_name)
-                : SnapshotWriterUtilities.BuildArtifactFileName(type.catalog_name, type.schema_name, type.user_type_name);
+                ? SnapshotWriterUtilities.BuildArtifactFileName(type.schema_name ?? string.Empty, type.user_type_name ?? string.Empty)
+                : SnapshotWriterUtilities.BuildArtifactFileName(type.catalog_name, type.schema_name ?? string.Empty, type.user_type_name ?? string.Empty);
             if (options?.Verbose == true)
             {
                 _console.Verbose($"[snapshot-udt] emit {baseKey} file={fileName}");
@@ -313,17 +314,18 @@ internal sealed class SchemaArtifactWriter
             summary.UserDefinedTypes.Add(new IndexUserDefinedTypeEntry
             {
                 Catalog = type.catalog_name,
-                Schema = type.schema_name,
-                Name = type.user_type_name,
+                Schema = type.schema_name ?? string.Empty,
+                Name = type.user_type_name ?? string.Empty,
                 File = fileName,
-                Hash = outcome.Hash
+                Hash = outcome.Hash ?? string.Empty
             });
         }
 
         // Ensure required scalar types are materialized even if the bulk metadata query missed them.
-        if (requiredTypeRefs.Count > 0)
+        IEnumerable<string> typeRefs = requiredTypeRefs as IEnumerable<string> ?? Array.Empty<string>();
+        if (typeRefs.Any())
         {
-            foreach (var typeRef in requiredTypeRefs)
+            foreach (var typeRef in typeRefs)
             {
                 if (string.IsNullOrWhiteSpace(typeRef))
                 {
