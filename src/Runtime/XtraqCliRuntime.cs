@@ -522,9 +522,15 @@ internal sealed class XtraqCliRuntime(
                 ? Path.GetFullPath(outputDir)
                 : Path.Combine(workingDirectory, outputDir);
             Directory.CreateDirectory(outputRoot);
-            if (effectiveSchemas.Count > 0)
+            if (effectiveSchemas.Count > 0 || tableTypeDetails.ArtifactsPerSchema.Count > 0)
             {
-                PurgeOutputSchemas(outputRoot, effectiveSchemas);
+                var keepSchemas = new HashSet<string>(effectiveSchemas, StringComparer.OrdinalIgnoreCase);
+                foreach (var schema in tableTypeDetails.ArtifactsPerSchema.Keys)
+                {
+                    keepSchemas.Add(schema);
+                }
+
+                PurgeOutputSchemas(outputRoot, keepSchemas);
             }
             if (options.Verbose)
             {
