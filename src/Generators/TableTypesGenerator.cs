@@ -120,6 +120,21 @@ internal sealed class TableTypesGenerator : GeneratorBase
 
             types = Array.Empty<TableTypeInfo>();
         }
+
+        if (normalizedDependencies.Count > 0 && types.Count < normalizedDependencies.Count)
+        {
+            // Fallback: emit all available types when dependency metadata cannot be matched (prevents missing cross-schema UDTTs).
+            try
+            {
+                Console.Out.WriteLine("[xtraq] Info: TableTypes dependencies unresolved or partially matched -> emitting all table types.");
+            }
+            catch
+            {
+                // best-effort logging
+            }
+
+            types = _provider.GetAll();
+        }
         foreach (var tt in types.OrderBy(t => t.Schema).ThenBy(t => t.Name))
         {
             var schemaPascal = ToPascalCase(tt.Schema);

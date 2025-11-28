@@ -9,11 +9,10 @@ internal static class TableTypeQueries
 
     public static Task<List<TableType>> TableTypeListAsync(this DbContext context, string schemaList, CancellationToken cancellationToken)
     {
-        var queryString = @"SELECT tt.user_type_id, tt.name, s.name AS schema_name
+        const string queryString = @"SELECT tt.user_type_id, tt.name, s.name AS schema_name
                                 FROM sys.table_types AS tt
                                     INNER JOIN sys.schemas AS s ON s.schema_id = tt.schema_id
-                                WHERE s.name IN(@schemaList)
-                                ORDER BY tt.name ASC;".Replace("@schemaList", schemaList);
+                                ORDER BY s.name ASC, tt.name ASC;";
 
         return context.ListAsync<TableType>(
             queryString,

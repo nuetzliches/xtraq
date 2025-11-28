@@ -68,6 +68,15 @@ internal sealed class SchemaArtifactWriter
             }
         }
 
+        var tableTypeSchemaHints = CollectTableTypeSchemas(updatedProcedures);
+        foreach (var schema in tableTypeSchemaHints)
+        {
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                schemaSet.Add(schema);
+            }
+        }
+
         ExtendSchemaSetWithDependencies(schemaSet, requiredTypeRefs, requiredTableRefs);
         var dependencyFilter = SchemaDependencyFilter.Build(updatedProcedures!, requiredTypeRefs, requiredTableRefs);
         foreach (var schema in dependencyFilter.Schemas)
@@ -108,6 +117,10 @@ internal sealed class SchemaArtifactWriter
         IReadOnlyList<TableTypeMetadata> tableTypes = Array.Empty<TableTypeMetadata>();
         if (tableTypeSchemas.Count > 0)
         {
+            if (options?.Verbose == true)
+            {
+                _console.Verbose($"[snapshot-tabletype] schemas={string.Join(',', tableTypeSchemas)}");
+            }
             try
             {
                 var skipCache = options?.NoCache == true;
@@ -119,11 +132,71 @@ internal sealed class SchemaArtifactWriter
             }
         }
 
+        tableTypes ??= Array.Empty<TableTypeMetadata>();
+
+        // Ensure referenced table types from procedure dependencies are materialized even if the database scan missed them.
+        if (tableTypes is not null && requiredTypeRefs.Count > 0)
+        {
+            var sanitizedTableTypes = tableTypes
+                .Where(static tt => tt?.TableType != null)
+                .Select(static tt => tt!)
+                .ToList();
+
+            var workingTableTypes = sanitizedTableTypes;
+            var existingKeys = new HashSet<string>(
+                workingTableTypes.Select(static tt => SnapshotWriterUtilities.BuildKey(tt.TableType!.SchemaName ?? string.Empty, tt.TableType!.Name ?? string.Empty)),
+                StringComparer.OrdinalIgnoreCase);
+            var synthetic = new List<TableTypeMetadata>();
+
+            foreach (var typeRef in requiredTypeRefs)
+            {
+                if (string.IsNullOrWhiteSpace(typeRef))
+                {
+                    continue;
+                }
+
+                var (catalog, schema, name) = TableTypeRefFormatter.Split(typeRef);
+                if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name) || string.Equals(schema, "sys", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var key = SnapshotWriterUtilities.BuildKey(schema, name);
+                if (existingKeys.Contains(key))
+                {
+                    continue;
+                }
+
+                synthetic.Add(new TableTypeMetadata(
+                    new TableType
+                    {
+                        SchemaName = schema ?? string.Empty,
+                        Name = name ?? string.Empty,
+                        Columns = new List<Column>(),
+                        UserTypeId = null
+                    },
+                    Array.Empty<Column>()));
+                existingKeys.Add(key);
+            }
+
+            if (synthetic.Count > 0)
+            {
+                if (options?.Verbose == true)
+                {
+                    _console.Verbose($"[snapshot-tabletype] synthesizing {synthetic.Count} missing table type(s) from procedure dependencies.");
+                }
+
+                workingTableTypes = workingTableTypes.Concat(synthetic).ToList();
+            }
+
+            tableTypes = workingTableTypes;
+        }
+
         var tableTypeRoot = Path.Combine(schemaRoot, "tabletypes");
         Directory.CreateDirectory(tableTypeRoot);
         var validTableTypeFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var tableTypeMetadata in tableTypes)
+        foreach (var tableTypeMetadata in tableTypes ?? Array.Empty<TableTypeMetadata>())
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (tableTypeMetadata == null)
@@ -325,6 +398,64 @@ internal sealed class SchemaArtifactWriter
             if (!string.IsNullOrWhiteSpace(schemaSegment))
             {
                 result.Add(schemaSegment);
+            }
+        }
+
+        return result;
+    }
+
+    private static HashSet<string> CollectTableTypeSchemas(IReadOnlyList<ProcedureAnalysisResult>? procedures)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (procedures == null || procedures.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var proc in procedures)
+        {
+            if (proc?.Parameters == null || proc.Parameters.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var param in proc.Parameters)
+            {
+                if (param == null)
+                {
+                    continue;
+                }
+
+                if (!param.IsTableType)
+                {
+                    if (string.IsNullOrWhiteSpace(param.SqlTypeName))
+                    {
+                        continue;
+                    }
+
+                    var maybeTableType = TableTypeRefFormatter.Split(param.SqlTypeName);
+                    if (string.IsNullOrWhiteSpace(maybeTableType.Schema) || string.Equals(maybeTableType.Schema, "sys", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    result.Add(maybeTableType.Schema);
+                    continue;
+                }
+
+                var schema = param.UserTypeSchemaName;
+                if (string.IsNullOrWhiteSpace(schema) && !string.IsNullOrWhiteSpace(param.SqlTypeName))
+                {
+                    var split = TableTypeRefFormatter.Split(param.SqlTypeName);
+                    schema = split.Schema;
+                }
+
+                schema ??= proc.Descriptor?.Schema;
+
+                if (!string.IsNullOrWhiteSpace(schema))
+                {
+                    result.Add(schema);
+                }
             }
         }
 

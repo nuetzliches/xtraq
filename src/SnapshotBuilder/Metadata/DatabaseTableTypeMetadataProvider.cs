@@ -24,19 +24,12 @@ internal sealed class DatabaseTableTypeMetadataProvider : ITableTypeMetadataProv
 
     public async Task<IReadOnlyList<TableTypeMetadata>> GetTableTypesAsync(ISet<string> schemas, bool skipCache, CancellationToken cancellationToken)
     {
-        if (schemas == null || schemas.Count == 0)
-        {
-            return Array.Empty<TableTypeMetadata>();
-        }
-
         var normalizedSchemas = new HashSet<string>(schemas.Where(static s => !string.IsNullOrWhiteSpace(s)), StringComparer.OrdinalIgnoreCase);
-        if (normalizedSchemas.Count == 0)
-        {
-            return Array.Empty<TableTypeMetadata>();
-        }
 
         var aggregated = new Dictionary<string, TableTypeMetadata>(StringComparer.OrdinalIgnoreCase);
-        var pendingSchemas = new HashSet<string>(normalizedSchemas, StringComparer.OrdinalIgnoreCase);
+        var pendingSchemas = normalizedSchemas.Count > 0
+            ? new HashSet<string>(normalizedSchemas, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(new[] { string.Empty }, StringComparer.OrdinalIgnoreCase);
 
         if (!skipCache)
         {
@@ -230,12 +223,7 @@ internal sealed class DatabaseTableTypeMetadataProvider : ITableTypeMetadataProv
             .Select(static s => $"'{s.Replace("'", "''")}'")
             .ToArray();
 
-        if (escapedSchemas.Length == 0)
-        {
-            return Array.Empty<TableTypeMetadata>();
-        }
-
-        var schemaListString = string.Join(',', escapedSchemas);
+        var schemaListString = escapedSchemas.Length == 0 ? string.Empty : string.Join(',', escapedSchemas);
 
         List<TableType> tableTypes;
         try

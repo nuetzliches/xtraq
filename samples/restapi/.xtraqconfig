@@ -15,7 +15,7 @@
             ]
         }
     },
-    "BuildSchemas": [],
+    "BuildSchemas": ["sample"],
     "EntityFramework": {
         "Enabled": false
     },

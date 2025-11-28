@@ -190,6 +190,7 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                 }
                 if (listT.Count > 0)
                 {
+                    MergeInferredTableTypes(schemaDir, listT);
                     _cache = listT.OrderBy(t => t.Schema).ThenBy(t => t.Name).ToList();
                     return _cache; // success via expanded folder
                 }
@@ -307,6 +308,89 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
         udttsDocument?.Dispose();
         _cache = ordered;
         return _cache;
+    }
+
+    private static void MergeInferredTableTypes(string schemaDir, List<TableTypeInfo> existing)
+    {
+        if (existing is null)
+        {
+            return;
+        }
+
+        var procDir = Path.Combine(schemaDir, "procedures");
+        if (!Directory.Exists(procDir))
+        {
+            return;
+        }
+
+        var procFiles = Directory.GetFiles(procDir, "*.json");
+        var inferred = new Dictionary<string, TableTypeInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pf in procFiles)
+        {
+            try
+            {
+                using var pfs = File.OpenRead(pf);
+                using var pdoc = JsonDocument.Parse(pfs);
+                var root = pdoc.RootElement;
+                var procSchema = root.GetPropertyOrDefault("Schema") ?? "dbo";
+                if ((root.TryGetProperty("Parameters", out var inputsEl) && inputsEl.ValueKind == JsonValueKind.Array) ||
+                    (root.TryGetProperty("Inputs", out inputsEl) && inputsEl.ValueKind == JsonValueKind.Array))
+                {
+                    foreach (var ip in inputsEl.EnumerateArray())
+                    {
+                        var typeRef = ip.GetPropertyOrDefault("TypeRef");
+                        bool isTt = ip.GetPropertyOrDefaultBool("IsTableType");
+                        var ttCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
+                        var ttCatalog = string.IsNullOrWhiteSpace(ttCatalogRaw) ? null : ttCatalogRaw;
+                        var ttSchema = ip.GetPropertyOrDefault("TableTypeSchema");
+                        var ttName = ip.GetPropertyOrDefault("TableTypeName") ?? ip.GetPropertyOrDefault("Name")?.TrimStart('@') ?? string.Empty;
+
+                        if (!isTt && !string.IsNullOrWhiteSpace(ttName))
+                        {
+                            isTt = true;
+                        }
+
+                        if (!isTt && !string.IsNullOrWhiteSpace(typeRef))
+                        {
+                            var (catalogFromRef, schemaFromRef, nameFromRef) = SplitTypeRef(typeRef);
+                            if (!string.IsNullOrWhiteSpace(schemaFromRef) && !string.Equals(schemaFromRef, "sys", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(nameFromRef))
+                            {
+                                isTt = true;
+                                ttCatalog ??= catalogFromRef;
+                                ttSchema ??= schemaFromRef;
+                                if (string.IsNullOrWhiteSpace(ttName))
+                                {
+                                    ttName = nameFromRef;
+                                }
+                            }
+                        }
+
+                        if (!isTt) continue;
+                        ttSchema ??= procSchema;
+                        if (string.IsNullOrWhiteSpace(ttName)) continue;
+                        var key = (ttCatalog is { Length: > 0 } ? ttCatalog + "." : string.Empty) + ttSchema + "." + ttName;
+                        if (!inferred.ContainsKey(key))
+                        {
+                            inferred[key] = new TableTypeInfo { Catalog = ttCatalog, Schema = ttSchema, Name = ttName, Columns = Array.Empty<ColumnInfo>() };
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var kvp in inferred)
+        {
+            var matches = existing.Any(tt =>
+                string.Equals(tt.Schema, kvp.Value.Schema, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(tt.Name, kvp.Value.Name, StringComparison.OrdinalIgnoreCase));
+            if (!matches)
+            {
+                existing.Add(kvp.Value);
+            }
+        }
     }
 
     private static (string? Catalog, string? Schema, string? Name) SplitTypeRef(string? typeRef)

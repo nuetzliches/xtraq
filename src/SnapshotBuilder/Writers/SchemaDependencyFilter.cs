@@ -137,6 +137,7 @@ internal sealed class SchemaDependencyFilter
             }
 
             var parts = SnapshotWriterUtilities.SplitTypeRefParts(typeRef);
+            TryAdd(_tableTypes, parts.Catalog, parts.Schema, parts.Name);
             RegisterSchema(parts.Schema);
         }
     }

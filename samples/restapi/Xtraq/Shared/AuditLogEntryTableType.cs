@@ -18,11 +18,6 @@ namespace Xtraq.Samples.RestApi.Xtraq.Shared;
 /// </remarks>
 public sealed record AuditLogEntryTableType : ITableType
 {
-    public string Source { get; init; } = string.Empty;
-    public string Message { get; init; } = string.Empty;
-    public byte Severity { get; init; }
-    public Guid? CorrelationId { get; init; }
-    public string? Details { get; init; }
 #if XTRAQ_ENFORCE_TABLETYPE_BUILDER
 	#warning Use the 'AuditLogEntryTableTypeBuilder' or factory method instead of object initializers.
 #endif
@@ -31,20 +26,10 @@ public sealed record AuditLogEntryTableType : ITableType
 	public AuditLogEntryTableType() { }
 
 	public static AuditLogEntryTableType Create(
-        string Source,
-        string Message,
-        byte Severity,
-        Guid? CorrelationId,
-        string? Details
     ) =>
 	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
 	new AuditLogEntryTableType
 	{
-        Source = Source,
-        Message = Message,
-        Severity = Severity,
-        CorrelationId = CorrelationId,
-        Details = Details
     };
 	#pragma warning restore CS0612, CS0618
 
@@ -52,26 +37,11 @@ public sealed record AuditLogEntryTableType : ITableType
 
 	public sealed class AuditLogEntryTableTypeBuilder
 	{
-        private string _Source = string.Empty;
-        private string _Message = string.Empty;
-        private byte _Severity;
-        private Guid? _CorrelationId;
-        private string? _Details;
-        public AuditLogEntryTableTypeBuilder WithSource(string value) { _Source = value; return this; }
-        public AuditLogEntryTableTypeBuilder WithMessage(string value) { _Message = value; return this; }
-        public AuditLogEntryTableTypeBuilder WithSeverity(byte value) { _Severity = value; return this; }
-        public AuditLogEntryTableTypeBuilder WithCorrelationId(Guid? value) { _CorrelationId = value; return this; }
-        public AuditLogEntryTableTypeBuilder WithDetails(string? value) { _Details = value; return this; }
         public AuditLogEntryTableType Build()
         {
 			#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
 			var result = new AuditLogEntryTableType
             {
-                Source = _Source,
-                Message = _Message,
-                Severity = _Severity,
-                CorrelationId = _CorrelationId,
-                Details = _Details
             };
 			#pragma warning restore CS0612, CS0618
 #if XTRAQ_ENABLE_TABLETYPE_VALIDATION
