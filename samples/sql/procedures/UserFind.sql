@@ -2,7 +2,7 @@ USE XtraqSample;
 GO
 
 CREATE OR ALTER PROCEDURE sample.UserFind
-    @UserId INT
+    @UserId shared.pkInt
 AS
 BEGIN
     SET NOCOUNT ON;

@@ -12,3 +12,9 @@ BEGIN
     EXEC(N'CREATE TYPE sample.JsonDocument FROM NVARCHAR(MAX) NULL');
 END;
 GO
+
+IF TYPE_ID(N'shared.pkInt') IS NULL
+BEGIN
+    EXEC(N'CREATE TYPE shared.pkInt FROM INT NOT NULL');
+END;
+GO

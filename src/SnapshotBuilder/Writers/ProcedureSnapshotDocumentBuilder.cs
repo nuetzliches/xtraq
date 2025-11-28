@@ -53,19 +53,31 @@ internal static class ProcedureSnapshotDocumentBuilder
                 }
 
                 var rawTypeRef = SnapshotWriterUtilities.BuildTypeRef(input);
-                var normalizedTypeRef = TableTypeRefFormatter.Normalize(rawTypeRef);
-                var typeRefToPersist = !string.IsNullOrWhiteSpace(normalizedTypeRef) ? normalizedTypeRef : rawTypeRef;
+                var userTypeRef = SnapshotWriterUtilities.BuildUserTypeRef(input);
+                var baseTypeRef = SnapshotWriterUtilities.BuildBaseTypeRef(input);
+
+                var primaryTypeRef = input.IsTableType
+                    ? (TableTypeRefFormatter.Normalize(rawTypeRef) ?? rawTypeRef)
+                    : (TableTypeRefFormatter.Normalize(baseTypeRef) ?? baseTypeRef ?? TableTypeRefFormatter.Normalize(rawTypeRef) ?? rawTypeRef);
+
+                var typeRefToPersist = primaryTypeRef;
                 if (!string.IsNullOrWhiteSpace(typeRefToPersist))
                 {
                     writer.WriteString("TypeRef", typeRefToPersist);
                     SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, typeRefToPersist);
                 }
 
+                if (!string.IsNullOrWhiteSpace(userTypeRef) && !string.Equals(userTypeRef, typeRefToPersist, StringComparison.OrdinalIgnoreCase))
+                {
+                    writer.WriteString("UserTypeRef", userTypeRef);
+                    SnapshotWriterUtilities.RegisterTypeRef(requiredTypeRefs, userTypeRef);
+                }
+
                 if (input.IsTableType)
                 {
-                    var candidateRef = string.IsNullOrWhiteSpace(normalizedTypeRef)
-                        ? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(input.UserTypeSchemaName, input.UserTypeName))
-                        : normalizedTypeRef;
+                    var candidateRef = TableTypeRefFormatter.Normalize(rawTypeRef)
+                        ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(input.UserTypeSchemaName, input.UserTypeName))
+                        ?? rawTypeRef;
 
                     if (!string.IsNullOrWhiteSpace(candidateRef))
                     {

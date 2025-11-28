@@ -1,5 +1,6 @@
 using Xtraq.Data.Models;
 using Xtraq.Data.Queries;
+using Xtraq.Services;
 using Xtraq.SnapshotBuilder.Models;
 using Xtraq.Utils;
 
@@ -32,18 +33,42 @@ internal static class SnapshotWriterUtilities
             return BuildTypeRef(null, input.UserTypeSchemaName, input.UserTypeName);
         }
 
-        if (!string.IsNullOrWhiteSpace(input.UserTypeSchemaName) && !string.IsNullOrWhiteSpace(input.UserTypeName))
+        return BuildBaseTypeRef(input);
+    }
+
+    internal static string? BuildBaseTypeRef(StoredProcedureInput input)
+    {
+        if (input == null)
         {
-            return BuildTypeRef(null, input.UserTypeSchemaName, input.UserTypeName);
+            return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(input.SqlTypeName))
+        var candidate = input.BaseSqlTypeName;
+        candidate ??= input.SqlTypeName;
+
+        if (!string.IsNullOrWhiteSpace(candidate))
         {
-            var normalized = NormalizeSqlTypeName(input.SqlTypeName);
+            var normalized = NormalizeSqlTypeName(candidate);
             if (!string.IsNullOrWhiteSpace(normalized))
             {
                 return BuildTypeRef("sys", normalized);
             }
+        }
+
+        return null;
+    }
+
+    internal static string? BuildUserTypeRef(StoredProcedureInput input)
+    {
+        if (input == null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.UserTypeSchemaName) && !string.IsNullOrWhiteSpace(input.UserTypeName))
+        {
+            var combined = BuildTypeRef(input.UserTypeSchemaName, input.UserTypeName);
+            return TableTypeRefFormatter.Normalize(combined) ?? combined;
         }
 
         return null;
