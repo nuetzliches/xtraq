@@ -1209,9 +1209,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             ApplyTypeMetadata(column, columnInfo);
 
             if (aliasInfo.ForceNullableColumns)
-            {
-                column.ForcedNullable ??= true;
-            }
+                MarkColumnForcedNullable(column);
         }
 
         private void ApplyJsonPathMetadata(ProcedureResultColumn column, Dictionary<string, JsonPathBinding> bindings)
@@ -1329,6 +1327,16 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             hints[key] = aliasInfo;
+        }
+
+        private static void MarkColumnForcedNullable(ProcedureResultColumn? column)
+        {
+            if (column == null)
+            {
+                return;
+            }
+
+            column.ForcedNullable = true;
         }
 
         private TableAliasInfo? ResolveJsonPathAlias(ProcedureResultColumn column, Dictionary<string, TableAliasInfo>? scope)
@@ -1661,7 +1669,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             column.IsNullable = true;
-            column.ForcedNullable ??= true;
+            MarkColumnForcedNullable(column);
         }
 
         private static bool ScalarSubqueryCanBeRowless(QuerySpecification query)
@@ -2238,7 +2246,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
                     break;
                 case DefaultLiteral:
-                    column.ForcedNullable ??= true;
+                    MarkColumnForcedNullable(column);
                     column.IsAmbiguous ??= true;
                     column.IsNullable ??= true;
                     var defaultMetadata = TryResolveScalarMetadata(column);
@@ -3737,7 +3745,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
                     if (resolved.ForceNullableColumns)
                     {
-                        column.ForcedNullable ??= true;
+                        MarkColumnForcedNullable(column);
                     }
                 }
                 else
@@ -5914,7 +5922,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
             if (alias.ForceNullableColumns)
             {
-                column.ForcedNullable ??= true;
+                MarkColumnForcedNullable(column);
             }
         }
 

@@ -1079,15 +1079,16 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                 return;
                             }
 
+                            var fieldNullable = field.IsNullable || field.ForcedNullable;
                             string path = string.Empty;
                             for (int i = 0; i < parts.Length - 1; i++)
                             {
                                 path = string.IsNullOrEmpty(path) ? parts[i] : string.Concat(path, ".", parts[i]);
                                 if (!groupNullability.TryGetValue(path, out var existing))
                                 {
-                                    groupNullability[path] = field.IsNullable;
+                                    groupNullability[path] = fieldNullable;
                                 }
-                                else if (field.IsNullable && !existing)
+                                else if (fieldNullable && !existing)
                                 {
                                     groupNullability[path] = true;
                                 }

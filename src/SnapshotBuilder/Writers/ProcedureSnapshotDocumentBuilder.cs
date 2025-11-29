@@ -272,7 +272,8 @@ internal static class ProcedureSnapshotDocumentBuilder
         ISet<string>? requiredTypeRefs,
         ISet<string>? requiredTableRefs,
         IJsonFunctionEnhancementService? jsonEnhancementService = null,
-        ProcedureDescriptor? descriptor = null)
+        ProcedureDescriptor? descriptor = null,
+        bool isNestedColumn = false)
     {
         writer.WriteStartObject();
         if (!string.IsNullOrWhiteSpace(column.Name))
@@ -402,7 +403,8 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("SqlTypeName", sqlTypeName);
         }
 
-        if (SnapshotWriterUtilities.ShouldEmitIsNullable(column.IsNullable, typeRef))
+        var emitIsNullable = column.IsNullable == true || (!isNestedColumn && column.ForcedNullable == true);
+        if (SnapshotWriterUtilities.ShouldEmitIsNullable(emitIsNullable, typeRef))
         {
             writer.WriteBoolean("IsNullable", true);
         }
@@ -429,7 +431,7 @@ internal static class ProcedureSnapshotDocumentBuilder
                     continue;
                 }
 
-                WriteResultColumn(writer, child, requiredTypeRefs, requiredTableRefs, jsonEnhancementService, descriptor);
+                WriteResultColumn(writer, child, requiredTypeRefs, requiredTableRefs, jsonEnhancementService, descriptor, isNestedColumn: true);
             }
 
             writer.WriteEndArray();

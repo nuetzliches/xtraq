@@ -85,7 +85,7 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
     }
 
     [Xunit.Fact]
-    public void BuildProcedureJson_DoesNotFlipIsNullableWhenOnlyForcedNullable()
+    public void BuildProcedureJson_MarksIsNullableWhenOnlyForcedNullable()
     {
         var descriptor = new ProcedureDescriptor { Schema = "sample", Name = "ForcedNullableProbe" };
         var procedure = new ProcedureModel();
@@ -115,7 +115,51 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
             .GetProperty("ResultSets")[0]
             .GetProperty("Columns")[0];
 
-        Xunit.Assert.False(persistedColumn.TryGetProperty("IsNullable", out _));
+        Xunit.Assert.True(persistedColumn.GetProperty("IsNullable").GetBoolean());
         Xunit.Assert.True(persistedColumn.GetProperty("ForcedNullable").GetBoolean());
+    }
+
+    [Xunit.Fact]
+    public void BuildProcedureJson_SkipsIsNullableForNestedForcedOnlyColumns()
+    {
+        var descriptor = new ProcedureDescriptor { Schema = "sample", Name = "NestedForcedProbe" };
+        var procedure = new ProcedureModel();
+        var resultSet = new ProcedureResultSet();
+
+        var nestedColumn = new ProcedureResultColumn
+        {
+            Name = "InnerValue",
+            SqlTypeName = "int",
+            ForcedNullable = true,
+            IsNullable = false
+        };
+
+        var container = new ProcedureResultColumn
+        {
+            Name = "Envelope",
+            ReturnsJson = true
+        };
+        container.Columns.Add(nestedColumn);
+
+        resultSet.Columns.Add(container);
+        procedure.ResultSets.Add(resultSet);
+
+        var payload = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
+            descriptor,
+            System.Array.Empty<StoredProcedureInput>(),
+            procedure,
+            requiredTypeRefs: null,
+            requiredTableTypeRefs: null,
+            requiredTableRefs: null,
+            jsonEnhancementService: null);
+
+        using var document = JsonDocument.Parse(payload);
+        var persistedChild = document.RootElement
+            .GetProperty("ResultSets")[0]
+            .GetProperty("Columns")[0]
+            .GetProperty("Columns")[0];
+
+        Xunit.Assert.True(persistedChild.GetProperty("ForcedNullable").GetBoolean());
+        Xunit.Assert.False(persistedChild.TryGetProperty("IsNullable", out _));
     }
 }
