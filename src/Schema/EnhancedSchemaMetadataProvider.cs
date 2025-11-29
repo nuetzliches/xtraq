@@ -467,12 +467,13 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         var normalizedType = NormalizeSqlTypeName(column.SqlTypeName);
         var name = !string.IsNullOrWhiteSpace(column.SourceColumn) ? column.SourceColumn! : column.Name ?? fallbackName;
         var (userTypeSchema, userTypeName) = SnapshotWriterUtilities.SplitTypeRef(column.UserTypeRef);
+        var effectiveNullable = column.IsNullable || column.ForcedNullable;
 
         return new ColumnMetadata
         {
             Name = name ?? string.Empty,
             SqlTypeName = normalizedType ?? string.Empty,
-            IsNullable = column.IsNullable,
+            IsNullable = effectiveNullable,
             MaxLength = column.MaxLength,
             Precision = column.Precision,
             Scale = column.Scale,

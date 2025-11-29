@@ -402,8 +402,7 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("SqlTypeName", sqlTypeName);
         }
 
-        var effectiveIsNullable = column.IsNullable == true || column.ForcedNullable == true;
-        if (SnapshotWriterUtilities.ShouldEmitIsNullable(effectiveIsNullable, typeRef))
+        if (SnapshotWriterUtilities.ShouldEmitIsNullable(column.IsNullable, typeRef))
         {
             writer.WriteBoolean("IsNullable", true);
         }
