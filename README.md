@@ -7,8 +7,6 @@
 
 Xtraq turns SQL Server stored procedures into strongly typed, production-ready C# libraries. The CLI targets .NET 10.0 by default while staying multi-targeted for .NET 8.0 clients that need the current LTS.
 
-**Status: Release Candidate** — config schema and templates are stable (`Api.*`, `EntityFramework.Enabled`, `ResultSet.Json.IncludeNullValues`). Regenerate artefacts with `xtraq build` to pick up the latest symbols.
-
 ## What Xtraq does
 
 - **Generates C# access layers** from stored procedures, including inputs, result models, context helpers, and execution pipelines.
@@ -50,23 +48,7 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — primary target framework for new generators and samples.
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — optional when you must build against the current LTS.
 
-## Configuration highlights
-
-```jsonc
-{
-  "Api": {
-    "Mode": "Minimal",
-    "Requests": {
-      "AutoBind": ["@UserId INT"],
-      "AutoBindProcedures": ["sample.UserCompositeJsonSnapshot"]
-    }
-  },
-  "EntityFramework": { "Enabled": true },
-  "ResultSet": { "Json": { "IncludeNullValues": false } }
-}
-```
-
-- Generated artefacts are read-only — rerun `xtraq build` rather than editing `*/Xtraq/` folders.
+- Generated artefacts are read-only — rerun `xtraq` rather than editing `*/Xtraq/` folders.
 
 ## License
 

@@ -348,14 +348,14 @@ internal sealed class XtraqCliRuntime(
         return ExecuteResultEnum.Succeeded;
     }
 
-    public Task<ExecuteResultEnum> BuildAsync(ICommandOptions options)
+    public Task<ExecuteResultEnum> BuildAsync(ICommandOptions options, bool refreshSnapshotRequested = false)
     {
         // Update debug output settings from command options
         DebugOutputHelper.UpdateFromOptions(options.Verbose, options.Debug);
-        return RunWithWarningSummaryAsync(() => BuildCoreAsync(options));
+        return RunWithWarningSummaryAsync(() => BuildCoreAsync(options, refreshSnapshotRequested));
     }
 
-    private async Task<ExecuteResultEnum> BuildCoreAsync(ICommandOptions options)
+    private async Task<ExecuteResultEnum> BuildCoreAsync(ICommandOptions options, bool refreshSnapshotRequested)
     {
         if (options.Telemetry)
         {
@@ -419,7 +419,9 @@ internal sealed class XtraqCliRuntime(
             }
         }
 
-        if (!await EnsureSnapshotAsync(workingDirectory))
+        var configuredSchemas = cfg.BuildSchemas ?? Array.Empty<string>();
+
+        if (!await EnsureSnapshotAsync(workingDirectory, configuredSchemas, refreshSnapshotRequested))
         {
             return ExecuteResultEnum.Error;
         }
@@ -441,7 +443,6 @@ internal sealed class XtraqCliRuntime(
                 }
             }
 
-            var configuredSchemas = cfg.BuildSchemas ?? Array.Empty<string>();
             var resolutionRequest = new SnapshotResolutionRequest
             {
                 ConnectionString = cfg.GeneratorConnectionString,
@@ -1221,24 +1222,65 @@ internal sealed class XtraqCliRuntime(
     }
 
 
-    private Task<bool> EnsureSnapshotAsync(string workingDirectory)
+    /// <summary>
+    /// Ensures snapshot artifacts exist before executing the build pipeline.
+    /// </summary>
+    private Task<bool> EnsureSnapshotAsync(string workingDirectory, IReadOnlyCollection<string> configuredSchemas, bool refreshSnapshotRequested)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+        ArgumentNullException.ThrowIfNull(configuredSchemas);
+
         try
         {
-            var schemaDir = Path.Combine(workingDirectory, ".xtraq", "snapshots");
-            if (!Directory.Exists(schemaDir) || Directory.GetFiles(schemaDir, "*.json").Length == 0)
+            var snapshotRoot = Path.Combine(workingDirectory, ".xtraq", "snapshots");
+            if (!Directory.Exists(snapshotRoot))
             {
-                consoleService.Error("No snapshot found. Run 'xtraq snapshot' before 'xtraq build'.");
-                consoleService.Output("\tUse 'xtraq build --refresh-snapshot' to refresh automatically.");
+                ReportMissingSnapshot(snapshotRoot, configuredSchemas, refreshSnapshotRequested);
                 return Task.FromResult(false);
             }
+
+            var hasArtifacts = Directory.EnumerateFiles(snapshotRoot, "*.json", SearchOption.TopDirectoryOnly).Any();
+            if (!hasArtifacts)
+            {
+                ReportMissingSnapshot(snapshotRoot, configuredSchemas, refreshSnapshotRequested);
+                return Task.FromResult(false);
+            }
+
             return Task.FromResult(true);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            consoleService.Error("Unable to verify snapshot presence.");
+            consoleService.Error($"Unable to verify snapshot presence: {ex.Message}");
             return Task.FromResult(false);
         }
+    }
+
+    private void ReportMissingSnapshot(string snapshotRoot, IReadOnlyCollection<string> configuredSchemas, bool refreshSnapshotRequested)
+    {
+        consoleService.Error("No snapshot artifacts are available for this project.");
+
+        if (refreshSnapshotRequested)
+        {
+            consoleService.Output("\tThe preceding '--refresh-snapshot' run did not produce any snapshot files.");
+        }
+        else
+        {
+            consoleService.Output("\tRun 'xtraq snapshot' or re-run the build with '--refresh-snapshot' to capture the schema.");
+        }
+
+        if (configuredSchemas.Count > 0)
+        {
+            var schemaList = string.Join(", ", configuredSchemas);
+            consoleService.Output($"\tConfigured BuildSchemas: {schemaList}");
+            consoleService.Output("\tVerify that these schemas exist in the generator database and contain stored procedures.");
+        }
+        else
+        {
+            consoleService.Output("\tNo BuildSchemas filter is configured. Ensure the generator database contains stored procedures.");
+        }
+
+        consoleService.Output("\tAn empty database or mismatched schema filter prevents snapshot emission.");
+        consoleService.Verbose($"\tExpected snapshot location: {snapshotRoot}");
     }
 
     private static List<GeneratedFileTelemetry> CollectGeneratedFiles(string outputRoot, DateTimeOffset buildStartUtc)

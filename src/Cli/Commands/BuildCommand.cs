@@ -29,7 +29,7 @@ internal sealed class BuildCommand : IXtraqCommand
             }
         }
 
-        var buildResult = await _runtime.BuildAsync(context.Options).ConfigureAwait(false);
+        var buildResult = await _runtime.BuildAsync(context.Options, context.RefreshSnapshot).ConfigureAwait(false);
         var buildExitCode = CommandResultMapper.Map(buildResult);
 
         if (context.Options.Telemetry && buildExitCode == ExitCodes.Success)

@@ -63,6 +63,7 @@
           "Alias": "PreferredContactEmail",
           "SourceColumn": "Email",
           "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
           "ForcedNullable": true,
           "MaxLength": 320,
           "FunctionRef": "sample.fnUserPreferredContact"
@@ -72,6 +73,7 @@
           "Alias": "PreferredContactDisplayName",
           "SourceColumn": "DisplayName",
           "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
           "ForcedNullable": true,
           "MaxLength": 200,
           "FunctionRef": "sample.fnUserPreferredContact"

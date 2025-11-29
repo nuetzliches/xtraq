@@ -27,6 +27,7 @@
           "Alias": "LatestOrderNumber",
           "SourceColumn": "OrderNumber",
           "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
           "ForcedNullable": true,
           "MaxLength": 40
         },
@@ -35,6 +36,7 @@
           "Alias": "LatestOrderTotalAmount",
           "SourceColumn": "TotalAmount",
           "TypeRef": "sys.decimal",
+          "IsNullable": true,
           "ForcedNullable": true,
           "MaxLength": 9
         },
@@ -43,6 +45,7 @@
           "Alias": "LatestOrderCurrency",
           "SourceColumn": "Currency",
           "TypeRef": "sys.char",
+          "IsNullable": true,
           "ForcedNullable": true,
           "MaxLength": 3
         },
@@ -59,7 +62,6 @@
           "Alias": "LatestOrderMetadata",
           "SourceColumn": "Metadata",
           "UserTypeRef": "sample.JsonDocument",
-          "SqlTypeName": "nvarchar",
           "IsNullable": true,
           "ForcedNullable": true
         },
@@ -68,6 +70,7 @@
           "Alias": "PendingOrderCount",
           "SourceColumn": "PendingCount",
           "TypeRef": "sys.bigint",
+          "IsNullable": true,
           "ForcedNullable": true
         },
         {
@@ -84,6 +87,7 @@
           "Alias": "CapturedPaymentCount",
           "SourceColumn": "PaymentId",
           "TypeRef": "sys.uniqueidentifier",
+          "IsNullable": true,
           "ForcedNullable": true
         },
         {
