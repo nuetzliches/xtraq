@@ -351,20 +351,6 @@ internal sealed class TableTypesGenerator : GeneratorBase
             attributes.Add($"[System.ComponentModel.DataAnnotations.StringLength({maxLength.Value})]");
         }
 
-        if (numericPrecision.HasValue && IsDecimalType(clrType))
-        {
-            var precisionLiteral = numericPrecision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (numericScale.HasValue)
-            {
-                var scaleLiteral = numericScale.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral}, {scaleLiteral})]");
-            }
-            else
-            {
-                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral})]");
-            }
-        }
-
         return attributes.Count == 0 ? Array.Empty<string>() : attributes;
     }
 
@@ -404,23 +390,6 @@ internal sealed class TableTypesGenerator : GeneratorBase
         }
 
         return !LooksLikeValueType(trimmed);
-    }
-
-    private static bool IsDecimalType(string clrType)
-    {
-        if (string.IsNullOrWhiteSpace(clrType))
-        {
-            return false;
-        }
-
-        var trimmed = clrType.Trim();
-        if (trimmed.EndsWith("?", StringComparison.Ordinal))
-        {
-            trimmed = trimmed[..^1];
-        }
-
-        return string.Equals(trimmed, "decimal", StringComparison.Ordinal)
-               || string.Equals(trimmed, "global::System.Decimal", StringComparison.Ordinal);
     }
 
     private static bool LooksLikeValueType(string clrType)

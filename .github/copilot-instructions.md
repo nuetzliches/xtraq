@@ -20,10 +20,7 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
 ## Project Structure
 
 - `src/`: Source code directory with comprehensive SQL Server code generation functionality
-  - `Program.cs`: Main CLI application entry point with Xtraq namespace
   - `Xtraq.csproj`: Multi-targeting project file (net8.0;net10.0) with Global Tool configuration
-  - `XtraqGenerator.cs`: Core code generation orchestrator
-  - Various subdirectories for CLI, Configuration, Data access, Generators, etc.
 - `.vscode/tasks.json`: VS Code build and run tasks
 - `README.md`: Project documentation
 - `docs/`: Documentation site powered by Docus 5 on Nuxt 4 (see `docs/content/4.meta/2.documentation-stack.md` for versioning & maintenance)
@@ -53,7 +50,7 @@ This is a .NET CLI application project with multi-targeting support for .NET 8 a
 - Treat generated artifacts as read-only. Do not edit files under `samples/restapi/Xtraq`, `debug/Xtraq`, or any other `Xtraq` artifact folders—rerun the generator instead.
 - After generation, run `dotnet format` as documented in `docs/content/4.meta/3.formatting-generated-artifacts.md` to keep emitted code aligned with the repository style rules.
 - Follow .NET coding conventions and best practices
-- **Configuration naming (alpha)**: Use the new config keys and env vars: `Api.Mode` (enum: `Minimal|None`), `Api.Requests.AutoBind*`, `EntityFramework.Enabled`, `ResultSet.Json.IncludeNullValues`.
+- **Configuration naming**: Use the new config keys and env vars: `Api.Mode` (enum: `Minimal|None`), `Api.Requests.AutoBind*`, `EntityFramework.Enabled`, `ResultSet.Json.IncludeNullValues`.
 - **Policies**: Prefer generic hooks (`DispatchExecutionPolicy`, `ResultCallbackExecutionPolicy`) over project-specific policies; keep custom logic outside generated `Xtraq/` folders.
 - **Generators/Templates**: Never hand-edit generated files; adjust templates under `src/Templates` or regenerate via `xtraq build`.
 

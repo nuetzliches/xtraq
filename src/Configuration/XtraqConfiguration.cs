@@ -50,7 +50,6 @@ public sealed class XtraqConfiguration
     /// Gets a value indicating whether result-set JSON should emit <c>[JsonIncludeNullValues]</c> attributes.
     /// </summary>
     public bool ResultSetJsonIncludeNullValues { get; init; }
-
     /// <summary>
     /// Loads the environment configuration by merging CLI overrides, environment variables, and .env settings.
     /// </summary>

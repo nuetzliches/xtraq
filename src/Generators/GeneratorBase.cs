@@ -48,4 +48,5 @@ internal abstract class GeneratorBase
 
         return EnvironmentHelper.IsTrue("XTRAQ_ENTITY_FRAMEWORK_ENABLED");
     }
+
 }

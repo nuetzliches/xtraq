@@ -2428,20 +2428,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
             attributes.Add($"[System.ComponentModel.DataAnnotations.StringLength({parameter.MaxLength.Value})]");
         }
 
-        if (ShouldEmitPrecisionAttribute(parameter))
-        {
-            var precisionLiteral = parameter.NumericPrecision!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (parameter.NumericScale.HasValue)
-            {
-                var scaleLiteral = parameter.NumericScale.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral}, {scaleLiteral})]");
-            }
-            else
-            {
-                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral})]");
-            }
-        }
-
         return attributes.Count == 0 ? Array.Empty<string>() : attributes;
     }
 
@@ -2476,7 +2462,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
         foreach (var attribute in attributes)
         {
-            destination.Add("    " + attribute);
+            var line = attribute.StartsWith("#", StringComparison.Ordinal)
+                ? attribute
+                : "    " + attribute;
+            destination.Add(line);
         }
     }
 
@@ -2534,9 +2523,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
         return !LooksLikeValueType(trimmed);
     }
-
-    private static bool ShouldEmitPrecisionAttribute(FieldDescriptor parameter)
-        => parameter.NumericPrecision.HasValue && IsDecimalType(parameter.ClrType);
 
     private static bool IsDecimalType(string clrType)
     {

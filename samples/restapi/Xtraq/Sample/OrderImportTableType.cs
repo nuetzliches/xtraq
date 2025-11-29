@@ -112,7 +112,6 @@ public sealed record OrderImportTableTypeRequest
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(40)]
     public string OrderNumber { get; init; }
-    [System.ComponentModel.DataAnnotations.Schema.Precision(18, 2)]
     public decimal TotalAmount { get; init; }
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(3)]
