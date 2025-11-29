@@ -31,7 +31,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserListRequest
 {
-    public bool? IncludeInactive { get; init; }
+    public bool IncludeInactive { get; init; }
 }
 
 public readonly record struct UserListInput(
@@ -74,7 +74,7 @@ internal static class UserListRequestMapper
     public static async ValueTask<UserListInput> ToInputAsync(UserListRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new UserListRequest();
-        var IncludeInactive = request.IncludeInactive;
+        bool? IncludeInactive = request.IncludeInactive;
         if (!HasValue(IncludeInactive))
         {
             throw new InvalidOperationException("Parameter @IncludeInactive must be supplied by the request or a configured binding.");

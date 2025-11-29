@@ -99,3 +99,54 @@ public sealed record OrderImportTableType : ITableType
 	}
 #endif
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+/// <summary>
+/// Minimal API request row mirroring the SQL table type <c>Sample.OrderImportTableType</c> with DataAnnotations metadata.
+/// </summary>
+public sealed record OrderImportTableTypeRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(120)]
+    public string UserAlias { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(40)]
+    public string OrderNumber { get; init; }
+    [System.ComponentModel.DataAnnotations.Schema.Precision(18, 2)]
+    public decimal TotalAmount { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(3)]
+    public string Currency { get; init; }
+    public DateTime PlacedAtUtc { get; init; }
+    public string? Metadata { get; init; }
+
+	internal OrderImportTableType ToTableType()
+		=> OrderImportTableType.Create(
+            UserAlias,
+            OrderNumber,
+            TotalAmount,
+            Currency,
+            PlacedAtUtc,
+            Metadata
+        );
+
+	internal static System.Collections.Generic.IReadOnlyList<OrderImportTableType>? ToTableTypes(System.Collections.Generic.IReadOnlyList<OrderImportTableTypeRequest>? source)
+	{
+		if (source is null) return null;
+		if (source.Count == 0) return System.Array.Empty<OrderImportTableType>();
+		var buffer = new OrderImportTableType[source.Count];
+		for (var i = 0; i < source.Count; i++)
+		{
+			var row = source[i];
+			if (row is null)
+			{
+				throw new System.InvalidOperationException("Table type rows cannot contain null entries.");
+			}
+
+			buffer[i] = row.ToTableType();
+		}
+
+		return buffer;
+	}
+}
+#endif

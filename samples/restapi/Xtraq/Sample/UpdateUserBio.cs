@@ -31,8 +31,10 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UpdateUserBioRequest
 {
-    public int? UserId { get; init; }
-    public string? Bio { get; init; }
+    public int UserId { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(4000)]
+    public string Bio { get; init; }
 }
 
 public readonly record struct UpdateUserBioInput(
@@ -71,12 +73,12 @@ internal static class UpdateUserBioRequestMapper
     public static async ValueTask<UpdateUserBioInput> ToInputAsync(UpdateUserBioRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new UpdateUserBioRequest();
-        var UserId = request.UserId;
+        int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
-        var Bio = request.Bio;
+        string? Bio = request.Bio;
         if (!HasValue(Bio))
         {
             throw new InvalidOperationException("Parameter @Bio must be supplied by the request or a configured binding.");

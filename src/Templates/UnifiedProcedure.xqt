@@ -21,7 +21,9 @@ namespace {{ Namespace }};
 /// </summary>
 public sealed record class {{ RequestTypeName }}
 {
-{{#each RequestPropertyParameters as parameter}}    public {{ parameter.RequestClrType }} {{ parameter.PropertyName }} { get; init; }
+{{#each RequestPropertyParameters as parameter}}
+{{#each parameter.PropertyBlockLines}}{{ this }}
+{{/each}}
 {{/each}}
 }
 
@@ -89,7 +91,8 @@ internal static class {{ ProcedureTypeName }}RequestMapper
     {
         request ??= new {{ RequestTypeName }}();
 {{#each RequestParameters as parameter}}
-	{{ parameter.RequestClrType }} {{ parameter.PropertyName }} = {{ parameter.Initializer }};
+{{#each parameter.InitializationLines}}{{ this }}
+{{/each}}
 {{#if EnableParameterBinding}}
 {{#if parameter.IsTableType}}
         if (!HasValue({{ parameter.PropertyName }}))
@@ -99,7 +102,7 @@ internal static class {{ ProcedureTypeName }}RequestMapper
 {{else}}
         if (!HasValue({{ parameter.PropertyName }}))
         {
-            {{ parameter.PropertyName }} = await ResolveAsync<{{ parameter.RequestClrType }}>(bindingProvider, "{{ ProcedureFullName }}", "@{{ parameter.Name }}", false, {{ parameter.PropertyName }}, cancellationToken).ConfigureAwait(false);
+	    {{ parameter.PropertyName }} = await ResolveAsync<{{ parameter.ResolverClrType }}>(bindingProvider, "{{ ProcedureFullName }}", "@{{ parameter.Name }}", false, {{ parameter.PropertyName }}, cancellationToken).ConfigureAwait(false);
         }
 {{/if}}
 {{/if}}

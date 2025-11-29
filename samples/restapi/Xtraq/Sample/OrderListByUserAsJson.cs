@@ -31,7 +31,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class OrderListByUserAsJsonRequest
 {
-    public int? UserId { get; init; }
+    public int UserId { get; init; }
 }
 
 public readonly record struct OrderListByUserAsJsonInput(
@@ -84,7 +84,7 @@ internal static class OrderListByUserAsJsonRequestMapper
     public static async ValueTask<OrderListByUserAsJsonInput> ToInputAsync(OrderListByUserAsJsonRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new OrderListByUserAsJsonRequest();
-        var UserId = request.UserId;
+        int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");

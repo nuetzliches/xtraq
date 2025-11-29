@@ -122,6 +122,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
         var emitJsonIncludeNullValues = ShouldEmitJsonIncludeNullValues();
         var emitEntityFrameworkIntegration = ShouldEmitEntityFrameworkIntegration();
+        var emitMinimalApiExtensions = ShouldEmitMinimalApiExtensions();
 
         // Check for explicit procedure filter first
         var buildProceduresRaw = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
@@ -385,7 +386,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                 var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures };
                 var builderCode = Templates.RenderRawTemplate(builderTpl, builderModel);
-                if (!ShouldEmitMinimalApiExtensions())
+                if (!emitMinimalApiExtensions)
                 {
                     builderCode = StripMinimalApiExtensions(builderCode);
                 }
@@ -1576,12 +1577,22 @@ internal sealed class ProceduresGenerator : GeneratorBase
                 var requestParameters = proc.InputParameters.Select((p, i) =>
                 {
                     var isTableType = tableTypeNames.Contains(p.Name);
-                    var requestClrType = BuildRequestClrType(p.ClrType);
+                    var requestClrType = p.ClrType;
                     var resolverClrType = BuildResolverClrType(p.ClrType);
                     var resolvedVar = "__resolved" + p.PropertyName;
                     var resolveAssignment = BuildResolveAssignment(p.ClrType, resolvedVar);
                     var emitProperty = ShouldExposeParameterOnRequest(enableParameterBinding, autoBindParameters, p.Name);
-                    var initializer = emitProperty ? $"request.{p.PropertyName}" : "default";
+                    var propertyAttributes = BuildRequestPropertyAttributes(p, emitProperty);
+                    var elementType = ResolveTableElementType(p.ClrType);
+                    var hasApiRequestProjection = emitProperty && emitMinimalApiExtensions && isTableType;
+                    var tableTypeRequestType = hasApiRequestProjection ? BuildTableTypeRequestType(elementType) : null;
+                    var apiRequestClrType = hasApiRequestProjection ? BuildTableTypeRequestClrType(requestClrType, elementType) : null;
+                    var propertyBlockLines = BuildRequestPropertyBlockLines(p.PropertyName, requestClrType, propertyAttributes, hasApiRequestProjection, apiRequestClrType);
+                    var defaultInitializer = emitProperty ? $"request.{p.PropertyName}" : "default";
+                    var apiInitializer = hasApiRequestProjection && !string.IsNullOrWhiteSpace(tableTypeRequestType)
+                        ? $"{tableTypeRequestType}.ToTableTypes(request.{p.PropertyName})"
+                        : null;
+                    var initializationLines = BuildRequestInitializationLines(resolverClrType, p.PropertyName, defaultInitializer, apiInitializer, hasApiRequestProjection);
 
                     return new
                     {
@@ -1592,12 +1603,14 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         IsNullable = p.IsNullable,
                         HasDefaultValue = p.HasDefaultValue ?? false,
                         IsTableType = isTableType,
-                        ElementType = ResolveTableElementType(p.ClrType),
+                        ElementType = elementType,
                         IsValueType = LooksLikeValueType(p.ClrType),
                         InputArgument = BuildInputArgument(p, isTableType),
                         Comma = i == proc.InputParameters.Count - 1 ? string.Empty : ",",
                         EmitProperty = emitProperty,
-                        Initializer = initializer,
+                        Attributes = propertyAttributes,
+                        PropertyBlockLines = propertyBlockLines,
+                        InitializationLines = initializationLines,
                         ResolverClrType = resolverClrType,
                         ResolvedVariableName = resolvedVar,
                         ResolveAssignment = resolveAssignment
@@ -2072,6 +2085,53 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return trimmed;
     }
 
+    private static string BuildTableTypeRequestType(string elementType)
+    {
+        if (string.IsNullOrWhiteSpace(elementType))
+        {
+            return elementType;
+        }
+
+        var trimmed = elementType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        return trimmed + "Request";
+    }
+
+    private static string? BuildTableTypeRequestClrType(string requestClrType, string elementType)
+    {
+        if (string.IsNullOrWhiteSpace(requestClrType) || string.IsNullOrWhiteSpace(elementType))
+        {
+            return requestClrType;
+        }
+
+        var trimmedElement = elementType.Trim();
+        if (trimmedElement.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmedElement = trimmedElement[..^1];
+        }
+
+        var replacement = trimmedElement + "Request";
+        var lastLt = requestClrType.LastIndexOf('<');
+        var lastGt = requestClrType.LastIndexOf('>');
+        if (lastLt >= 0 && lastGt > lastLt)
+        {
+            var prefix = requestClrType[..(lastLt + 1)];
+            var suffix = requestClrType[lastGt..];
+            return prefix + replacement + suffix;
+        }
+
+        if (requestClrType.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return requestClrType[..^2] + "Request[]";
+        }
+
+        return replacement;
+    }
+
     private static bool LooksLikeValueType(string clrType)
     {
         if (string.IsNullOrWhiteSpace(clrType)) return false;
@@ -2346,6 +2406,152 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return LooksLikeValueType(clrType)
             ? $"{variableName} ?? default"
             : $"{variableName} ?? default!";
+    }
+
+    private static IReadOnlyList<string> BuildRequestPropertyAttributes(FieldDescriptor parameter, bool emitProperty)
+    {
+        if (!emitProperty)
+        {
+            return Array.Empty<string>();
+        }
+
+        var attributes = new List<string>(capacity: 3);
+
+        if (!parameter.IsNullable && IsReferenceLikeType(parameter.ClrType))
+        {
+            attributes.Add("[System.ComponentModel.DataAnnotations.Required]");
+        }
+
+        if (parameter.MaxLength.HasValue && parameter.MaxLength.Value > 0 && IsStringType(parameter.ClrType))
+        {
+            attributes.Add($"[System.ComponentModel.DataAnnotations.StringLength({parameter.MaxLength.Value})]");
+        }
+
+        if (ShouldEmitPrecisionAttribute(parameter))
+        {
+            var precisionLiteral = parameter.NumericPrecision!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (parameter.NumericScale.HasValue)
+            {
+                var scaleLiteral = parameter.NumericScale.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral}, {scaleLiteral})]");
+            }
+            else
+            {
+                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral})]");
+            }
+        }
+
+        return attributes.Count == 0 ? Array.Empty<string>() : attributes;
+    }
+
+    private static IReadOnlyList<string> BuildRequestPropertyBlockLines(string propertyName, string requestClrType, IReadOnlyList<string> attributes, bool hasApiRequestProjection, string? apiRequestClrType)
+    {
+        var lines = new List<string>();
+        if (hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiRequestClrType))
+        {
+            lines.Add("#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL");
+            AppendAttributeLines(lines, attributes);
+            lines.Add($"    public {apiRequestClrType} {propertyName} {{ get; init; }}");
+            lines.Add("#else");
+            AppendAttributeLines(lines, attributes);
+            lines.Add($"    public {requestClrType} {propertyName} {{ get; init; }}");
+            lines.Add("#endif");
+        }
+        else
+        {
+            AppendAttributeLines(lines, attributes);
+            lines.Add($"    public {requestClrType} {propertyName} {{ get; init; }}");
+        }
+
+        return lines;
+    }
+
+    private static void AppendAttributeLines(List<string> destination, IReadOnlyList<string> attributes)
+    {
+        if (attributes is null || attributes.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var attribute in attributes)
+        {
+            destination.Add("    " + attribute);
+        }
+    }
+
+    private static IReadOnlyList<string> BuildRequestInitializationLines(string resolverClrType, string propertyName, string defaultInitializer, string? apiInitializer, bool hasApiRequestProjection)
+    {
+        if (hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiInitializer))
+        {
+            return new[]
+            {
+                "#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL",
+                $"        {resolverClrType} {propertyName} = {apiInitializer};",
+                "#else",
+                $"        {resolverClrType} {propertyName} = {defaultInitializer};",
+                "#endif"
+            };
+        }
+
+        return new[] { $"        {resolverClrType} {propertyName} = {defaultInitializer};" };
+    }
+
+    private static bool IsStringType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        return string.Equals(trimmed, "string", StringComparison.Ordinal)
+               || string.Equals(trimmed, "global::System.String", StringComparison.Ordinal);
+    }
+
+    private static bool IsReferenceLikeType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        if (trimmed.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return !LooksLikeValueType(trimmed);
+    }
+
+    private static bool ShouldEmitPrecisionAttribute(FieldDescriptor parameter)
+        => parameter.NumericPrecision.HasValue && IsDecimalType(parameter.ClrType);
+
+    private static bool IsDecimalType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        return string.Equals(trimmed, "decimal", StringComparison.Ordinal)
+               || string.Equals(trimmed, "global::System.Decimal", StringComparison.Ordinal);
     }
 
     private static readonly HashSet<string> CSharpKeywords = new(new[]

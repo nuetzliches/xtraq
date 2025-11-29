@@ -93,3 +93,49 @@ public sealed record AuditLogEntryTableType : ITableType
 	}
 #endif
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+/// <summary>
+/// Minimal API request row mirroring the SQL table type <c>Shared.AuditLogEntryTableType</c> with DataAnnotations metadata.
+/// </summary>
+public sealed record AuditLogEntryTableTypeRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(120)]
+    public string Source { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(4000)]
+    public string Message { get; init; }
+    public byte Severity { get; init; }
+    public Guid? CorrelationId { get; init; }
+    public string? Details { get; init; }
+
+	internal AuditLogEntryTableType ToTableType()
+		=> AuditLogEntryTableType.Create(
+            Source,
+            Message,
+            Severity,
+            CorrelationId,
+            Details
+        );
+
+	internal static System.Collections.Generic.IReadOnlyList<AuditLogEntryTableType>? ToTableTypes(System.Collections.Generic.IReadOnlyList<AuditLogEntryTableTypeRequest>? source)
+	{
+		if (source is null) return null;
+		if (source.Count == 0) return System.Array.Empty<AuditLogEntryTableType>();
+		var buffer = new AuditLogEntryTableType[source.Count];
+		for (var i = 0; i < source.Count; i++)
+		{
+			var row = source[i];
+			if (row is null)
+			{
+				throw new System.InvalidOperationException("Table type rows cannot contain null entries.");
+			}
+
+			buffer[i] = row.ToTableType();
+		}
+
+		return buffer;
+	}
+}
+#endif

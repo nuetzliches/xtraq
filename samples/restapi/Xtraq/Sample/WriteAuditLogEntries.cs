@@ -32,11 +32,10 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class WriteAuditLogEntriesRequest
 {
-    public IReadOnlyList<AuditLogEntryTableType>? Entries { get; init; }
 }
 
 public readonly record struct WriteAuditLogEntriesInput(
-    IReadOnlyList<AuditLogEntryTableType>? Entries
+    IReadOnlyList<AuditLogEntryTableType> Entries
 );
 
 public sealed class WriteAuditLogEntriesResult
@@ -56,7 +55,7 @@ internal static class WriteAuditLogEntriesRequestMapper
     public static async ValueTask<WriteAuditLogEntriesInput> ToInputAsync(WriteAuditLogEntriesRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new WriteAuditLogEntriesRequest();
-        var Entries = request.Entries;
+        IReadOnlyList<AuditLogEntryTableType>? Entries = default;
         if (!HasValue(Entries))
         {
             Entries = await ResolveTableAsync<AuditLogEntryTableType>(bindingProvider, "[sample].[WriteAuditLogEntries]", "@Entries", Entries, cancellationToken).ConfigureAwait(false);
@@ -67,7 +66,7 @@ internal static class WriteAuditLogEntriesRequestMapper
         }
 
         return new WriteAuditLogEntriesInput(
-            Entries
+            Entries!
         );
     }
 
@@ -133,7 +132,7 @@ internal static partial class WriteAuditLogEntriesPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (WriteAuditLogEntriesInput)state!;
-			{ var prm = cmd.Parameters["@Entries"]; var source = input.Entries; if (source != null) { var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; } if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "shared.AuditLogEntryTableType"; } }
+			{ var prm = cmd.Parameters["@Entries"]; var source = input.Entries; var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "shared.AuditLogEntryTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[WriteAuditLogEntries]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

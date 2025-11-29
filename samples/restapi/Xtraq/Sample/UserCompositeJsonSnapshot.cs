@@ -31,8 +31,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserCompositeJsonSnapshotRequest
 {
-    public int? UserId { get; init; }
-    public int? RecentPaymentCount { get; init; }
+    public int RecentPaymentCount { get; init; }
 }
 
 public readonly record struct UserCompositeJsonSnapshotInput(
@@ -112,19 +111,19 @@ internal static class UserCompositeJsonSnapshotRequestMapper
     public static async ValueTask<UserCompositeJsonSnapshotInput> ToInputAsync(UserCompositeJsonSnapshotRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new UserCompositeJsonSnapshotRequest();
-        var UserId = request.UserId;
+        int? UserId = default;
         if (!HasValue(UserId))
         {
-            UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
         }
         if (!HasValue(UserId))
         {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
-        var RecentPaymentCount = request.RecentPaymentCount;
+        int? RecentPaymentCount = request.RecentPaymentCount;
         if (!HasValue(RecentPaymentCount))
         {
-            RecentPaymentCount = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@RecentPaymentCount", false, RecentPaymentCount, cancellationToken).ConfigureAwait(false);
+	    RecentPaymentCount = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@RecentPaymentCount", false, RecentPaymentCount, cancellationToken).ConfigureAwait(false);
         }
         if (!HasValue(RecentPaymentCount))
         {

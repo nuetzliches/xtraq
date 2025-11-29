@@ -31,8 +31,8 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class OrderStatusReportRequest
 {
-    public DateTime? FromUtc { get; init; }
-    public DateTime? ToUtc { get; init; }
+    public DateTime FromUtc { get; init; }
+    public DateTime ToUtc { get; init; }
 }
 
 public readonly record struct OrderStatusReportInput(
@@ -72,12 +72,12 @@ internal static class OrderStatusReportRequestMapper
     public static async ValueTask<OrderStatusReportInput> ToInputAsync(OrderStatusReportRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new OrderStatusReportRequest();
-        var FromUtc = request.FromUtc;
+        DateTime? FromUtc = request.FromUtc;
         if (!HasValue(FromUtc))
         {
             throw new InvalidOperationException("Parameter @FromUtc must be supplied by the request or a configured binding.");
         }
-        var ToUtc = request.ToUtc;
+        DateTime? ToUtc = request.ToUtc;
         if (!HasValue(ToUtc))
         {
             throw new InvalidOperationException("Parameter @ToUtc must be supplied by the request or a configured binding.");

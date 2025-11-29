@@ -99,3 +99,52 @@ public sealed record UserContactTableType : ITableType
 	}
 #endif
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+/// <summary>
+/// Minimal API request row mirroring the SQL table type <c>Sample.UserContactTableType</c> with DataAnnotations metadata.
+/// </summary>
+public sealed record UserContactTableTypeRequest
+{
+    public int UserId { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(320)]
+    public string Email { get; init; }
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(200)]
+    public string DisplayName { get; init; }
+    [System.ComponentModel.DataAnnotations.StringLength(50)]
+    public string? Source { get; init; }
+    public bool? Preferred { get; init; }
+    public DateTime? LastInteractionUtc { get; init; }
+
+	internal UserContactTableType ToTableType()
+		=> UserContactTableType.Create(
+            UserId,
+            Email,
+            DisplayName,
+            Source,
+            Preferred,
+            LastInteractionUtc
+        );
+
+	internal static System.Collections.Generic.IReadOnlyList<UserContactTableType>? ToTableTypes(System.Collections.Generic.IReadOnlyList<UserContactTableTypeRequest>? source)
+	{
+		if (source is null) return null;
+		if (source.Count == 0) return System.Array.Empty<UserContactTableType>();
+		var buffer = new UserContactTableType[source.Count];
+		for (var i = 0; i < source.Count; i++)
+		{
+			var row = source[i];
+			if (row is null)
+			{
+				throw new System.InvalidOperationException("Table type rows cannot contain null entries.");
+			}
+
+			buffer[i] = row.ToTableType();
+		}
+
+		return buffer;
+	}
+}
+#endif

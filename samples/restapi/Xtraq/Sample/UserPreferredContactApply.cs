@@ -31,8 +31,8 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserPreferredContactApplyRequest
 {
-    public int? UserId { get; init; }
-    public bool? OnlyPreferred { get; init; }
+    public int UserId { get; init; }
+    public bool OnlyPreferred { get; init; }
 }
 
 public readonly record struct UserPreferredContactApplyInput(
@@ -99,12 +99,12 @@ internal static class UserPreferredContactApplyRequestMapper
     public static async ValueTask<UserPreferredContactApplyInput> ToInputAsync(UserPreferredContactApplyRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new UserPreferredContactApplyRequest();
-        var UserId = request.UserId;
+        int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
-        var OnlyPreferred = request.OnlyPreferred;
+        bool? OnlyPreferred = request.OnlyPreferred;
         if (!HasValue(OnlyPreferred))
         {
             throw new InvalidOperationException("Parameter @OnlyPreferred must be supplied by the request or a configured binding.");

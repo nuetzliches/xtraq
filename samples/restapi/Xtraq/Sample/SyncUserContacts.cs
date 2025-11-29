@@ -31,11 +31,17 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class SyncUserContactsRequest
 {
-    public IReadOnlyList<UserContactTableType>? Contacts { get; init; }
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+    [System.ComponentModel.DataAnnotations.Required]
+    public IReadOnlyList<UserContactTableTypeRequest> Contacts { get; init; }
+#else
+    [System.ComponentModel.DataAnnotations.Required]
+    public IReadOnlyList<UserContactTableType> Contacts { get; init; }
+#endif
 }
 
 public readonly record struct SyncUserContactsInput(
-    IReadOnlyList<UserContactTableType>? Contacts
+    IReadOnlyList<UserContactTableType> Contacts
 );
 
 /// <summary>
@@ -73,14 +79,18 @@ internal static class SyncUserContactsRequestMapper
     public static async ValueTask<SyncUserContactsInput> ToInputAsync(SyncUserContactsRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new SyncUserContactsRequest();
-        var Contacts = request.Contacts;
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+        IReadOnlyList<UserContactTableType>? Contacts = UserContactTableTypeRequest.ToTableTypes(request.Contacts);
+#else
+        IReadOnlyList<UserContactTableType>? Contacts = request.Contacts;
+#endif
         if (!HasValue(Contacts))
         {
             throw new InvalidOperationException("Parameter @Contacts must be supplied by the request or a configured binding.");
         }
 
         return new SyncUserContactsInput(
-            Contacts
+            Contacts!
         );
     }
 
@@ -155,7 +165,7 @@ internal static partial class SyncUserContactsPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (SyncUserContactsInput)state!;
-			{ var prm = cmd.Parameters["@Contacts"]; var source = input.Contacts; if (source != null) { var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; } if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "sample.UserContactTableType"; } }
+			{ var prm = cmd.Parameters["@Contacts"]; var source = input.Contacts; var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "sample.UserContactTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[SyncUserContacts]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

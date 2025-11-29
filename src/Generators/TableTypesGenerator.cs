@@ -145,15 +145,31 @@ internal sealed class TableTypesGenerator : GeneratorBase
                 var propertyName = Xtraq.Utils.NameSanitizer.SanitizeIdentifier(c.Name);
                 var clrType = MapSqlToClr(c.SqlType, c.IsNullable);
                 var (propertyInitializer, builderInitializer) = GetInitializers(clrType);
+                var requestAttributes = BuildRequestAttributes(clrType, c.IsNullable, c.MaxLength, c.Precision, c.Scale);
                 return new
                 {
                     c.Name,
                     PropertyName = propertyName,
                     ClrType = clrType,
                     PropertyInitializer = propertyInitializer,
-                    BuilderInitializer = builderInitializer
+                    BuilderInitializer = builderInitializer,
+                    RequestAttributes = requestAttributes,
+                    RequestSeparator = string.Empty
                 };
             }).ToList();
+            for (var idx = 0; idx < cols.Count; idx++)
+            {
+                cols[idx] = new
+                {
+                    cols[idx].Name,
+                    cols[idx].PropertyName,
+                    cols[idx].ClrType,
+                    cols[idx].PropertyInitializer,
+                    cols[idx].BuilderInitializer,
+                    cols[idx].RequestAttributes,
+                    RequestSeparator = idx == cols.Count - 1 ? string.Empty : ","
+                };
+            }
             // Consistent naming with input mapping: CLR type uses Pascal(TableTypeName) without an extra 'Table' suffix
             var typeName = Xtraq.Utils.NameSanitizer.SanitizeIdentifier(tt.Name); // do not append suffix
             // Remove obsolete file with 'Table' suffix if present
@@ -175,7 +191,9 @@ internal sealed class TableTypesGenerator : GeneratorBase
                     c.ClrType,
                     c.PropertyInitializer,
                     c.BuilderInitializer,
-                    Separator = idx == cols.Count - 1 ? string.Empty : ","
+                    Separator = idx == cols.Count - 1 ? string.Empty : ",",
+                    RequestAttributes = c.RequestAttributes,
+                    RequestSeparator = c.RequestSeparator
                 }).ToList(),
                 ColumnsCount = cols.Count,
                 // Deterministic placeholder instead of real timestamp
@@ -319,4 +337,116 @@ internal sealed class TableTypesGenerator : GeneratorBase
         return (" = default!;", " = default!");
     }
 
+    private static IReadOnlyList<string> BuildRequestAttributes(string clrType, bool isNullable, int? maxLength, int? numericPrecision, int? numericScale)
+    {
+        var attributes = new List<string>(capacity: 3);
+
+        if (!isNullable && IsReferenceLikeType(clrType))
+        {
+            attributes.Add("[System.ComponentModel.DataAnnotations.Required]");
+        }
+
+        if (maxLength.HasValue && maxLength.Value > 0 && IsStringType(clrType))
+        {
+            attributes.Add($"[System.ComponentModel.DataAnnotations.StringLength({maxLength.Value})]");
+        }
+
+        if (numericPrecision.HasValue && IsDecimalType(clrType))
+        {
+            var precisionLiteral = numericPrecision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (numericScale.HasValue)
+            {
+                var scaleLiteral = numericScale.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral}, {scaleLiteral})]");
+            }
+            else
+            {
+                attributes.Add($"[System.ComponentModel.DataAnnotations.Schema.Precision({precisionLiteral})]");
+            }
+        }
+
+        return attributes.Count == 0 ? Array.Empty<string>() : attributes;
+    }
+
+    private static bool IsStringType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        return string.Equals(trimmed, "string", StringComparison.Ordinal)
+               || string.Equals(trimmed, "global::System.String", StringComparison.Ordinal);
+    }
+
+    private static bool IsReferenceLikeType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        if (trimmed.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return !LooksLikeValueType(trimmed);
+    }
+
+    private static bool IsDecimalType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        return string.Equals(trimmed, "decimal", StringComparison.Ordinal)
+               || string.Equals(trimmed, "global::System.Decimal", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeValueType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return false;
+        }
+
+        var trimmed = clrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[..^1];
+        }
+
+        var genericIdx = trimmed.IndexOf('<');
+        if (genericIdx >= 0)
+        {
+            trimmed = trimmed[..genericIdx];
+        }
+
+        var baseName = trimmed.Split('.').Last();
+        return baseName switch
+        {
+            "int" or "long" or "short" or "decimal" or "double" or "float" or "bool" or "byte" or "sbyte" or "uint" or "ulong" or "ushort" or "char" or "DateTime" or "DateTimeOffset" or "Guid" or "TimeSpan" => true,
+            _ => false
+        };
+    }
 }

@@ -427,6 +427,8 @@ namespace Xtraq.Metadata
                         var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? ip.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
+                        var effectivePrecision = resolved?.Precision ?? precision;
+                        var effectiveScale = resolved?.Scale ?? scale;
                         bool isTableType = explicitTableType
                             || !string.IsNullOrWhiteSpace(inferredTableTypeRef)
                             || legacyTableTypeRef is not null;
@@ -500,7 +502,7 @@ namespace Xtraq.Metadata
                         else
                         {
                             var clr = MapSqlToClr(sqlType, isNullable);
-                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen, HasDefaultValue: hasDefaultValue);
+                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen, HasDefaultValue: hasDefaultValue, NumericPrecision: effectivePrecision, NumericScale: effectiveScale);
                         }
 
                         if (isOutput) outputParams.Add(fd); else inputParams.Add(fd);
@@ -521,10 +523,12 @@ namespace Xtraq.Metadata
                         var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? opEl.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
+                        var effectivePrecision = resolved?.Precision ?? precision;
+                        var effectiveScale = resolved?.Scale ?? scale;
                         var isNullable = opEl.GetPropertyOrDefaultBoolStrict("IsNullable");
                         if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
                         var clr = MapSqlToClr(sqlType, isNullable);
-                        var fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen);
+                        var fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen, NumericPrecision: effectivePrecision, NumericScale: effectiveScale);
                         outputParams.Add(fd);
                     }
                 }

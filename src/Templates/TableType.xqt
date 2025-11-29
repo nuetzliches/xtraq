@@ -68,3 +68,39 @@ public sealed record {{ TypeName }} : ITableType
 	}
 #endif
 }
+
+#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+/// <summary>
+/// Minimal API request row mirroring the SQL table type <c>{{ Schema }}.{{ Name }}</c> with DataAnnotations metadata.
+/// </summary>
+public sealed record {{ TypeName }}Request
+{
+{{#each Columns as column}}{{#each column.RequestAttributes}}    {{ this }}
+{{/each}}    public {{ column.ClrType }} {{ column.PropertyName }} { get; init; }
+{{/each}}
+
+	internal {{ TypeName }} ToTableType()
+		=> {{ TypeName }}.Create(
+{{#each Columns as column}}            {{ column.PropertyName }}{{ column.RequestSeparator }}
+{{/each}}        );
+
+	internal static System.Collections.Generic.IReadOnlyList<{{ TypeName }}>? ToTableTypes(System.Collections.Generic.IReadOnlyList<{{ TypeName }}Request>? source)
+	{
+		if (source is null) return null;
+		if (source.Count == 0) return System.Array.Empty<{{ TypeName }}>();
+		var buffer = new {{ TypeName }}[source.Count];
+		for (var i = 0; i < source.Count; i++)
+		{
+			var row = source[i];
+			if (row is null)
+			{
+				throw new System.InvalidOperationException("Table type rows cannot contain null entries.");
+			}
+
+			buffer[i] = row.ToTableType();
+		}
+
+		return buffer;
+	}
+}
+#endif
