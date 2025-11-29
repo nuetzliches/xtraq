@@ -436,7 +436,6 @@ internal sealed class ConsoleService : IConsoleService
 
     public void FlushWarningsSummary()
     {
-        List<(string Message, WarningAggregate Aggregate)> snapshot;
         lock (_warningLock)
         {
             if (_warnings.Count == 0)
@@ -444,64 +443,9 @@ internal sealed class ConsoleService : IConsoleService
                 return;
             }
 
-            snapshot = _warnings
-                .Select(static pair => (pair.Key, pair.Value))
-                .ToList();
             _warnings.Clear();
             _warningOrder = 0;
         }
-
-        var ordered = snapshot
-            .OrderByDescending(static item => item.Aggregate.Count)
-            .ThenBy(static item => item.Aggregate.Order)
-            .ToList();
-
-        var totalCount = ordered.Sum(static entry => entry.Aggregate.Count);
-        if (UseSpectre)
-        {
-            var table = new Table()
-                .Border(TableBorder.Rounded)
-                .BorderStyle(new Style(Color.Gold1))
-                .Title(new TableTitle("[yellow][[xtraq]] Warning summary[/]"));
-
-            table.AddColumn(new TableColumn("[grey]#[/]").Centered());
-            table.AddColumn(new TableColumn("[grey]Message[/]").LeftAligned());
-            table.AddColumn(new TableColumn("[grey]Count[/]").RightAligned());
-            table.AddColumn(new TableColumn("[grey]Share[/]").RightAligned());
-
-            var index = 1;
-            foreach (var entry in ordered)
-            {
-                var count = entry.Aggregate.Count;
-                var share = totalCount > 0 ? (count / (double)totalCount) * 100d : 0d;
-                table.AddRow(
-                    index.ToString(CultureInfo.InvariantCulture),
-                    Escape(entry.Message),
-                    count.ToString(CultureInfo.InvariantCulture),
-                    share > 0 ? $"{share.ToString("F1", CultureInfo.InvariantCulture)}%" : "—");
-                index++;
-            }
-
-            table.Caption = new TableTitle($"[grey]{snapshot.Count} unique • {totalCount} total[/]");
-
-            AnsiConsole.WriteLine();
-            AnsiConsole.Write(table);
-            return;
-        }
-
-        Output(string.Empty);
-        WriteLine(StdOut, "[xtraq] Warning summary", ConsoleColor.Yellow);
-
-        var rowIndex = 1;
-        foreach (var entry in ordered)
-        {
-            var count = entry.Aggregate.Count;
-            var share = totalCount > 0 ? $"{(count / (double)totalCount * 100d).ToString("F1", CultureInfo.InvariantCulture)}%" : "n/a";
-            WriteLine(StdOut, $"  {rowIndex,2}. {entry.Message} (count={count}, share={share})", ConsoleColor.DarkYellow);
-            rowIndex++;
-        }
-
-        Gray($"  unique={ordered.Count}, total={totalCount}");
     }
 
     public void RenderBreakdownChart(string title, IReadOnlyDictionary<string, double> segments, string? unit = null)
