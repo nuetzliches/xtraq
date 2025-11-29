@@ -5,7 +5,6 @@ namespace Xtraq.Services;
 
 /// <summary>
 /// New file-based snapshot writer: creates an index.json plus subfolders 'procedures/' and 'tabletypes/'.
-/// Migration approach: legacy monolithic snapshot file remains for fallback during the transition; this service can run in parallel.
 /// No fingerprint in the folder name – index.json stores the global fingerprint and hashes of individual files.
 /// </summary>
 internal sealed class SchemaSnapshotFileLayoutService
@@ -37,19 +36,6 @@ internal sealed class SchemaSnapshotFileLayoutService
         ArgumentNullException.ThrowIfNull(snapshot);
         var baseDir = EnsureBaseDir();
         if (baseDir == null) return;
-
-        // Cleanup: remove legacy monolithic snapshot files (Fingerprint.json) except index.json
-        try
-        {
-            var legacyFiles = Directory.GetFiles(baseDir, "*.json", SearchOption.TopDirectoryOnly)
-                .Where(f => Path.GetFileName(f) != "index.json" && !string.Equals(Path.GetFileName(f), "procedures", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            foreach (var lf in legacyFiles)
-            {
-                try { File.Delete(lf); } catch { }
-            }
-        }
-        catch { }
 
         // Delta detection: load existing files
         var procDir = Path.Combine(baseDir, "procedures");
@@ -833,11 +819,6 @@ internal sealed class SchemaSnapshotFileLayoutService
                         };
 
                         var normalizedTableTypeRef = TableTypeRefFormatter.Normalize(parameter.TableTypeRef);
-                        if (string.IsNullOrEmpty(normalizedTableTypeRef))
-                        {
-                            var legacyRef = TableTypeRefFormatter.Combine(parameter.TableTypeSchema, parameter.TableTypeName);
-                            normalizedTableTypeRef = TableTypeRefFormatter.Normalize(legacyRef);
-                        }
 
                         snapshotInput.TableTypeRef = normalizedTableTypeRef;
 
@@ -857,7 +838,11 @@ internal sealed class SchemaSnapshotFileLayoutService
                         }
 
                         var (schema, name) = SplitTypeRef(resolvedTypeRef);
-                        var kind = DetermineTypeRefKind(baseDir, schema, name, parameter.IsTableType);
+                        var kind = parameter.IsTableType == true
+                            ? ParameterTypeRefKind.TableType
+                            : parameter.IsTableType == false
+                                ? ParameterTypeRefKind.Scalar
+                                : DetermineTypeRefKind(baseDir, schema, name);
 
                         if (kind == ParameterTypeRefKind.TableType || !string.IsNullOrWhiteSpace(snapshotInput.TableTypeRef))
                         {
@@ -902,11 +887,6 @@ internal sealed class SchemaSnapshotFileLayoutService
                     }
 
                     var normalized = TableTypeRefFormatter.Normalize(pi.TableTypeRef);
-                    if (string.IsNullOrEmpty(normalized))
-                    {
-                        var legacyRef = TableTypeRefFormatter.Combine(pi.TableTypeSchema, pi.TableTypeName);
-                        normalized = TableTypeRefFormatter.Normalize(legacyRef);
-                    }
 
                     pi.TableTypeRef = normalized;
                     var (catalogSegment, schemaSegment, nameSegment) = TableTypeRefFormatter.Split(normalized);
@@ -1214,10 +1194,8 @@ internal sealed class SchemaSnapshotFileLayoutService
         return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ParameterTypeRefKind DetermineTypeRefKind(string baseDir, string? schema, string? name, bool? legacyHint)
+    private static ParameterTypeRefKind DetermineTypeRefKind(string baseDir, string? schema, string? name)
     {
-        if (legacyHint == true) return ParameterTypeRefKind.TableType;
-        if (legacyHint == false) return ParameterTypeRefKind.Scalar;
         if (string.IsNullOrWhiteSpace(baseDir) || string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name)) return ParameterTypeRefKind.Unknown;
 
         var sanitizedSchema = Xtraq.Utils.NameSanitizer.SanitizeForFile(schema);

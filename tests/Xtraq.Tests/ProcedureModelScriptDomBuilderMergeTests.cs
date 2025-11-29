@@ -51,13 +51,11 @@ END;";
             File.WriteAllText(Path.Combine(tablesDir, "sample.UserContacts.json"), TableMetadata);
 
             var previousSnapshotRoot = Environment.GetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT");
-            var previousProjectRoot = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
             var previousProjectPath = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH");
 
             try
             {
                 Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", tempRoot);
-                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", tempRoot);
                 Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", tempRoot);
 
                 var builder = new ProcedureModelScriptDomBuilder();
@@ -96,7 +94,6 @@ END;";
             finally
             {
                 Environment.SetEnvironmentVariable("XTRAQ_SNAPSHOT_ROOT", previousSnapshotRoot);
-                Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", previousProjectRoot);
                 Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", previousProjectPath);
                 try
                 {

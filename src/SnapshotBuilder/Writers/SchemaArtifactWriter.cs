@@ -700,7 +700,6 @@ internal sealed class SchemaArtifactWriter
         }
 
         PruneExtraneousFiles(tableRoot, validTableFiles, schemaSet);
-        RemoveLegacyTableCacheArtifacts(Directory.GetParent(schemaRoot)?.FullName ?? schemaRoot);
 
         summary.Tables.Sort((a, b) =>
         {
@@ -2302,26 +2301,4 @@ internal sealed class SchemaArtifactWriter
         return null;
     }
 
-    private static void RemoveLegacyTableCacheArtifacts(string xtraqRoot)
-    {
-        if (string.IsNullOrWhiteSpace(xtraqRoot))
-        {
-            return;
-        }
-
-        var cacheTables = Path.Combine(xtraqRoot, "cache", "tables");
-        if (!Directory.Exists(cacheTables))
-        {
-            return;
-        }
-
-        try
-        {
-            Directory.Delete(cacheTables, recursive: true);
-        }
-        catch
-        {
-            // best effort cleanup only
-        }
-    }
 }

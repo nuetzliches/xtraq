@@ -178,7 +178,6 @@ internal static class CliHostUtilities
         }
 
         Environment.SetEnvironmentVariable("XTRAQ_PROJECT_PATH", normalized);
-        Environment.SetEnvironmentVariable("XTRAQ_PROJECT_ROOT", normalized);
         EnsureSnapshotRoot(normalized);
     }
 
@@ -393,8 +392,7 @@ internal static class CliHostUtilities
             }
         }
 
-        var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
-            ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+        var projectHint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH");
         if (!string.IsNullOrWhiteSpace(projectHint))
         {
             var normalizedHint = NormalizePathSafe(projectHint);

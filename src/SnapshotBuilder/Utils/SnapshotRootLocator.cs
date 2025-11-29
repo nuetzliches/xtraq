@@ -60,8 +60,7 @@ internal static class SnapshotRootLocator
 
     private static string? ResolveProjectRoot()
     {
-        var hint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
-                   ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+        var hint = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH");
 
         if (!string.IsNullOrWhiteSpace(hint))
         {

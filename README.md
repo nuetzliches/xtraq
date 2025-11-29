@@ -43,6 +43,10 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 3. **Snapshot** – `xtraq snapshot` pulls stored procedure metadata and result shapes into the local cache.
 4. **Generate** – `xtraq build` emits strongly typed C# artefacts ready to commit, package, or publish.
 
+### Environment overrides
+
+- Set `XTRAQ_PROJECT_PATH` to pin the CLI to a specific project root when running commands from outside the repository.
+
 ## Requirements
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — primary target framework for new generators and samples.

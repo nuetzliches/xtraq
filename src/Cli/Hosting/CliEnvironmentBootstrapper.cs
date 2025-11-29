@@ -17,8 +17,7 @@ internal static class CliEnvironmentBootstrapper
     {
         try
         {
-            var existingProjectPath = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH")
-                ?? Environment.GetEnvironmentVariable("XTRAQ_PROJECT_ROOT");
+            var existingProjectPath = Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH");
 
             if (!string.IsNullOrWhiteSpace(existingProjectPath))
             {

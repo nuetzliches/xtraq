@@ -57,7 +57,7 @@ internal static class DirectoryUtils
         }
         catch
         {
-            // Fallback: reset BasePath so legacy fallback logic applies
+            // Fallback: reset BasePath so default resolution applies
             BasePath = null;
         }
     }
