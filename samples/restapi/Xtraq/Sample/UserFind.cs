@@ -50,8 +50,8 @@ public readonly record struct UserFindResultSet1Result(
     string PreferredLocale,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc,
-    string PreferredContactEmail,
-    string PreferredContactDisplayName
+    string? PreferredContactEmail,
+    string? PreferredContactDisplayName
 );
 
 public sealed class UserFindResult
@@ -138,7 +138,7 @@ internal static partial class UserFindPlan
 		{
             new("ResultSet1", async (r, ct) =>
 			{
-                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "Alias"); int o2=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o3=ReaderUtil.TryGetOrdinal(r, "Email"); int o4=ReaderUtil.TryGetOrdinal(r, "IsActive"); int o5=ReaderUtil.TryGetOrdinal(r, "PreferredLocale"); int o6=ReaderUtil.TryGetOrdinal(r, "CreatedAtUtc"); int o7=ReaderUtil.TryGetOrdinal(r, "UpdatedAtUtc"); int o8=ReaderUtil.TryGetOrdinal(r, "PreferredContactEmail"); int o9=ReaderUtil.TryGetOrdinal(r, "PreferredContactDisplayName"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserFindResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? null : (r.IsDBNull(o1) ? null : r.GetString(o1)), o2 < 0 ? string.Empty : (r.IsDBNull(o2) ? string.Empty : r.GetString(o2)), o3 < 0 ? null : (r.IsDBNull(o3) ? null : r.GetString(o3)), o4 < 0 ? default(bool) : r.GetBoolean(o4), o5 < 0 ? string.Empty : (r.IsDBNull(o5) ? string.Empty : r.GetString(o5)), o6 < 0 ? default(DateTime) : r.GetDateTime(o6), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (DateTime?)r.GetDateTime(o7)), o8 < 0 ? string.Empty : (r.IsDBNull(o8) ? string.Empty : r.GetString(o8)), o9 < 0 ? string.Empty : (r.IsDBNull(o9) ? string.Empty : r.GetString(o9)))); } return list;
+                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "Alias"); int o2=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o3=ReaderUtil.TryGetOrdinal(r, "Email"); int o4=ReaderUtil.TryGetOrdinal(r, "IsActive"); int o5=ReaderUtil.TryGetOrdinal(r, "PreferredLocale"); int o6=ReaderUtil.TryGetOrdinal(r, "CreatedAtUtc"); int o7=ReaderUtil.TryGetOrdinal(r, "UpdatedAtUtc"); int o8=ReaderUtil.TryGetOrdinal(r, "PreferredContactEmail"); int o9=ReaderUtil.TryGetOrdinal(r, "PreferredContactDisplayName"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserFindResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? null : (r.IsDBNull(o1) ? null : r.GetString(o1)), o2 < 0 ? string.Empty : (r.IsDBNull(o2) ? string.Empty : r.GetString(o2)), o3 < 0 ? null : (r.IsDBNull(o3) ? null : r.GetString(o3)), o4 < 0 ? default(bool) : r.GetBoolean(o4), o5 < 0 ? string.Empty : (r.IsDBNull(o5) ? string.Empty : r.GetString(o5)), o6 < 0 ? default(DateTime) : r.GetDateTime(o6), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (DateTime?)r.GetDateTime(o7)), o8 < 0 ? null : (r.IsDBNull(o8) ? null : r.GetString(o8)), o9 < 0 ? null : (r.IsDBNull(o9) ? null : r.GetString(o9)))); } return list;
 			}),
 
         };
@@ -276,7 +276,7 @@ public static class UserFindProcedure
             int o9=ReaderUtil.TryGetOrdinal(reader, "PreferredContactDisplayName");
 			while (await reader.ReadAsync(ct).ConfigureAwait(false))
 			{
-				var row = new UserFindResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? null : (reader.IsDBNull(o1) ? null : reader.GetString(o1)), o2 < 0 ? string.Empty : (reader.IsDBNull(o2) ? string.Empty : reader.GetString(o2)), o3 < 0 ? null : (reader.IsDBNull(o3) ? null : reader.GetString(o3)), o4 < 0 ? default(bool) : reader.GetBoolean(o4), o5 < 0 ? string.Empty : (reader.IsDBNull(o5) ? string.Empty : reader.GetString(o5)), o6 < 0 ? default(DateTime) : reader.GetDateTime(o6), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (DateTime?)reader.GetDateTime(o7)), o8 < 0 ? string.Empty : (reader.IsDBNull(o8) ? string.Empty : reader.GetString(o8)), o9 < 0 ? string.Empty : (reader.IsDBNull(o9) ? string.Empty : reader.GetString(o9)));
+				var row = new UserFindResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? null : (reader.IsDBNull(o1) ? null : reader.GetString(o1)), o2 < 0 ? string.Empty : (reader.IsDBNull(o2) ? string.Empty : reader.GetString(o2)), o3 < 0 ? null : (reader.IsDBNull(o3) ? null : reader.GetString(o3)), o4 < 0 ? default(bool) : reader.GetBoolean(o4), o5 < 0 ? string.Empty : (reader.IsDBNull(o5) ? string.Empty : reader.GetString(o5)), o6 < 0 ? default(DateTime) : reader.GetDateTime(o6), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (DateTime?)reader.GetDateTime(o7)), o8 < 0 ? null : (reader.IsDBNull(o8) ? null : reader.GetString(o8)), o9 < 0 ? null : (reader.IsDBNull(o9) ? null : reader.GetString(o9)));
 				await onRowAsync(row, ct).ConfigureAwait(false);
 			}
 		}

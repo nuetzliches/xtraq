@@ -44,14 +44,14 @@ public readonly record struct UserOrderInsightsInput(
 public readonly record struct UserOrderInsightsResultSet1Result(
     int UserId,
     string DisplayName,
-    string LatestOrderNumber,
-    decimal LatestOrderTotalAmount,
-    string LatestOrderCurrency,
+    string? LatestOrderNumber,
+    decimal? LatestOrderTotalAmount,
+    string? LatestOrderCurrency,
     DateTime? LatestOrderRequiredAtUtc,
     string? LatestOrderMetadata,
-    long PendingOrderCount,
+    long? PendingOrderCount,
     decimal? CapturedPaymentAmount,
-    Guid CapturedPaymentCount,
+    Guid? CapturedPaymentCount,
     DateTime? NextContactReminderUtc
 );
 
@@ -139,7 +139,7 @@ internal static partial class UserOrderInsightsPlan
 		{
             new("ResultSet1", async (r, ct) =>
 			{
-                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o2=ReaderUtil.TryGetOrdinal(r, "LatestOrderNumber"); int o3=ReaderUtil.TryGetOrdinal(r, "LatestOrderTotalAmount"); int o4=ReaderUtil.TryGetOrdinal(r, "LatestOrderCurrency"); int o5=ReaderUtil.TryGetOrdinal(r, "LatestOrderRequiredAtUtc"); int o6=ReaderUtil.TryGetOrdinal(r, "LatestOrderMetadata"); int o7=ReaderUtil.TryGetOrdinal(r, "PendingOrderCount"); int o8=ReaderUtil.TryGetOrdinal(r, "CapturedPaymentAmount"); int o9=ReaderUtil.TryGetOrdinal(r, "CapturedPaymentCount"); int o10=ReaderUtil.TryGetOrdinal(r, "NextContactReminderUtc"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserOrderInsightsResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? string.Empty : (r.IsDBNull(o1) ? string.Empty : r.GetString(o1)), o2 < 0 ? string.Empty : (r.IsDBNull(o2) ? string.Empty : r.GetString(o2)), o3 < 0 ? default(decimal) : r.GetDecimal(o3), o4 < 0 ? string.Empty : (r.IsDBNull(o4) ? string.Empty : r.GetString(o4)), o5 < 0 ? null : (r.IsDBNull(o5) ? null : (DateTime?)r.GetDateTime(o5)), o6 < 0 ? null : (r.IsDBNull(o6) ? null : r.GetString(o6)), o7 < 0 ? default(long) : r.GetInt64(o7), o8 < 0 ? null : (r.IsDBNull(o8) ? null : (decimal?)r.GetDecimal(o8)), o9 < 0 ? default(Guid) : r.GetGuid(o9), o10 < 0 ? null : (r.IsDBNull(o10) ? null : (DateTime?)r.GetDateTime(o10)))); } return list;
+                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o2=ReaderUtil.TryGetOrdinal(r, "LatestOrderNumber"); int o3=ReaderUtil.TryGetOrdinal(r, "LatestOrderTotalAmount"); int o4=ReaderUtil.TryGetOrdinal(r, "LatestOrderCurrency"); int o5=ReaderUtil.TryGetOrdinal(r, "LatestOrderRequiredAtUtc"); int o6=ReaderUtil.TryGetOrdinal(r, "LatestOrderMetadata"); int o7=ReaderUtil.TryGetOrdinal(r, "PendingOrderCount"); int o8=ReaderUtil.TryGetOrdinal(r, "CapturedPaymentAmount"); int o9=ReaderUtil.TryGetOrdinal(r, "CapturedPaymentCount"); int o10=ReaderUtil.TryGetOrdinal(r, "NextContactReminderUtc"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserOrderInsightsResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? string.Empty : (r.IsDBNull(o1) ? string.Empty : r.GetString(o1)), o2 < 0 ? null : (r.IsDBNull(o2) ? null : r.GetString(o2)), o3 < 0 ? null : (r.IsDBNull(o3) ? null : (decimal?)r.GetDecimal(o3)), o4 < 0 ? null : (r.IsDBNull(o4) ? null : r.GetString(o4)), o5 < 0 ? null : (r.IsDBNull(o5) ? null : (DateTime?)r.GetDateTime(o5)), o6 < 0 ? null : (r.IsDBNull(o6) ? null : r.GetString(o6)), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (long?)r.GetInt64(o7)), o8 < 0 ? null : (r.IsDBNull(o8) ? null : (decimal?)r.GetDecimal(o8)), o9 < 0 ? null : (r.IsDBNull(o9) ? null : (Guid?)r.GetGuid(o9)), o10 < 0 ? null : (r.IsDBNull(o10) ? null : (DateTime?)r.GetDateTime(o10)))); } return list;
 			}),
 
         };
@@ -278,7 +278,7 @@ public static class UserOrderInsightsProcedure
             int o10=ReaderUtil.TryGetOrdinal(reader, "NextContactReminderUtc");
 			while (await reader.ReadAsync(ct).ConfigureAwait(false))
 			{
-				var row = new UserOrderInsightsResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? string.Empty : (reader.IsDBNull(o1) ? string.Empty : reader.GetString(o1)), o2 < 0 ? string.Empty : (reader.IsDBNull(o2) ? string.Empty : reader.GetString(o2)), o3 < 0 ? default(decimal) : reader.GetDecimal(o3), o4 < 0 ? string.Empty : (reader.IsDBNull(o4) ? string.Empty : reader.GetString(o4)), o5 < 0 ? null : (reader.IsDBNull(o5) ? null : (DateTime?)reader.GetDateTime(o5)), o6 < 0 ? null : (reader.IsDBNull(o6) ? null : reader.GetString(o6)), o7 < 0 ? default(long) : reader.GetInt64(o7), o8 < 0 ? null : (reader.IsDBNull(o8) ? null : (decimal?)reader.GetDecimal(o8)), o9 < 0 ? default(Guid) : reader.GetGuid(o9), o10 < 0 ? null : (reader.IsDBNull(o10) ? null : (DateTime?)reader.GetDateTime(o10)));
+				var row = new UserOrderInsightsResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? string.Empty : (reader.IsDBNull(o1) ? string.Empty : reader.GetString(o1)), o2 < 0 ? null : (reader.IsDBNull(o2) ? null : reader.GetString(o2)), o3 < 0 ? null : (reader.IsDBNull(o3) ? null : (decimal?)reader.GetDecimal(o3)), o4 < 0 ? null : (reader.IsDBNull(o4) ? null : reader.GetString(o4)), o5 < 0 ? null : (reader.IsDBNull(o5) ? null : (DateTime?)reader.GetDateTime(o5)), o6 < 0 ? null : (reader.IsDBNull(o6) ? null : reader.GetString(o6)), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (long?)reader.GetInt64(o7)), o8 < 0 ? null : (reader.IsDBNull(o8) ? null : (decimal?)reader.GetDecimal(o8)), o9 < 0 ? null : (reader.IsDBNull(o9) ? null : (Guid?)reader.GetGuid(o9)), o10 < 0 ? null : (reader.IsDBNull(o10) ? null : (DateTime?)reader.GetDateTime(o10)));
 				await onRowAsync(row, ct).ConfigureAwait(false);
 			}
 		}

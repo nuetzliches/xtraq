@@ -48,9 +48,9 @@ public readonly record struct UserPreferredContactApplyResultSet1Result(
     string DisplayName,
     string? Email,
     bool IsActive,
-    string PreferredEmail,
-    string PreferredDisplayName,
-    string PreferredSource,
+    string? PreferredEmail,
+    string? PreferredDisplayName,
+    string? PreferredSource,
     DateTime? PreferredLastInteractionUtc,
     string PreferredRank
 );
@@ -169,7 +169,7 @@ internal static partial class UserPreferredContactApplyPlan
 		{
             new("ResultSet1", async (r, ct) =>
 			{
-                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o2=ReaderUtil.TryGetOrdinal(r, "Email"); int o3=ReaderUtil.TryGetOrdinal(r, "IsActive"); int o4=ReaderUtil.TryGetOrdinal(r, "PreferredEmail"); int o5=ReaderUtil.TryGetOrdinal(r, "PreferredDisplayName"); int o6=ReaderUtil.TryGetOrdinal(r, "PreferredSource"); int o7=ReaderUtil.TryGetOrdinal(r, "PreferredLastInteractionUtc"); int o8=ReaderUtil.TryGetOrdinal(r, "PreferredRank"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserPreferredContactApplyResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? string.Empty : (r.IsDBNull(o1) ? string.Empty : r.GetString(o1)), o2 < 0 ? null : (r.IsDBNull(o2) ? null : r.GetString(o2)), o3 < 0 ? default(bool) : r.GetBoolean(o3), o4 < 0 ? string.Empty : (r.IsDBNull(o4) ? string.Empty : r.GetString(o4)), o5 < 0 ? string.Empty : (r.IsDBNull(o5) ? string.Empty : r.GetString(o5)), o6 < 0 ? string.Empty : (r.IsDBNull(o6) ? string.Empty : r.GetString(o6)), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (DateTime?)r.GetDateTime(o7)), o8 < 0 ? string.Empty : (r.IsDBNull(o8) ? string.Empty : r.GetString(o8)))); } return list;
+                var list = new System.Collections.Generic.List<object>(); int o0=ReaderUtil.TryGetOrdinal(r, "UserId"); int o1=ReaderUtil.TryGetOrdinal(r, "DisplayName"); int o2=ReaderUtil.TryGetOrdinal(r, "Email"); int o3=ReaderUtil.TryGetOrdinal(r, "IsActive"); int o4=ReaderUtil.TryGetOrdinal(r, "PreferredEmail"); int o5=ReaderUtil.TryGetOrdinal(r, "PreferredDisplayName"); int o6=ReaderUtil.TryGetOrdinal(r, "PreferredSource"); int o7=ReaderUtil.TryGetOrdinal(r, "PreferredLastInteractionUtc"); int o8=ReaderUtil.TryGetOrdinal(r, "PreferredRank"); while (await r.ReadAsync(ct).ConfigureAwait(false)) { list.Add(new UserPreferredContactApplyResultSet1Result(o0 < 0 ? default(int) : r.GetInt32(o0), o1 < 0 ? string.Empty : (r.IsDBNull(o1) ? string.Empty : r.GetString(o1)), o2 < 0 ? null : (r.IsDBNull(o2) ? null : r.GetString(o2)), o3 < 0 ? default(bool) : r.GetBoolean(o3), o4 < 0 ? null : (r.IsDBNull(o4) ? null : r.GetString(o4)), o5 < 0 ? null : (r.IsDBNull(o5) ? null : r.GetString(o5)), o6 < 0 ? null : (r.IsDBNull(o6) ? null : r.GetString(o6)), o7 < 0 ? null : (r.IsDBNull(o7) ? null : (DateTime?)r.GetDateTime(o7)), o8 < 0 ? string.Empty : (r.IsDBNull(o8) ? string.Empty : r.GetString(o8)))); } return list;
 			}),
 
             new("ResultSet2", async (r, ct) =>
@@ -341,7 +341,7 @@ public static class UserPreferredContactApplyProcedure
             int o8=ReaderUtil.TryGetOrdinal(reader, "PreferredRank");
 			while (await reader.ReadAsync(ct).ConfigureAwait(false))
 			{
-				var row = new UserPreferredContactApplyResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? string.Empty : (reader.IsDBNull(o1) ? string.Empty : reader.GetString(o1)), o2 < 0 ? null : (reader.IsDBNull(o2) ? null : reader.GetString(o2)), o3 < 0 ? default(bool) : reader.GetBoolean(o3), o4 < 0 ? string.Empty : (reader.IsDBNull(o4) ? string.Empty : reader.GetString(o4)), o5 < 0 ? string.Empty : (reader.IsDBNull(o5) ? string.Empty : reader.GetString(o5)), o6 < 0 ? string.Empty : (reader.IsDBNull(o6) ? string.Empty : reader.GetString(o6)), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (DateTime?)reader.GetDateTime(o7)), o8 < 0 ? string.Empty : (reader.IsDBNull(o8) ? string.Empty : reader.GetString(o8)));
+				var row = new UserPreferredContactApplyResultSet1Result(o0 < 0 ? default(int) : reader.GetInt32(o0), o1 < 0 ? string.Empty : (reader.IsDBNull(o1) ? string.Empty : reader.GetString(o1)), o2 < 0 ? null : (reader.IsDBNull(o2) ? null : reader.GetString(o2)), o3 < 0 ? default(bool) : reader.GetBoolean(o3), o4 < 0 ? null : (reader.IsDBNull(o4) ? null : reader.GetString(o4)), o5 < 0 ? null : (reader.IsDBNull(o5) ? null : reader.GetString(o5)), o6 < 0 ? null : (reader.IsDBNull(o6) ? null : reader.GetString(o6)), o7 < 0 ? null : (reader.IsDBNull(o7) ? null : (DateTime?)reader.GetDateTime(o7)), o8 < 0 ? string.Empty : (reader.IsDBNull(o8) ? string.Empty : reader.GetString(o8)));
 				await onRowAsync(row, ct).ConfigureAwait(false);
 			}
 		}

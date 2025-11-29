@@ -663,18 +663,20 @@ namespace Xtraq.Metadata
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         var inferred = resolved?.IsNullable ?? InferNullabilityFromTypeRef(typeRef);
                         var forcedNullable = columnElement.TryGetProperty("ForcedNullable", out var forcedToken) && forcedToken.ValueKind == JsonValueKind.True;
-                        bool isNullable;
+                        bool? declaredNullable = null;
                         if (columnElement.TryGetProperty("IsNullable", out var nullableToken))
                         {
-                            isNullable = nullableToken.ValueKind == JsonValueKind.True;
-                            if (inferred.HasValue)
-                            {
-                                isNullable = inferred.Value;
-                            }
+                            declaredNullable = nullableToken.ValueKind == JsonValueKind.True;
                         }
-                        else
+
+                        bool isNullable = declaredNullable ?? (inferred ?? (returnsJsonArray == true || returnsJson == true));
+                        if (!isNullable && inferred == true)
                         {
-                            isNullable = inferred ?? (returnsJsonArray == true || returnsJson == true);
+                            isNullable = true;
+                        }
+                        if (forcedNullable && !isNullable)
+                        {
+                            isNullable = true;
                         }
                         if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
                         var clr = MapSqlToClr(sqlType, isNullable);
