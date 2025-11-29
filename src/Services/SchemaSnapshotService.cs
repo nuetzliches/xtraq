@@ -72,19 +72,6 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
 
             if (cacheDocument != null)
             {
-                if (cacheDocument.CacheVersion < SchemaCacheDocument.CurrentVersion && RequiresLegacyConversion(cacheDocument, json))
-                {
-                    try
-                    {
-                        var legacy = JsonSerializer.Deserialize<LegacySchemaCacheDocument>(json, _jsonOptions);
-                        cacheDocument = ConvertLegacyCacheDocument(legacy) ?? cacheDocument;
-                    }
-                    catch (JsonException)
-                    {
-                        // ignore legacy conversion failures; fall back to existing document
-                    }
-                }
-
                 return ConvertFromCacheDocument(cacheDocument);
             }
 
@@ -162,70 +149,10 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
             var json = JsonSerializer.Serialize(document, _jsonOptions);
             File.WriteAllText(path, json);
 
-            PruneLegacySnapshots(dir, snapshot.Fingerprint);
+            PruneSnapshotCache(dir, snapshot.Fingerprint);
 
         }
         catch { /* swallow snapshot write errors */ }
-    }
-
-    private static bool RequiresLegacyConversion(SchemaCacheDocument document, string json)
-    {
-        if (document == null)
-        {
-            return false;
-        }
-
-        if (document.Procedures == null || document.Procedures.Count == 0)
-        {
-            return ContainsInputsMarker(json);
-        }
-
-        var allHaveParameters = document.Procedures.All(p => p != null && p.Parameters != null && p.Parameters.Count > 0);
-        if (allHaveParameters)
-        {
-            return false;
-        }
-
-        return ContainsInputsMarker(json);
-    }
-
-    private static bool ContainsInputsMarker(string json)
-    {
-        if (string.IsNullOrEmpty(json))
-        {
-            return false;
-        }
-
-        return json.IndexOf("\"Inputs\"", StringComparison.OrdinalIgnoreCase) >= 0;
-    }
-
-    private static SchemaCacheDocument? ConvertLegacyCacheDocument(LegacySchemaCacheDocument? legacy)
-    {
-        if (legacy == null)
-        {
-            return null;
-        }
-
-        var convertedProcedures = (legacy.Procedures ?? new List<LegacySchemaCacheProcedure>())
-            .Where(p => !string.IsNullOrWhiteSpace(p?.Schema) && !string.IsNullOrWhiteSpace(p?.Name))
-            .Select(p => new SchemaCacheProcedure
-            {
-                Schema = p.Schema,
-                Name = p.Name,
-                Parameters = CloneParameters(p.Inputs)
-            })
-            .ToList();
-
-        return new SchemaCacheDocument
-        {
-            CacheVersion = SchemaCacheDocument.CurrentVersion,
-            SchemaVersion = legacy.SchemaVersion,
-            Fingerprint = legacy.Fingerprint ?? string.Empty,
-            Database = legacy.Database,
-            Schemas = legacy.Schemas ?? new List<SchemaCacheSchema>(),
-            Procedures = convertedProcedures,
-            Tables = new List<SchemaCacheTable>()
-        };
     }
 
     private static SchemaSnapshot? ConvertFromCacheDocument(SchemaCacheDocument? document)
@@ -290,7 +217,7 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
         return snapshot;
     }
 
-    private static void PruneLegacySnapshots(string directory, string activeFingerprint, int retentionCount = 2)
+    private static void PruneSnapshotCache(string directory, string activeFingerprint, int retentionCount = 2)
     {
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory) || retentionCount <= 0)
         {
@@ -414,8 +341,8 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
 
         if (string.IsNullOrEmpty(normalizedTableTypeRef))
         {
-            var legacyRef = TableTypeRefFormatter.Combine(source.TableTypeSchema, source.TableTypeName);
-            normalizedTableTypeRef = TableTypeRefFormatter.Normalize(legacyRef);
+            var fallbackRef = TableTypeRefFormatter.Combine(source.TableTypeSchema, source.TableTypeName);
+            normalizedTableTypeRef = TableTypeRefFormatter.Normalize(fallbackRef);
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedTypeRef) && !string.IsNullOrWhiteSpace(normalizedTableTypeRef)
@@ -573,20 +500,6 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
         public string Schema { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public List<SnapshotInput>? Parameters { get; set; }
-
-        [JsonPropertyName("Inputs")]
-        public List<SnapshotInput>? LegacyInputs
-        {
-            set
-            {
-                if (value == null || value.Count == 0)
-                {
-                    return;
-                }
-
-                Parameters = value;
-            }
-        }
     }
 
     private sealed class SchemaCacheTable
@@ -601,23 +514,6 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
     {
         public string ServerHash { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
-    }
-
-    private sealed class LegacySchemaCacheDocument
-    {
-        public int CacheVersion { get; set; }
-        public int SchemaVersion { get; set; }
-        public string Fingerprint { get; set; } = string.Empty;
-        public SchemaCacheDatabase? Database { get; set; }
-        public List<SchemaCacheSchema> Schemas { get; set; } = new();
-        public List<LegacySchemaCacheProcedure> Procedures { get; set; } = new();
-    }
-
-    private sealed class LegacySchemaCacheProcedure
-    {
-        public string Schema { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public List<SnapshotInput> Inputs { get; set; } = new();
     }
 
 }

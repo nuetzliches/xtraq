@@ -245,102 +245,62 @@ namespace Xtraq.Metadata
             var schemaDir = Path.Combine(_projectRoot, ".xtraq", "snapshots");
             if (!Directory.Exists(schemaDir)) { SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Info: schema directory not found: {schemaDir}"); return; }
             var indexPath = Path.Combine(schemaDir, "index.json");
-            JsonDocument? doc = null;
-            bool expanded = false;
-            if (File.Exists(indexPath))
+            if (!File.Exists(indexPath))
             {
-                try
-                {
-                    using var fs = File.OpenRead(indexPath);
-                    doc = JsonDocument.Parse(fs);
-                    expanded = true;
-                    SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Using expanded snapshot index: {indexPath}");
-                }
-                catch (Exception ex)
-                {
-                    SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse expanded index.json: {ex.Message}");
-                    doc = null; // fallback legacy
-                }
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: expanded snapshot index missing: {indexPath}");
+                return;
             }
-            if (doc == null)
+
+            JsonDocument? doc;
+            try
             {
-                // Legacy fallback: pick latest non-index *.json (monolith)
-                var files = Directory.GetFiles(schemaDir, "*.json")
-                    .Where(f => !string.Equals(Path.GetFileName(f), "index.json", StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                if (files.Length == 0) { SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Info: no legacy snapshot files in {schemaDir}"); return; }
-                var ordered = files.Select(f => new FileInfo(f)).OrderByDescending(fi => fi.LastWriteTimeUtc).ToList();
-                foreach (var fi in ordered.Take(5))
-                    SchemaMetadataProviderLogHelper.TryLog($"[xtraq] legacy snapshot candidate: {fi.FullName} (utc={fi.LastWriteTimeUtc:O} size={fi.Length})");
-                var latest = ordered.First();
-                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Using legacy snapshot: {latest.FullName}");
-                try
-                {
-                    using var fs = File.OpenRead(latest.FullName);
-                    doc = JsonDocument.Parse(fs);
-                }
-                catch (Exception ex)
-                {
-                    SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse legacy snapshot {latest.FullName}: {ex.Message}");
-                    return;
-                }
+                using var fs = File.OpenRead(indexPath);
+                doc = JsonDocument.Parse(fs);
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Using expanded snapshot index: {indexPath}");
             }
-            if (doc == null) return;
+            catch (Exception ex)
+            {
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse expanded index.json: {ex.Message}");
+                return;
+            }
+
             JsonElement procsEl;
-            if (expanded)
+            // Expanded index: load procedure files individually - index only contains file hash entries
+            if (doc.RootElement.TryGetProperty("Procedures", out var procIndexEl) && procIndexEl.ValueKind == JsonValueKind.Array)
             {
-                // Expanded index: load procedure files individually - index only contains file hash entries
-                if (doc.RootElement.TryGetProperty("Procedures", out var procIndexEl) && procIndexEl.ValueKind == JsonValueKind.Array)
+                var procEntries = procIndexEl.EnumerateArray().Select(e => new
                 {
-                    var procEntries = procIndexEl.EnumerateArray().Select(e => new
+                    File = e.GetPropertyOrDefault("File"),
+                    Name = e.GetPropertyOrDefault("Name"),
+                    Schema = e.GetPropertyOrDefault("Schema")
+                }).Where(x => !string.IsNullOrWhiteSpace(x.File)).ToList();
+                var procArray = new List<JsonElement>();
+                foreach (var entry in procEntries)
+                {
+                    var path = Path.Combine(schemaDir, "procedures", entry.File!);
+                    if (!File.Exists(path)) continue;
+                    try
                     {
-                        File = e.GetPropertyOrDefault("File"),
-                        Name = e.GetPropertyOrDefault("Name"),
-                        Schema = e.GetPropertyOrDefault("Schema")
-                    }).Where(x => !string.IsNullOrWhiteSpace(x.File)).ToList();
-                    var procArray = new List<JsonElement>();
-                    foreach (var entry in procEntries)
-                    {
-                        var path = Path.Combine(schemaDir, "procedures", entry.File!);
-                        if (!File.Exists(path)) continue;
-                        try
-                        {
-                            using var pfs = File.OpenRead(path);
-                            using var pdoc = JsonDocument.Parse(pfs);
-                            procArray.Add(pdoc.RootElement.Clone());
-                        }
-                        catch (Exception ex)
-                        {
-                            SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse procedure file {path}: {ex.Message}");
-                        }
+                        using var pfs = File.OpenRead(path);
+                        using var pdoc = JsonDocument.Parse(pfs);
+                        procArray.Add(pdoc.RootElement.Clone());
                     }
-                    // Build an array JsonElement manually
-                    using var tmpDoc = JsonDocument.Parse("[]"); // placeholder
-                    // Cannot create a new JsonElement dynamically without Utf8JsonWriter -> convert via re-serialize
-                    var procJson = System.Text.Json.JsonSerializer.Serialize(procArray);
-                    doc = JsonDocument.Parse(procJson);
-                    procsEl = doc.RootElement; // doc.root ist jetzt das Array der Procs
+                    catch (Exception procEx)
+                    {
+                        SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse procedure file {path}: {procEx.Message}");
+                    }
                 }
-                else
-                {
-                    SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: expanded index.json missing Procedures array");
-                    return;
-                }
+                // Build an array JsonElement manually
+                using var tmpDoc = JsonDocument.Parse("[]"); // placeholder
+                // Cannot create a new JsonElement dynamically without Utf8JsonWriter -> convert via re-serialize
+                var procJson = System.Text.Json.JsonSerializer.Serialize(procArray);
+                doc = JsonDocument.Parse(procJson);
+                procsEl = doc.RootElement; // doc.root ist jetzt das Array der Procs
             }
             else
             {
-                if (!doc.RootElement.TryGetProperty("Procedures", out procsEl) || procsEl.ValueKind != JsonValueKind.Array)
-                {
-                    if (!doc.RootElement.TryGetProperty("StoredProcedures", out procsEl) || procsEl.ValueKind != JsonValueKind.Array)
-                    {
-                        SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: snapshot has no 'Procedures' or 'StoredProcedures' array");
-                        return;
-                    }
-                    else
-                    {
-                        SchemaMetadataProviderLogHelper.TryLog("[xtraq] Info: using legacy 'StoredProcedures' key");
-                    }
-                }
+                SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: expanded index.json missing Procedures array");
+                return;
             }
 
             var procList = new List<ProcedureDescriptor>();
@@ -351,19 +311,6 @@ namespace Xtraq.Metadata
             var functionDescriptors = new List<FunctionDescriptor>();
             var functionJsonSets = new ConcurrentDictionary<string, (bool ReturnsJson, bool ReturnsJsonArray, string RootProperty, IReadOnlyList<string> ColumnNames)>(StringComparer.OrdinalIgnoreCase);
 
-            var tableTypeProvider = new TableTypeMetadataProvider(_projectRoot);
-            var tableTypeInfos = tableTypeProvider.GetAll();
-            var tableTypeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var tt in tableTypeInfos)
-            {
-                if (tt == null || string.IsNullOrWhiteSpace(tt.Schema) || string.IsNullOrWhiteSpace(tt.Name)) continue;
-                var catalogQualified = TableTypeRefFormatter.Combine(tt.Catalog, tt.Schema, tt.Name);
-                if (!string.IsNullOrWhiteSpace(catalogQualified))
-                {
-                    tableTypeRefs.Add(catalogQualified);
-                }
-                tableTypeRefs.Add(tt.Schema + "." + tt.Name);
-            }
             var typeResolver = new TypeMetadataResolver(_projectRoot);
 
             foreach (var p in procsEl.EnumerateArray())
@@ -406,14 +353,9 @@ namespace Xtraq.Metadata
                         var tableTypeRefRaw = ip.GetPropertyOrDefault("TableTypeRef");
                         var normalizedTableTypeRef = TableTypeRefFormatter.Normalize(tableTypeRefRaw);
                         var (tableTypeCatalogFromRef, tableTypeSchemaFromRef, tableTypeNameFromRef) = TableTypeRefFormatter.Split(normalizedTableTypeRef);
-                        var legacyTtCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
-                        var legacyTtCatalog = string.IsNullOrWhiteSpace(legacyTtCatalogRaw) ? null : legacyTtCatalogRaw;
-                        var legacyTtSchema = ip.GetPropertyOrDefault("TableTypeSchema");
-                        var legacyTtName = ip.GetPropertyOrDefault("TableTypeName");
-
-                        var tableTypeCatalog = legacyTtCatalog ?? (string.IsNullOrWhiteSpace(tableTypeCatalogFromRef) ? null : tableTypeCatalogFromRef);
-                        var tableTypeSchema = legacyTtSchema ?? tableTypeSchemaFromRef;
-                        var tableTypeName = legacyTtName ?? tableTypeNameFromRef;
+                        var tableTypeCatalog = string.IsNullOrWhiteSpace(tableTypeCatalogFromRef) ? null : tableTypeCatalogFromRef;
+                        var tableTypeSchema = tableTypeSchemaFromRef;
+                        var tableTypeName = tableTypeNameFromRef;
 
                         var inferredTableTypeRef = normalizedTableTypeRef;
                         if (string.IsNullOrWhiteSpace(inferredTableTypeRef) && !string.IsNullOrWhiteSpace(tableTypeSchema) && !string.IsNullOrWhiteSpace(tableTypeName))
@@ -422,23 +364,20 @@ namespace Xtraq.Metadata
                                 ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(tableTypeSchema, tableTypeName));
                         }
 
-                        var legacyTableTypeRef = (!string.IsNullOrWhiteSpace(typeRef) && tableTypeRefs.Contains(typeRef)) ? typeRef : null;
-
                         var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? ip.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         var effectivePrecision = resolved?.Precision ?? precision;
                         var effectiveScale = resolved?.Scale ?? scale;
                         bool isTableType = explicitTableType
-                            || !string.IsNullOrWhiteSpace(inferredTableTypeRef)
-                            || legacyTableTypeRef is not null;
+                            || !string.IsNullOrWhiteSpace(inferredTableTypeRef);
 
                         string? ttSchema = tableTypeSchema;
                         string? ttName = tableTypeName;
                         string? ttCatalog = tableTypeCatalog;
                         if (isTableType)
                         {
-                            var referenceToUse = inferredTableTypeRef ?? legacyTableTypeRef;
+                            var referenceToUse = inferredTableTypeRef;
                             if (referenceToUse is not null && !string.IsNullOrWhiteSpace(typeRef))
                             {
                                 var normalizedReference = TableTypeRefFormatter.Normalize(referenceToUse);
@@ -468,7 +407,7 @@ namespace Xtraq.Metadata
                             sqlType = typeRef;
                         }
 
-                        var effectiveTableTypeRef = inferredTableTypeRef ?? legacyTableTypeRef;
+                        var effectiveTableTypeRef = inferredTableTypeRef;
                         FieldDescriptor fd;
                         if (isTableType && !string.IsNullOrWhiteSpace(ttName))
                         {
@@ -609,16 +548,6 @@ namespace Xtraq.Metadata
                             {
                                 procedureRef = procRefEl.GetString();
                             }
-                            else if (rse.TryGetProperty("Reference", out var legacyRefEl) && legacyRefEl.ValueKind == JsonValueKind.Object)
-                            {
-                                var kindLegacy = legacyRefEl.GetPropertyOrDefault("Kind");
-                                var schemaLegacy = legacyRefEl.GetPropertyOrDefault("Schema");
-                                var nameLegacy = legacyRefEl.GetPropertyOrDefault("Name");
-                                if (string.Equals(kindLegacy, "Procedure", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    procedureRef = ComposeSchemaObjectRef(schemaLegacy, nameLegacy);
-                                }
-                            }
                         }
                         catch { }
                         if (string.IsNullOrWhiteSpace(procedureRef) && !string.IsNullOrWhiteSpace(execSourceProc))
@@ -688,16 +617,6 @@ namespace Xtraq.Metadata
                             if (columnElement.TryGetProperty("FunctionRef", out var fnEl) && fnEl.ValueKind == JsonValueKind.String)
                             {
                                 functionRef = fnEl.GetString();
-                            }
-                            if (string.IsNullOrWhiteSpace(functionRef) && columnElement.TryGetProperty("Reference", out var legacyRefEl) && legacyRefEl.ValueKind == JsonValueKind.Object)
-                            {
-                                var kindLegacy = legacyRefEl.GetPropertyOrDefault("Kind");
-                                var schemaLegacy = legacyRefEl.GetPropertyOrDefault("Schema");
-                                var nameLegacy = legacyRefEl.GetPropertyOrDefault("Name");
-                                if (string.Equals(kindLegacy, "Function", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    functionRef = ComposeSchemaObjectRef(schemaLegacy, nameLegacy);
-                                }
                             }
                             if (columnElement.TryGetProperty("DeferredJsonExpansion", out var defEl))
                             {
@@ -906,182 +825,179 @@ namespace Xtraq.Metadata
             // Functions (expanded snapshot only)
             try
             {
-                if (expanded)
+                // Load functions directory entries from index.json? index.json holds FunctionsVersion + Function file hashes
+                var fnSchemaDir = Path.Combine(_projectRoot, ".xtraq", "snapshots");
+                var fnIndexPath = Path.Combine(fnSchemaDir, "index.json");
+                if (File.Exists(fnIndexPath))
                 {
-                    // Load functions directory entries from index.json? index.json holds FunctionsVersion + Function file hashes
-                    var fnSchemaDir = Path.Combine(_projectRoot, ".xtraq", "snapshots");
-                    var fnIndexPath = Path.Combine(fnSchemaDir, "index.json");
-                    if (File.Exists(fnIndexPath))
+                    using var idxFs = File.OpenRead(fnIndexPath);
+                    using var idxDoc = JsonDocument.Parse(idxFs);
+                    if (idxDoc.RootElement.TryGetProperty("FunctionsVersion", out var fv) && fv.ValueKind != JsonValueKind.Null)
                     {
-                        using var idxFs = File.OpenRead(fnIndexPath);
-                        using var idxDoc = JsonDocument.Parse(idxFs);
-                        if (idxDoc.RootElement.TryGetProperty("FunctionsVersion", out var fv) && fv.ValueKind != JsonValueKind.Null)
+                        // Enumerate function file entries
+                        if (idxDoc.RootElement.TryGetProperty("Functions", out var fnsEl) && fnsEl.ValueKind == JsonValueKind.Array)
                         {
-                            // Enumerate function file entries
-                            if (idxDoc.RootElement.TryGetProperty("Functions", out var fnsEl) && fnsEl.ValueKind == JsonValueKind.Array)
+                            var fnEntries = fnsEl.EnumerateArray().Select(e => new
                             {
-                                var fnEntries = fnsEl.EnumerateArray().Select(e => new
+                                File = e.GetPropertyOrDefault("File"),
+                                Name = e.GetPropertyOrDefault("Name"),
+                                Schema = e.GetPropertyOrDefault("Schema")
+                            }).Where(x => !string.IsNullOrWhiteSpace(x.File)).ToList();
+                            foreach (var entry in fnEntries)
+                            {
+                                var path = Path.Combine(fnSchemaDir, "functions", entry.File!);
+                                if (!File.Exists(path)) continue;
+                                try
                                 {
-                                    File = e.GetPropertyOrDefault("File"),
-                                    Name = e.GetPropertyOrDefault("Name"),
-                                    Schema = e.GetPropertyOrDefault("Schema")
-                                }).Where(x => !string.IsNullOrWhiteSpace(x.File)).ToList();
-                                foreach (var entry in fnEntries)
-                                {
-                                    var path = Path.Combine(fnSchemaDir, "functions", entry.File!);
-                                    if (!File.Exists(path)) continue;
-                                    try
+                                    using var ffs = File.OpenRead(path);
+                                    using var fdoc = JsonDocument.Parse(ffs);
+                                    var root = fdoc.RootElement;
+                                    var schema = root.GetPropertyOrDefault("Schema") ?? entry.Schema ?? "dbo";
+                                    var name = root.GetPropertyOrDefault("Name") ?? entry.Name ?? string.Empty;
+                                    if (string.IsNullOrWhiteSpace(name)) continue;
+                                    bool isTableValued = root.GetPropertyOrDefaultBool("IsTableValued");
+                                    var returnSql = root.GetPropertyOrDefault("ReturnSqlType");
+                                    var returnMaxLenVal = root.GetPropertyOrDefaultInt("ReturnMaxLength");
+                                    int? returnMaxLen = returnMaxLenVal > 0 ? returnMaxLenVal : null;
+                                    bool? returnIsNullable = null;
+                                    if (root.TryGetProperty("ReturnIsNullable", out var rin) && rin.ValueKind != JsonValueKind.Null)
                                     {
-                                        using var ffs = File.OpenRead(path);
-                                        using var fdoc = JsonDocument.Parse(ffs);
-                                        var root = fdoc.RootElement;
-                                        var schema = root.GetPropertyOrDefault("Schema") ?? entry.Schema ?? "dbo";
-                                        var name = root.GetPropertyOrDefault("Name") ?? entry.Name ?? string.Empty;
-                                        if (string.IsNullOrWhiteSpace(name)) continue;
-                                        bool isTableValued = root.GetPropertyOrDefaultBool("IsTableValued");
-                                        var returnSql = root.GetPropertyOrDefault("ReturnSqlType");
-                                        var returnMaxLenVal = root.GetPropertyOrDefaultInt("ReturnMaxLength");
-                                        int? returnMaxLen = returnMaxLenVal > 0 ? returnMaxLenVal : null;
-                                        bool? returnIsNullable = null;
-                                        if (root.TryGetProperty("ReturnIsNullable", out var rin) && rin.ValueKind != JsonValueKind.Null)
+                                        if (rin.ValueKind == JsonValueKind.True) returnIsNullable = true; else if (rin.ValueKind == JsonValueKind.False) returnIsNullable = false; // record only when metadata is present
+                                    }
+                                    JsonPayloadDescriptor? jsonPayload = null;
+                                    var returnsJson = root.GetPropertyOrDefaultBool("ReturnsJson");
+                                    var returnsJsonArrayExplicit = TryGetOptionalBoolean(root, "ReturnsJsonArray");
+                                    var returnsJsonArray = returnsJsonArrayExplicit ?? (returnsJson ? true : false);
+                                    var jsonRootProp = root.GetPropertyOrDefault("JsonRootProperty");
+                                    var includeNullValues = TryGetOptionalBoolean(root, "JsonIncludeNullValues");
+                                    if (returnsJson || returnsJsonArray || !string.IsNullOrWhiteSpace(jsonRootProp))
+                                    {
+                                        jsonPayload = new JsonPayloadDescriptor(returnsJsonArray, string.IsNullOrWhiteSpace(jsonRootProp) ? null : jsonRootProp, includeNullValues == true);
+                                    }
+                                    bool encrypted = root.GetPropertyOrDefaultBool("IsEncrypted");
+                                    // Dependencies
+                                    var dependencies = new List<string>();
+                                    if (root.TryGetProperty("Dependencies", out var depsEl) && depsEl.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var de in depsEl.EnumerateArray())
                                         {
-                                            if (rin.ValueKind == JsonValueKind.True) returnIsNullable = true; else if (rin.ValueKind == JsonValueKind.False) returnIsNullable = false; // record only when metadata is present
-                                        }
-                                        JsonPayloadDescriptor? jsonPayload = null;
-                                        var returnsJson = root.GetPropertyOrDefaultBool("ReturnsJson");
-                                        var returnsJsonArrayExplicit = TryGetOptionalBoolean(root, "ReturnsJsonArray");
-                                        var returnsJsonArray = returnsJsonArrayExplicit ?? (returnsJson ? true : false);
-                                        var jsonRootProp = root.GetPropertyOrDefault("JsonRootProperty");
-                                        var includeNullValues = TryGetOptionalBoolean(root, "JsonIncludeNullValues");
-                                        if (returnsJson || returnsJsonArray || !string.IsNullOrWhiteSpace(jsonRootProp))
-                                        {
-                                            jsonPayload = new JsonPayloadDescriptor(returnsJsonArray, string.IsNullOrWhiteSpace(jsonRootProp) ? null : jsonRootProp, includeNullValues == true);
-                                        }
-                                        bool encrypted = root.GetPropertyOrDefaultBool("IsEncrypted");
-                                        // Dependencies
-                                        var dependencies = new List<string>();
-                                        if (root.TryGetProperty("Dependencies", out var depsEl) && depsEl.ValueKind == JsonValueKind.Array)
-                                        {
-                                            foreach (var de in depsEl.EnumerateArray())
+                                            if (de.ValueKind == JsonValueKind.String)
                                             {
-                                                if (de.ValueKind == JsonValueKind.String)
-                                                {
-                                                    var dep = de.GetString();
-                                                    if (!string.IsNullOrWhiteSpace(dep)) dependencies.Add(dep!);
-                                                }
+                                                var dep = de.GetString();
+                                                if (!string.IsNullOrWhiteSpace(dep)) dependencies.Add(dep!);
                                             }
                                         }
-                                        // Parameters
-                                        var paramDescriptors = new List<FunctionParameterDescriptor>();
-                                        if (root.TryGetProperty("Parameters", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
+                                    }
+                                    // Parameters
+                                    var paramDescriptors = new List<FunctionParameterDescriptor>();
+                                    if (root.TryGetProperty("Parameters", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var pe in paramsEl.EnumerateArray())
                                         {
-                                            foreach (var pe in paramsEl.EnumerateArray())
-                                            {
-                                                var raw = pe.GetPropertyOrDefault("Name") ?? string.Empty;
-                                                if (string.IsNullOrWhiteSpace(raw)) continue;
-                                                var clean = raw.TrimStart('@');
-                                                var typeRef = pe.GetPropertyOrDefault("TypeRef");
-                                                var maxLenVal = pe.GetPropertyOrDefaultInt("MaxLength");
-                                                var precisionVal = pe.GetPropertyOrDefaultInt("Precision");
-                                                var scaleVal = pe.GetPropertyOrDefaultInt("Scale");
-                                                var resolved = typeResolver.Resolve(typeRef, maxLenVal, precisionVal, scaleVal);
-                                                var sqlType = resolved?.SqlType ?? pe.GetPropertyOrDefault("SqlTypeName") ?? pe.GetPropertyOrDefault("SqlType") ?? string.Empty;
-                                                int maxLen = (resolved?.MaxLength ?? maxLenVal) ?? 0;
-                                                bool isNullable = pe.GetPropertyOrDefaultBoolStrict("IsNullable");
-                                                bool isOutput = pe.GetPropertyOrDefaultBool("IsOutput");
-                                                if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
-                                                var clr = SqlClrTypeMapper.Map(sqlType, isNullable);
-                                                paramDescriptors.Add(new FunctionParameterDescriptor(clean, sqlType, clr, isNullable, maxLen <= 0 ? null : maxLen, isOutput));
-                                            }
+                                            var raw = pe.GetPropertyOrDefault("Name") ?? string.Empty;
+                                            if (string.IsNullOrWhiteSpace(raw)) continue;
+                                            var clean = raw.TrimStart('@');
+                                            var typeRef = pe.GetPropertyOrDefault("TypeRef");
+                                            var maxLenVal = pe.GetPropertyOrDefaultInt("MaxLength");
+                                            var precisionVal = pe.GetPropertyOrDefaultInt("Precision");
+                                            var scaleVal = pe.GetPropertyOrDefaultInt("Scale");
+                                            var resolved = typeResolver.Resolve(typeRef, maxLenVal, precisionVal, scaleVal);
+                                            var sqlType = resolved?.SqlType ?? pe.GetPropertyOrDefault("SqlTypeName") ?? pe.GetPropertyOrDefault("SqlType") ?? string.Empty;
+                                            int maxLen = (resolved?.MaxLength ?? maxLenVal) ?? 0;
+                                            bool isNullable = pe.GetPropertyOrDefaultBoolStrict("IsNullable");
+                                            bool isOutput = pe.GetPropertyOrDefaultBool("IsOutput");
+                                            if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
+                                            var clr = SqlClrTypeMapper.Map(sqlType, isNullable);
+                                            paramDescriptors.Add(new FunctionParameterDescriptor(clean, sqlType, clr, isNullable, maxLen <= 0 ? null : maxLen, isOutput));
                                         }
-                                        // Columns (TVF)
-                                        var colDescriptors = new List<TableValuedFunctionColumnDescriptor>();
-                                        if (isTableValued && root.TryGetProperty("Columns", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
+                                    }
+                                    // Columns (TVF)
+                                    var colDescriptors = new List<TableValuedFunctionColumnDescriptor>();
+                                    if (isTableValued && root.TryGetProperty("Columns", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var ce in colsEl.EnumerateArray())
                                         {
-                                            foreach (var ce in colsEl.EnumerateArray())
-                                            {
-                                                var colName = ce.GetPropertyOrDefault("Name") ?? string.Empty;
-                                                if (string.IsNullOrWhiteSpace(colName)) continue;
-                                                var typeRef = ce.GetPropertyOrDefault("TypeRef");
-                                                bool isNullable = ce.GetPropertyOrDefaultBoolStrict("IsNullable");
-                                                var maxLenVal = ce.GetPropertyOrDefaultInt("MaxLength");
-                                                var precisionVal = ce.GetPropertyOrDefaultInt("Precision");
-                                                var scaleVal = ce.GetPropertyOrDefaultInt("Scale");
-                                                var resolved = typeResolver.Resolve(typeRef, maxLenVal, precisionVal, scaleVal);
-                                                var sqlType = resolved?.SqlType ?? ce.GetPropertyOrDefault("SqlTypeName") ?? ce.GetPropertyOrDefault("SqlType") ?? string.Empty;
-                                                int maxLen = (resolved?.MaxLength ?? maxLenVal) ?? 0;
-                                                if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
-                                                var clr = SqlClrTypeMapper.Map(sqlType, isNullable);
-                                                colDescriptors.Add(new TableValuedFunctionColumnDescriptor(colName, sqlType, clr, isNullable, maxLen <= 0 ? null : maxLen));
-                                            }
+                                            var colName = ce.GetPropertyOrDefault("Name") ?? string.Empty;
+                                            if (string.IsNullOrWhiteSpace(colName)) continue;
+                                            var typeRef = ce.GetPropertyOrDefault("TypeRef");
+                                            bool isNullable = ce.GetPropertyOrDefaultBoolStrict("IsNullable");
+                                            var maxLenVal = ce.GetPropertyOrDefaultInt("MaxLength");
+                                            var precisionVal = ce.GetPropertyOrDefaultInt("Precision");
+                                            var scaleVal = ce.GetPropertyOrDefaultInt("Scale");
+                                            var resolved = typeResolver.Resolve(typeRef, maxLenVal, precisionVal, scaleVal);
+                                            var sqlType = resolved?.SqlType ?? ce.GetPropertyOrDefault("SqlTypeName") ?? ce.GetPropertyOrDefault("SqlType") ?? string.Empty;
+                                            int maxLen = (resolved?.MaxLength ?? maxLenVal) ?? 0;
+                                            if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
+                                            var clr = SqlClrTypeMapper.Map(sqlType, isNullable);
+                                            colDescriptors.Add(new TableValuedFunctionColumnDescriptor(colName, sqlType, clr, isNullable, maxLen <= 0 ? null : maxLen));
                                         }
-                                        var functionDescriptor = new FunctionDescriptor(
-                                            SchemaName: schema,
-                                            FunctionName: name,
-                                            IsTableValued: isTableValued,
-                                            ReturnSqlType: string.IsNullOrWhiteSpace(returnSql) ? null : returnSql,
-                                            ReturnMaxLength: returnMaxLen,
-                                            ReturnIsNullable: returnIsNullable,
-                                            JsonPayload: jsonPayload,
-                                            IsEncrypted: encrypted,
-                                            Dependencies: dependencies,
-                                            Parameters: paramDescriptors,
-                                            Columns: colDescriptors
-                                        );
-                                        functionDescriptors.Add(functionDescriptor);
+                                    }
+                                    var functionDescriptor = new FunctionDescriptor(
+                                        SchemaName: schema,
+                                        FunctionName: name,
+                                        IsTableValued: isTableValued,
+                                        ReturnSqlType: string.IsNullOrWhiteSpace(returnSql) ? null : returnSql,
+                                        ReturnMaxLength: returnMaxLen,
+                                        ReturnIsNullable: returnIsNullable,
+                                        JsonPayload: jsonPayload,
+                                        IsEncrypted: encrypted,
+                                        Dependencies: dependencies,
+                                        Parameters: paramDescriptors,
+                                        Columns: colDescriptors
+                                    );
+                                    functionDescriptors.Add(functionDescriptor);
 
-                                        if (!isTableValued)
+                                    if (!isTableValued)
+                                    {
+                                        var descriptor = TryBuildFunctionJsonDescriptorFromSnapshot(schema, name, jsonPayload, root, typeResolver);
+                                        if (descriptor != null)
                                         {
-                                            var descriptor = TryBuildFunctionJsonDescriptorFromSnapshot(schema, name, jsonPayload, root, typeResolver);
-                                            if (descriptor != null)
+                                            var normalizedSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
+                                            var normalizedName = name.Trim();
+                                            var descriptorKey = string.Concat(normalizedSchema, ".", normalizedName);
+                                            _functionJsonDescriptors[descriptorKey] = descriptor;
+                                            if (normalizedName.Length > 0)
+                                            {
+                                                _functionJsonDescriptors.TryAdd(normalizedName, descriptor);
+                                            }
+
+                                            var flattened = FlattenFunctionJsonDescriptor(descriptor);
+                                            (bool ReturnsJson, bool ReturnsJsonArray, string RootProperty, IReadOnlyList<string> ColumnNames) metadata = (
+                                                ReturnsJson: true,
+                                                ReturnsJsonArray: descriptor.ReturnsJsonArray,
+                                                RootProperty: jsonPayload?.RootProperty ?? string.Empty,
+                                                ColumnNames: flattened
+                                            );
+                                            functionJsonSets[descriptorKey] = metadata;
+                                            if (normalizedName.Length > 0)
+                                            {
+                                                functionJsonSets.TryAdd(normalizedName, metadata);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var jsonColumns = ExtractFunctionJsonColumns(root);
+                                            if (jsonColumns.Count > 0)
                                             {
                                                 var normalizedSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
                                                 var normalizedName = name.Trim();
-                                                var descriptorKey = string.Concat(normalizedSchema, ".", normalizedName);
-                                                _functionJsonDescriptors[descriptorKey] = descriptor;
-                                                if (normalizedName.Length > 0)
-                                                {
-                                                    _functionJsonDescriptors.TryAdd(normalizedName, descriptor);
-                                                }
-
-                                                var flattened = FlattenFunctionJsonDescriptor(descriptor);
+                                                var key = string.Concat(normalizedSchema, ".", normalizedName);
                                                 (bool ReturnsJson, bool ReturnsJsonArray, string RootProperty, IReadOnlyList<string> ColumnNames) metadata = (
-                                                    ReturnsJson: true,
-                                                    ReturnsJsonArray: descriptor.ReturnsJsonArray,
-                                                    RootProperty: jsonPayload?.RootProperty ?? string.Empty,
-                                                    ColumnNames: flattened
+                                                    ReturnsJson: jsonPayload != null || returnsJson,
+                                                    ReturnsJsonArray: returnsJsonArray,
+                                                    RootProperty: string.IsNullOrWhiteSpace(jsonRootProp) ? string.Empty : jsonRootProp.Trim(),
+                                                    ColumnNames: jsonColumns
                                                 );
-                                                functionJsonSets[descriptorKey] = metadata;
+                                                functionJsonSets[key] = metadata;
                                                 if (normalizedName.Length > 0)
                                                 {
                                                     functionJsonSets.TryAdd(normalizedName, metadata);
                                                 }
                                             }
-                                            else
-                                            {
-                                                var jsonColumns = ExtractFunctionJsonColumns(root);
-                                                if (jsonColumns.Count > 0)
-                                                {
-                                                    var normalizedSchema = string.IsNullOrWhiteSpace(schema) ? "dbo" : schema.Trim();
-                                                    var normalizedName = name.Trim();
-                                                    var key = string.Concat(normalizedSchema, ".", normalizedName);
-                                                    (bool ReturnsJson, bool ReturnsJsonArray, string RootProperty, IReadOnlyList<string> ColumnNames) metadata = (
-                                                        ReturnsJson: jsonPayload != null || returnsJson,
-                                                        ReturnsJsonArray: returnsJsonArray,
-                                                        RootProperty: string.IsNullOrWhiteSpace(jsonRootProp) ? string.Empty : jsonRootProp.Trim(),
-                                                        ColumnNames: jsonColumns
-                                                    );
-                                                    functionJsonSets[key] = metadata;
-                                                    if (normalizedName.Length > 0)
-                                                    {
-                                                        functionJsonSets.TryAdd(normalizedName, metadata);
-                                                    }
-                                                }
-                                            }
                                         }
                                     }
-                                    catch (Exception fx) { SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse function file {path}: {fx.Message}"); }
                                 }
+                                catch (Exception fx) { SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse function file {path}: {fx.Message}"); }
                             }
                         }
                     }
@@ -1096,7 +1012,7 @@ namespace Xtraq.Metadata
             UpdateFunctionJsonResolver();
             if (_procedures.Count == 0)
             {
-                SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: 0 procedures parsed from snapshot (expanded/legacy)");
+                SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: 0 procedures parsed from snapshot");
             }
         }
 
