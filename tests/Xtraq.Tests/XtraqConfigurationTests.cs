@@ -153,10 +153,10 @@ public sealed class XtraqConfigurationTests
     }
 
     /// <summary>
-    /// Ensures MinimalApi object config hydrates per-procedure allow-lists.
+    /// Ensures MinimalApi object config auto-binds per-procedure allow-lists.
     /// </summary>
     [Xunit.Fact]
-    public void Load_WhenMinimalApiObjectSpecified_ResolvesHydrationLists()
+    public void Load_WhenMinimalApiObjectSpecified_ResolvesAutoBindLists()
     {
         var cleanupKeys = new[]
         {
@@ -165,8 +165,8 @@ public sealed class XtraqConfigurationTests
             "XTRAQ_NAMESPACE",
             "XTRAQ_GENERATOR_DB",
             "XTRAQ_API_MODE",
-            "XTRAQ_API_HYDRATE",
-            "XTRAQ_API_HYDRATE_PROCEDURES"
+            "XTRAQ_API_AUTOBIND",
+            "XTRAQ_API_AUTOBIND_PROCEDURES"
         };
 
         var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);
@@ -176,7 +176,7 @@ public sealed class XtraqConfigurationTests
             Environment.SetEnvironmentVariable(key, null);
         }
 
-        var projectRoot = Directory.CreateTempSubdirectory("xtraq-hydration-").FullName;
+        var projectRoot = Directory.CreateTempSubdirectory("xtraq-autobind-").FullName;
 
         try
         {
@@ -185,15 +185,15 @@ public sealed class XtraqConfigurationTests
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
                 "{\n" +
-                "  \"Namespace\": \"Hydration.Namespace\",\n" +
-                "  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"Hydrate\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"HydrateProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] } }\n" +
+                "  \"Namespace\": \"AutoBind.Namespace\",\n" +
+                "  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] } }\n" +
                 "}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
             Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.Minimal, configuration.ApiMode);
-            Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.ApiHydrateParameters);
-            Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.ApiHydrateProcedures);
+            Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.ApiAutoBindParameters);
+            Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.ApiAutoBindProcedures);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig"), configuration.ConfigPath);
         }
         finally

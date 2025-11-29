@@ -1,6 +1,6 @@
 # SQL Object Catalogue
 
-The scripts in this folder materialise the `sample` schema inside the `XtraqSample` database. They are grouped by object type to simplify selective execution while keeping re-runs idempotent. Execute them in the following order:
+The scripts in this folder materialise the `sample`, `shared`, `test`, and `test-foo` schemas inside the `XtraqSample` database. They are grouped by object type to simplify selective execution while keeping re-runs idempotent. Execute them in the following order:
 
 1. `schema/` – create the database and schema container
 2. `types/` – register custom scalar and table types used throughout the samples
@@ -15,6 +15,8 @@ All scripts use `GO` batch separators and guard clauses (`IF DB_ID`, `IF OBJECT_
 - table-valued parameter upserts and scalar type usage
 - computed columns, filtered indexes, check constraints, and `ROWVERSION`
 - nested JSON projections suitable for the enhanced JSON analyzer
+- cross-schema joins and hyphenated schema names to validate nullable detection
+- sub-select diagnostics with embedded JOIN clauses (see `sample.UserOrderSubselectDiagnostics`)
 
 You can execute the entire catalogue with a plain `sqlcmd` session:
 
@@ -28,3 +30,5 @@ sqlcmd -S localhost -d XtraqSample -i tables/Users.sql
 ```
 
 (Replace the server and authentication parameters as needed.)
+
+When adding new scripts remember to mirror the changes in `samples/mssql/scripts/entrypoint.sh` so the containerised SQL Server picks them up during start-up.

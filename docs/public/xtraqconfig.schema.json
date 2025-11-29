@@ -54,17 +54,17 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "Hydrate": {
+            "AutoBind": {
               "type": "array",
               "uniqueItems": true,
               "items": { "type": "string" },
-              "description": "Global parameter hydrate allow-list for API endpoints."
+              "description": "Global parameter auto-bind allow-list for API endpoints."
             },
-            "HydrateProcedures": {
+            "AutoBindProcedures": {
               "type": "array",
               "uniqueItems": true,
               "items": { "type": "string" },
-              "description": "Schema-qualified procedures that should participate in automatic parameter hydration."
+              "description": "Schema-qualified procedures that should participate in automatic parameter auto-binding."
             }
           }
         }

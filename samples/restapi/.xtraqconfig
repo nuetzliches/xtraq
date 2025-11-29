@@ -1,21 +1,21 @@
 {
-    "Namespace": "",
-    "OutputDir": "Xtraq",
-    "TargetFramework": "net10",
+    "$schema": "../../docs/public/xtraqconfig.schema.json",
     "Api": {
         "Mode": "Minimal",
         "Requests": {
-            "Hydrate": [
+            "AutoBind": [
                 "@UserId INT",
                 "@Entries shared.AuditLogEntryTableType READONLY"
             ],
-            "HydrateProcedures": [
+            "AutoBindProcedures": [
                 "sample.UserCompositeJsonSnapshot",
                 "sample.WriteAuditLogEntries"
             ]
         }
     },
-    "BuildSchemas": ["sample"],
+    "BuildSchemas": [
+        "sample"
+    ],
     "EntityFramework": {
         "Enabled": false
     },

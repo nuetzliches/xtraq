@@ -22,6 +22,7 @@ namespace Xtraq.Metadata;
 /// <param name="JsonElementSqlType">The SQL type used when JSON columns are materialized as JSON elements.</param>
 /// <param name="JsonIncludeNullValues">Indicates whether JSON serialization should include null values.</param>
 /// <param name="HasDefaultValue">Indicates whether the parameter has a database-side default value.</param>
+/// <param name="ForcedNullable">Indicates whether the field can become null due to outer joins or APPLY semantics even when the underlying source column is non-nullable.</param>
 public sealed record FieldDescriptor(
     string Name,
     string PropertyName,
@@ -40,6 +41,7 @@ public sealed record FieldDescriptor(
     string? JsonElementClrType = null,
     string? JsonElementSqlType = null,
     bool? JsonIncludeNullValues = null,
-    bool? HasDefaultValue = null
+    bool? HasDefaultValue = null,
+    bool ForcedNullable = false
 );
 

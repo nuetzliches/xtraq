@@ -1,0 +1,49 @@
+{
+  "Schema": "sample",
+  "Name": "UserOrderSubselectDiagnostics",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "UserTypeRef": "shared.pkInt"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "OrderId",
+          "SourceColumn": "OrderId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "OrderNumber",
+          "SourceColumn": "OrderNumber",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 40
+        },
+        {
+          "Name": "PrimaryTagWithNoteSummary",
+          "Alias": "PrimaryTagWithNoteSummary",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true
+        },
+        {
+          "Name": "PrimaryTagNoteIsPublic",
+          "Alias": "PrimaryTagNoteIsPublic",
+          "SourceColumn": "IsPublic",
+          "TypeRef": "sys.bit",
+          "IsNullable": true
+        },
+        {
+          "Name": "LatestPublicNote",
+          "Alias": "LatestPublicNote",
+          "SourceColumn": "NoteText",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "MaxLength": 400
+        }
+      ]
+    }
+  ]
+}

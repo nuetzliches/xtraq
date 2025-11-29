@@ -402,10 +402,14 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteString("SqlTypeName", sqlTypeName);
         }
 
-        var emitIsNullable = column.ForcedNullable == true || SnapshotWriterUtilities.ShouldEmitIsNullable(column.IsNullable, typeRef);
-        if (emitIsNullable)
+        if (SnapshotWriterUtilities.ShouldEmitIsNullable(column.IsNullable, typeRef))
         {
             writer.WriteBoolean("IsNullable", true);
+        }
+
+        if (column.ForcedNullable == true)
+        {
+            writer.WriteBoolean("ForcedNullable", true);
         }
 
         var columnMaxLength = column.MaxLength ?? column.CastTargetLength;

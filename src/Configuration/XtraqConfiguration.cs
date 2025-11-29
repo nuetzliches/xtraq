@@ -35,13 +35,13 @@ public sealed class XtraqConfiguration
     /// </summary>
     public ApiMode ApiMode { get; init; } = ApiMode.None;
     /// <summary>
-    /// Optional global parameter hydration list applied to API endpoints (schema-qualified filters are configured separately).
+    /// Optional global parameter auto-binding list applied to API endpoints (schema-qualified filters are configured separately).
     /// </summary>
-    public IReadOnlyList<string> ApiHydrateParameters { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ApiAutoBindParameters { get; init; } = Array.Empty<string>();
     /// <summary>
-    /// Optional allow-list of schema-qualified procedures that should participate in automatic parameter hydration.
+    /// Optional allow-list of schema-qualified procedures that should participate in automatic parameter auto-binding.
     /// </summary>
-    public IReadOnlyList<string> ApiHydrateProcedures { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ApiAutoBindProcedures { get; init; } = Array.Empty<string>();
     /// <summary>
     /// Gets a value indicating whether Entity Framework Core integration helpers should be enabled for generated projects.
     /// </summary>
@@ -164,8 +164,8 @@ public sealed class XtraqConfiguration
         var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
             ? ApiMode.None
             : apiModeRaw!.Equals("minimal", StringComparison.OrdinalIgnoreCase) ? ApiMode.Minimal : ApiMode.None;
-        var hydrateParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_HYDRATE")));
-        var hydrateProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_HYDRATE_PROCEDURES")));
+        var autoBindParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND")));
+        var autoBindProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND_PROCEDURES")));
         var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK_ENABLED"));
         var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"));
 
@@ -178,8 +178,8 @@ public sealed class XtraqConfiguration
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
             ApiMode = apiMode,
-            ApiHydrateParameters = hydrateParameters,
-            ApiHydrateProcedures = hydrateProcedures,
+            ApiAutoBindParameters = autoBindParameters,
+            ApiAutoBindProcedures = autoBindProcedures,
             EntityFrameworkEnabled = enableEntityFramework,
             ResultSetJsonIncludeNullValues = emitJsonIncludeNullValues
         };

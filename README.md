@@ -57,8 +57,8 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
   "Api": {
     "Mode": "Minimal",
     "Requests": {
-      "Hydrate": ["@UserId INT"],
-      "HydrateProcedures": ["sample.UserCompositeJsonSnapshot"]
+      "AutoBind": ["@UserId INT"],
+      "AutoBindProcedures": ["sample.UserCompositeJsonSnapshot"]
     }
   },
   "EntityFramework": { "Enabled": true },
@@ -66,9 +66,9 @@ Xtraq turns SQL Server stored procedures into strongly typed, production-ready C
 }
 ```
 
-- Environment keys mirror the schema: `XTRAQ_API_MODE`, `XTRAQ_API_HYDRATE`, `XTRAQ_API_HYDRATE_PROCEDURES`, `XTRAQ_ENTITY_FRAMEWORK_ENABLED`, `XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES`.
 - Generated artefacts are read-only — rerun `xtraq build` rather than editing `*/Xtraq/` folders.
 
 ## License
 
 This project is under [Free Use, No Warranty license](LICENSE).
+

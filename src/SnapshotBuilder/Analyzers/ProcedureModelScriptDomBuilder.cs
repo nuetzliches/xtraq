@@ -1210,7 +1210,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
             if (aliasInfo.ForceNullableColumns)
             {
-                column.IsNullable = true;
                 column.ForcedNullable ??= true;
             }
         }
@@ -1550,6 +1549,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             var shouldFlattenProbe = false;
+            ProcedureResultColumn? flattenedProbe = null;
             if (column.Columns.Count == 1)
             {
                 var probe = column.Columns[0];
@@ -1586,6 +1586,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                     }
 
                     shouldFlattenProbe = ShouldFlattenScalarSubquery(column, probe);
+                    flattenedProbe = probe;
                 }
             }
 
@@ -1605,6 +1606,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             {
                 column.Columns.Clear();
             }
+
+            ApplyScalarSubqueryNullability(column, query, flattenedProbe);
         }
 
         private static bool ShouldFlattenScalarSubquery(ProcedureResultColumn container, ProcedureResultColumn probe)
@@ -1640,6 +1643,85 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
             }
 
             return true;
+        }
+
+        private static void ApplyScalarSubqueryNullability(
+            ProcedureResultColumn column,
+            QuerySpecification query,
+            ProcedureResultColumn? flattenedProbe)
+        {
+            if (!ScalarSubqueryCanBeRowless(query))
+            {
+                return;
+            }
+
+            if (!ShouldForceScalarSubqueryNullability(column, flattenedProbe))
+            {
+                return;
+            }
+
+            column.IsNullable = true;
+            column.ForcedNullable ??= true;
+        }
+
+        private static bool ScalarSubqueryCanBeRowless(QuerySpecification query)
+        {
+            if (query == null)
+            {
+                return false;
+            }
+
+            var references = query.FromClause?.TableReferences;
+            if (references == null || references.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var reference in references)
+            {
+                if (reference != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldForceScalarSubqueryNullability(ProcedureResultColumn column, ProcedureResultColumn? flattenedProbe)
+        {
+            if (column == null)
+            {
+                return false;
+            }
+
+            if (column.IsNullable == true)
+            {
+                return false;
+            }
+
+            if (flattenedProbe == null)
+            {
+                return true;
+            }
+
+            if (flattenedProbe.IsAggregate && IsNonNullableAggregate(flattenedProbe.AggregateFunction))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsNonNullableAggregate(string? aggregateFunction)
+        {
+            if (string.IsNullOrWhiteSpace(aggregateFunction))
+            {
+                return false;
+            }
+
+            return string.Equals(aggregateFunction, "COUNT", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(aggregateFunction, "COUNT_BIG", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ApplyForJsonMetadata(ProcedureResultColumn column, QuerySpecification query)
@@ -3655,7 +3737,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
                     if (resolved.ForceNullableColumns)
                     {
-                        column.IsNullable = true;
                         column.ForcedNullable ??= true;
                     }
                 }
@@ -4923,6 +5004,43 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
         private bool TryHandleApplyReference(TableReference reference, Dictionary<string, TableAliasInfo> scope, bool forceNullableColumns)
         {
+            if (reference == null)
+            {
+                return false;
+            }
+
+            if (reference is UnqualifiedJoin unqualified && TryResolveApplyOperands(unqualified, out var left, out var right, out var unqualifiedOuter))
+            {
+                if (left != null)
+                {
+                    CollectTableAliases(left, scope, forceNullableColumns);
+                }
+
+                if (right != null)
+                {
+                    var rightNullable = forceNullableColumns || unqualifiedOuter;
+                    CollectTableAliases(right, scope, rightNullable);
+                }
+
+                return true;
+            }
+
+            if (reference is QualifiedJoin qualified && TryResolveApplyOperands(qualified, out var qualifiedLeft, out var qualifiedRight, out var qualifiedOuter))
+            {
+                if (qualifiedLeft != null)
+                {
+                    CollectTableAliases(qualifiedLeft, scope, forceNullableColumns);
+                }
+
+                if (qualifiedRight != null)
+                {
+                    var rightNullable = forceNullableColumns || qualifiedOuter;
+                    CollectTableAliases(qualifiedRight, scope, rightNullable);
+                }
+
+                return true;
+            }
+
             var typeName = reference.GetType().Name;
             if (!string.Equals(typeName, "CrossApplyTableReference", StringComparison.Ordinal) &&
                 !string.Equals(typeName, "OuterApplyTableReference", StringComparison.Ordinal))
@@ -4930,22 +5048,83 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 return false;
             }
 
-            var left = reference.GetType().GetProperty("LeftTableReference")?.GetValue(reference) as TableReference;
-            var right = reference.GetType().GetProperty("RightTableReference")?.GetValue(reference) as TableReference;
+            var leftReflection = reference.GetType().GetProperty("LeftTableReference")?.GetValue(reference) as TableReference;
+            var rightReflection = reference.GetType().GetProperty("RightTableReference")?.GetValue(reference) as TableReference;
             var isOuterApply = string.Equals(typeName, "OuterApplyTableReference", StringComparison.Ordinal);
 
-            if (left != null)
+            if (leftReflection != null)
             {
-                CollectTableAliases(left, scope, forceNullableColumns);
+                CollectTableAliases(leftReflection, scope, forceNullableColumns);
             }
 
-            if (right != null)
+            if (rightReflection != null)
             {
                 var rightNullable = forceNullableColumns || isOuterApply;
-                CollectTableAliases(right, scope, rightNullable);
+                CollectTableAliases(rightReflection, scope, rightNullable);
             }
 
             return true;
+        }
+
+        private static bool TryResolveApplyOperands(UnqualifiedJoin? join, out TableReference? left, out TableReference? right, out bool isOuterApply)
+        {
+            isOuterApply = false;
+            left = join?.FirstTableReference;
+            right = join?.SecondTableReference;
+
+            if (join == null)
+            {
+                return false;
+            }
+
+            switch (join.UnqualifiedJoinType)
+            {
+                case UnqualifiedJoinType.CrossApply:
+                    return true;
+                case UnqualifiedJoinType.OuterApply:
+                    isOuterApply = true;
+                    return true;
+                default:
+                    var name = join.UnqualifiedJoinType.ToString();
+                    if (string.Equals(name, "CrossApply", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    if (string.Equals(name, "OuterApply", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isOuterApply = true;
+                        return true;
+                    }
+
+                    return false;
+            }
+        }
+
+        private static bool TryResolveApplyOperands(QualifiedJoin? join, out TableReference? left, out TableReference? right, out bool isOuterApply)
+        {
+            isOuterApply = false;
+            left = join?.FirstTableReference;
+            right = join?.SecondTableReference;
+
+            if (join == null)
+            {
+                return false;
+            }
+
+            var typeName = join.QualifiedJoinType.ToString();
+            if (string.Equals(typeName, "CrossApply", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(typeName, "OuterApply", StringComparison.OrdinalIgnoreCase))
+            {
+                isOuterApply = true;
+                return true;
+            }
+
+            return false;
         }
 
         private static void RegisterAlias(Dictionary<string, TableAliasInfo> scope, string key, TableAliasInfo info)
@@ -5412,7 +5591,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                     continue;
                 }
 
-                clone[entry.Key] = CloneColumnSourceInfo(info, true);
+                clone[entry.Key] = CloneColumnSourceInfo(info);
             }
 
             return clone;
@@ -5735,7 +5914,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
 
             if (alias.ForceNullableColumns)
             {
-                column.IsNullable = true;
                 column.ForcedNullable ??= true;
             }
         }

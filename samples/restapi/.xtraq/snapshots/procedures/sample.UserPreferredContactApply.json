@@ -1,0 +1,135 @@
+{
+  "Schema": "sample",
+  "Name": "UserPreferredContactApply",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "UserTypeRef": "shared.pkInt"
+    },
+    {
+      "Name": "OnlyPreferred",
+      "TypeRef": "sys.bit"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "SourceColumn": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200
+        },
+        {
+          "Name": "Email",
+          "SourceColumn": "Email",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "MaxLength": 320
+        },
+        {
+          "Name": "IsActive",
+          "SourceColumn": "IsActive",
+          "TypeRef": "sys.bit"
+        },
+        {
+          "Name": "PreferredEmail",
+          "Alias": "PreferredEmail",
+          "SourceColumn": "Email",
+          "TypeRef": "sys.nvarchar",
+          "ForcedNullable": true,
+          "MaxLength": 320,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        },
+        {
+          "Name": "PreferredDisplayName",
+          "Alias": "PreferredDisplayName",
+          "SourceColumn": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "ForcedNullable": true,
+          "MaxLength": 200,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        },
+        {
+          "Name": "PreferredSource",
+          "Alias": "PreferredSource",
+          "SourceColumn": "Source",
+          "TypeRef": "sys.nvarchar",
+          "ForcedNullable": true,
+          "MaxLength": 50,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        },
+        {
+          "Name": "PreferredLastInteractionUtc",
+          "Alias": "PreferredLastInteractionUtc",
+          "SourceColumn": "LastInteractionUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true,
+          "ForcedNullable": true,
+          "FunctionRef": "sample.fnUserPreferredContact"
+        },
+        {
+          "Name": "PreferredRank",
+          "Alias": "PreferredRank",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 7
+        }
+      ]
+    },
+    {
+      "ReturnsJson": true,
+      "ReturnsJsonArray": false,
+      "Columns": [
+        {
+          "Name": "UserId",
+          "SourceColumn": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "PreferredContactJson",
+          "Alias": "PreferredContactJson",
+          "ReturnsJson": true,
+          "ReturnsJsonArray": false,
+          "IsNullable": true,
+          "Columns": [
+            {
+              "Name": "Email",
+              "SourceColumn": "Email",
+              "TypeRef": "sys.nvarchar",
+              "MaxLength": 320
+            },
+            {
+              "Name": "DisplayName",
+              "SourceColumn": "DisplayName",
+              "TypeRef": "sys.nvarchar",
+              "MaxLength": 200
+            },
+            {
+              "Name": "Source",
+              "SourceColumn": "Source",
+              "TypeRef": "sys.nvarchar",
+              "MaxLength": 50
+            },
+            {
+              "Name": "Preferred",
+              "SourceColumn": "Preferred",
+              "TypeRef": "sys.bit"
+            },
+            {
+              "Name": "LastInteractionUtc",
+              "SourceColumn": "LastInteractionUtc",
+              "TypeRef": "sys.datetime2",
+              "IsNullable": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

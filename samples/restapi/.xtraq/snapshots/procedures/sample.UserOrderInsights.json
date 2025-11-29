@@ -1,0 +1,99 @@
+{
+  "Schema": "sample",
+  "Name": "UserOrderInsights",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "UserTypeRef": "shared.pkInt"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "UserId",
+          "SourceColumn": "UserId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "DisplayName",
+          "SourceColumn": "DisplayName",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 200
+        },
+        {
+          "Name": "LatestOrderNumber",
+          "Alias": "LatestOrderNumber",
+          "SourceColumn": "OrderNumber",
+          "TypeRef": "sys.nvarchar",
+          "ForcedNullable": true,
+          "MaxLength": 40
+        },
+        {
+          "Name": "LatestOrderTotalAmount",
+          "Alias": "LatestOrderTotalAmount",
+          "SourceColumn": "TotalAmount",
+          "TypeRef": "sys.decimal",
+          "ForcedNullable": true,
+          "MaxLength": 9
+        },
+        {
+          "Name": "LatestOrderCurrency",
+          "Alias": "LatestOrderCurrency",
+          "SourceColumn": "Currency",
+          "TypeRef": "sys.char",
+          "ForcedNullable": true,
+          "MaxLength": 3
+        },
+        {
+          "Name": "LatestOrderRequiredAtUtc",
+          "Alias": "LatestOrderRequiredAtUtc",
+          "SourceColumn": "RequiredAtUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true,
+          "ForcedNullable": true
+        },
+        {
+          "Name": "LatestOrderMetadata",
+          "Alias": "LatestOrderMetadata",
+          "SourceColumn": "Metadata",
+          "UserTypeRef": "sample.JsonDocument",
+          "SqlTypeName": "nvarchar",
+          "IsNullable": true,
+          "ForcedNullable": true
+        },
+        {
+          "Name": "PendingOrderCount",
+          "Alias": "PendingOrderCount",
+          "SourceColumn": "PendingCount",
+          "TypeRef": "sys.bigint",
+          "ForcedNullable": true
+        },
+        {
+          "Name": "CapturedPaymentAmount",
+          "Alias": "CapturedPaymentAmount",
+          "SourceColumn": "Amount",
+          "TypeRef": "sys.decimal",
+          "IsNullable": true,
+          "ForcedNullable": true,
+          "MaxLength": 9
+        },
+        {
+          "Name": "CapturedPaymentCount",
+          "Alias": "CapturedPaymentCount",
+          "SourceColumn": "PaymentId",
+          "TypeRef": "sys.uniqueidentifier",
+          "ForcedNullable": true
+        },
+        {
+          "Name": "NextContactReminderUtc",
+          "Alias": "NextContactReminderUtc",
+          "SourceColumn": "LastInteractionUtc",
+          "TypeRef": "sys.datetime2",
+          "IsNullable": true
+        }
+      ]
+    }
+  ]
+}

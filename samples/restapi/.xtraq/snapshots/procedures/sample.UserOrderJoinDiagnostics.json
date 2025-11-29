@@ -1,0 +1,82 @@
+{
+  "Schema": "sample",
+  "Name": "UserOrderJoinDiagnostics",
+  "Parameters": [
+    {
+      "Name": "UserId",
+      "TypeRef": "sys.int",
+      "UserTypeRef": "shared.pkInt"
+    }
+  ],
+  "ResultSets": [
+    {
+      "Columns": [
+        {
+          "Name": "OrderId",
+          "SourceColumn": "OrderId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "OrderNumber",
+          "SourceColumn": "OrderNumber",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 40
+        },
+        {
+          "Name": "Status",
+          "SourceColumn": "Status",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 50
+        },
+        {
+          "Name": "PublicNote",
+          "Alias": "PublicNote",
+          "SourceColumn": "NoteText",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "ForcedNullable": true,
+          "MaxLength": 400
+        },
+        {
+          "Name": "NoteIsPublic",
+          "Alias": "NoteIsPublic",
+          "SourceColumn": "IsPublic",
+          "TypeRef": "sys.bit",
+          "IsNullable": true,
+          "ForcedNullable": true
+        }
+      ]
+    },
+    {
+      "Columns": [
+        {
+          "Name": "OrderId",
+          "SourceColumn": "OrderId",
+          "TypeRef": "sys.int"
+        },
+        {
+          "Name": "OrderNumber",
+          "SourceColumn": "OrderNumber",
+          "TypeRef": "sys.nvarchar",
+          "MaxLength": 40
+        },
+        {
+          "Name": "PrimaryTag",
+          "Alias": "PrimaryTag",
+          "SourceColumn": "TagName",
+          "TypeRef": "sys.nvarchar",
+          "IsNullable": true,
+          "ForcedNullable": true,
+          "MaxLength": 80
+        },
+        {
+          "Name": "IsPrimary",
+          "SourceColumn": "IsPrimary",
+          "TypeRef": "sys.bit",
+          "IsNullable": true,
+          "ForcedNullable": true
+        }
+      ]
+    }
+  ]
+}

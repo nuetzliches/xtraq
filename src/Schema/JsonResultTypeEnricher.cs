@@ -103,13 +103,7 @@ internal sealed class JsonResultTypeEnricher
                     modifiedLocal = true;
                 }
             }
-            // Forced nullable adjustment (outer join heuristic)
-            if (col.ForcedNullable == true && (col.IsNullable == false || col.IsNullable == null))
-            {
-                col.IsNullable = true; modifiedLocal = true;
-                if (verbose && level == JsonTypeLogLevel.Detailed)
-                    _console.Verbose($"[json-type-nullable-adjust] {sp.SchemaName}.{sp.Name} {col.Name} forced nullable (outer join)");
-            }
+            // Forced nullable now preserved separately; downstream consumers decide how to expose join-driven nullability.
             // CAST / CONVERT target typing
             if (col.ExpressionKind == StoredProcedureContentModel.ResultColumnExpressionKind.Cast && string.IsNullOrWhiteSpace(col.SqlTypeName) && !string.IsNullOrWhiteSpace(col.CastTargetType))
             {

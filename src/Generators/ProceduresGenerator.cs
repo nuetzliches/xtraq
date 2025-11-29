@@ -519,6 +519,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
             }
             catch { }
         }
+        var autoBindParameters = BuildAutoBindParameterSet(Configuration?.ApiAutoBindParameters);
+
         foreach (var proc in procs.OrderBy(p => p.OperationName))
         {
             var op = proc.OperationName;
@@ -1305,15 +1307,47 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var rootLeafFields = new List<FieldDescriptor>();
                         var groupOrder = new List<string>();
                         var groups = new Dictionary<string, List<FieldDescriptor>>(StringComparer.OrdinalIgnoreCase);
+                        var groupNullability = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+                        void TrackGroupNullability(FieldDescriptor field)
+                        {
+                            if (!field.Name.Contains('.'))
+                            {
+                                return;
+                            }
+
+                            var parts = field.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length <= 1)
+                            {
+                                return;
+                            }
+
+                            var nullableDriver = field.IsNullable || field.ForcedNullable;
+                            string path = string.Empty;
+                            for (int i = 0; i < parts.Length - 1; i++)
+                            {
+                                path = string.IsNullOrEmpty(path) ? parts[i] : string.Concat(path, ".", parts[i]);
+                                if (!groupNullability.TryGetValue(path, out var existing))
+                                {
+                                    groupNullability[path] = nullableDriver;
+                                }
+                                else if (nullableDriver && !existing)
+                                {
+                                    groupNullability[path] = true;
+                                }
+                            }
+                        }
+
                         foreach (var f in effectiveFields)
                         {
+                            TrackGroupNullability(f);
                             if (!f.Name.Contains('.')) { rootLeafFields.Add(f); continue; }
                             var parts = f.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);
                             var key = parts[0];
                             if (!groups.ContainsKey(key)) { groups[key] = new List<FieldDescriptor>(); groupOrder.Add(key); }
                             // Rebuild the remainder (without the first segment) as a dotted name for later resolution
                             var remainder = string.Join('.', parts.Skip(1));
-                            groups[key].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues));
+                            groups[key].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable));
                         }
                         string Pascal(string raw)
                         {
@@ -1336,8 +1370,15 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var builtTypes = new List<(string TypeName, string Code)>();
                         var exprLookup = effectiveFields.Select((f, idx) => (f, idx)).ToDictionary(t => t.f.Name, t => MaterializeFieldExpressionCached(t.f, t.idx), StringComparer.OrdinalIgnoreCase);
 
-                        List<(string TypeName, string Code)> BuildGroup(string rootTypeName, string groupName, List<FieldDescriptor> fields, out string ctorExpr)
+                        string CombinePath(string? prefix, string segment)
+                            => string.IsNullOrWhiteSpace(prefix) ? segment : (string.IsNullOrWhiteSpace(segment) ? prefix! : prefix + "." + segment);
+
+                        bool GroupPathIsNullable(string? path)
+                            => string.IsNullOrWhiteSpace(path) ? false : (groupNullability.TryGetValue(path!, out var flag) && flag);
+
+                        List<(string TypeName, string Code)> BuildGroup(string rootTypeName, string groupName, List<FieldDescriptor> fields, string? parentPath, out string ctorExpr)
                         {
+                            var groupPath = CombinePath(parentPath, groupName);
                             var leaves = new List<FieldDescriptor>();
                             var subGroups = new Dictionary<string, List<FieldDescriptor>>(StringComparer.OrdinalIgnoreCase);
                             foreach (var f in fields)
@@ -1347,7 +1388,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                 var sub = parts[0];
                                 var remainder = string.Join('.', parts.Skip(1));
                                 if (!subGroups.ContainsKey(sub)) subGroups[sub] = new List<FieldDescriptor>();
-                                subGroups[sub].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues));
+                                subGroups[sub].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable));
                             }
                             var typeNameNested = BuildNestedTypeName(rootTypeName, groupName);
                             var paramLines = new List<string>();
@@ -1367,11 +1408,13 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             int sgIdx = 0;
                             foreach (var sg in subGroups)
                             {
-                                var nestedList = BuildGroup(typeNameNested, sg.Key, sg.Value, out var subCtor);
+                                var nestedList = BuildGroup(typeNameNested, sg.Key, sg.Value, groupPath, out var subCtor);
                                 builtTypes.AddRange(nestedList);
                                 var nestedTypeName = BuildNestedTypeName(typeNameNested, sg.Key);
                                 var comma = sgIdx == subGroups.Count - 1 ? string.Empty : ",";
-                                paramLines.Add($"    {nestedTypeName} {AliasToIdentifier(sg.Key)}{comma}");
+                                var nestedPath = CombinePath(groupPath, sg.Key);
+                                var nestedPropertyType = ApplyNullability(nestedTypeName, GroupPathIsNullable(nestedPath));
+                                paramLines.Add($"    {nestedPropertyType} {AliasToIdentifier(sg.Key)}{comma}");
                                 subgroupCtorExprs.Add(subCtor);
                                 sgIdx++;
                             }
@@ -1387,7 +1430,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var topGroupCtorExprs = new List<string>();
                         foreach (var g in groupOrder)
                         {
-                            var nestedList = BuildGroup(rsType, g, groups[g], out var gCtor);
+                            var nestedList = BuildGroup(rsType, g, groups[g], null, out var gCtor);
                             builtTypes.AddRange(nestedList);
                             topGroupCtorExprs.Add(gCtor);
                         }
@@ -1412,7 +1455,9 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             var gEsc = AliasToIdentifier(g);
                             var nestedTypeName = BuildNestedTypeName(rsType, g);
                             var comma = i == groupOrder.Count - 1 ? string.Empty : ",";
-                            rootParams.Add($"    {nestedTypeName} {gEsc}{comma}");
+                            var gPath = CombinePath(null, g);
+                            var groupNullable = GroupPathIsNullable(gPath);
+                            rootParams.Add($"    {ApplyNullability(nestedTypeName, groupNullable)} {gEsc}{comma}");
                         }
                         var rootFieldsBlock = string.Join(Environment.NewLine, rootParams);
                         // Mapping arguments: root leaves followed by group constructor expressions (matching parameter order)
@@ -1527,20 +1572,38 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                 // Parameters meta
                 var tableTypeNames = new HashSet<string>(proc.TableTypeParameters.Select(p => p.ParameterName), StringComparer.OrdinalIgnoreCase);
-                var requestParameters = proc.InputParameters.Select((p, i) => new
+                var enableParameterBinding = ShouldEnableParameterBinding(proc);
+                var requestParameters = proc.InputParameters.Select((p, i) =>
                 {
-                    Name = p.Name,
-                    PropertyName = p.PropertyName,
-                    RequestClrType = BuildRequestClrType(p.ClrType),
-                    InputClrType = p.ClrType,
-                    IsNullable = p.IsNullable,
-                    HasDefaultValue = p.HasDefaultValue ?? false,
-                    IsTableType = tableTypeNames.Contains(p.Name),
-                    ElementType = ResolveTableElementType(p.ClrType),
-                    IsValueType = LooksLikeValueType(p.ClrType),
-                    InputArgument = BuildInputArgument(p, tableTypeNames.Contains(p.Name)),
-                    Comma = i == proc.InputParameters.Count - 1 ? string.Empty : ","
+                    var isTableType = tableTypeNames.Contains(p.Name);
+                    var requestClrType = BuildRequestClrType(p.ClrType);
+                    var resolverClrType = BuildResolverClrType(p.ClrType);
+                    var resolvedVar = "__resolved" + p.PropertyName;
+                    var resolveAssignment = BuildResolveAssignment(p.ClrType, resolvedVar);
+                    var emitProperty = ShouldExposeParameterOnRequest(enableParameterBinding, autoBindParameters, p.Name);
+                    var initializer = emitProperty ? $"request.{p.PropertyName}" : "default";
+
+                    return new
+                    {
+                        Name = p.Name,
+                        PropertyName = p.PropertyName,
+                        RequestClrType = requestClrType,
+                        InputClrType = p.ClrType,
+                        IsNullable = p.IsNullable,
+                        HasDefaultValue = p.HasDefaultValue ?? false,
+                        IsTableType = isTableType,
+                        ElementType = ResolveTableElementType(p.ClrType),
+                        IsValueType = LooksLikeValueType(p.ClrType),
+                        InputArgument = BuildInputArgument(p, isTableType),
+                        Comma = i == proc.InputParameters.Count - 1 ? string.Empty : ",",
+                        EmitProperty = emitProperty,
+                        Initializer = initializer,
+                        ResolverClrType = resolverClrType,
+                        ResolvedVariableName = resolvedVar,
+                        ResolveAssignment = resolveAssignment
+                    };
                 }).ToList();
+                var requestPropertyParameters = requestParameters.Where(p => p.EmitProperty).ToList();
                 var paramLines = new List<string>();
                 foreach (var ip in proc.InputParameters)
                 {
@@ -1560,7 +1623,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                 // Output factory args
                 string outputFactoryArgs = proc.OutputFields.Count > 0 ? string.Join(", ", proc.OutputFields.Select(f => CastOutputValue(f))) : string.Empty;
-                var enableParameterBinding = ShouldEnableParameterBinding(proc);
 
                 // Aggregate assignments
                 var model = new
@@ -1587,6 +1649,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     InputTypeName = inputTypeName,
                     RequestTypeName = requestTypeName,
                     RequestParameters = requestParameters,
+                    RequestPropertyParameters = requestPropertyParameters,
                     EnableParameterBinding = enableParameterBinding,
                     ParameterLines = paramLines,
                     EnableParameterBindingArgument = enableParameterBinding ? string.Empty : ", enableParameterBinding: false",
@@ -1596,7 +1659,12 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         {
                             // Build SqlDataRecord collection via reflection helper (ExecutionSupport.TvpHelper)
                             var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
-                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; if (source != null) {{ var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; }} if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
+                            if (ip.IsNullable)
+                            {
+                                return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; if (source != null) {{ var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; }} else {{ prm.Value = DBNull.Value; }} if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
+                            }
+
+                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
                         }
                         var valueExpr = ip.IsNullable ? $"(object?)input.{ip.PropertyName} ?? DBNull.Value" : $"input.{ip.PropertyName}";
                         return $"cmd.Parameters[\"@{ip.Name}\"].Value = {valueExpr};";
@@ -2028,7 +2096,12 @@ internal sealed class ProceduresGenerator : GeneratorBase
     private static string BuildInputArgument(FieldDescriptor parameter, bool isTableType)
     {
         var variable = parameter.PropertyName;
-        if (parameter.IsNullable || isTableType)
+        if (isTableType)
+        {
+            return parameter.IsNullable ? variable : $"{variable}!";
+        }
+
+        if (parameter.IsNullable)
         {
             return variable;
         }
@@ -2171,7 +2244,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
     private bool ShouldEnableParameterBinding(ProcedureDescriptor proc)
     {
-        var configured = Configuration?.ApiHydrateProcedures;
+        var configured = Configuration?.ApiAutoBindProcedures;
         if (configured is { Count: > 0 })
         {
             var opName = proc.OperationName ?? $"{proc.Schema}.{proc.ProcedureName}";
@@ -2192,6 +2265,87 @@ internal sealed class ProceduresGenerator : GeneratorBase
         }
 
         return true;
+    }
+
+    private static HashSet<string> BuildAutoBindParameterSet(IReadOnlyCollection<string>? configured)
+    {
+        if (configured is not { Count: > 0 })
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in configured)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+            {
+                continue;
+            }
+
+            var token = entry.Trim();
+            if (token.StartsWith("@", StringComparison.Ordinal))
+            {
+                token = token[1..];
+            }
+
+            var separatorIdx = token.IndexOfAny(new[] { ' ', '\t', '\r', '\n' });
+            if (separatorIdx >= 0)
+            {
+                token = token[..separatorIdx];
+            }
+
+            if (token.Length == 0)
+            {
+                continue;
+            }
+
+            set.Add(token);
+        }
+
+        return set;
+    }
+
+    private static bool ShouldExposeParameterOnRequest(bool enableParameterBinding, HashSet<string> autoBindParameters, string parameterName)
+    {
+        if (!enableParameterBinding)
+        {
+            return true;
+        }
+
+        if (autoBindParameters is null || autoBindParameters.Count == 0)
+        {
+            return true;
+        }
+
+        return !autoBindParameters.Contains(parameterName);
+    }
+
+    private static string BuildResolverClrType(string clrType)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return "object?";
+        }
+
+        var trimmed = clrType.Trim();
+        if (!trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            trimmed += "?";
+        }
+
+        return trimmed;
+    }
+
+    private static string BuildResolveAssignment(string clrType, string variableName)
+    {
+        if (string.IsNullOrWhiteSpace(clrType))
+        {
+            return variableName;
+        }
+
+        return LooksLikeValueType(clrType)
+            ? $"{variableName} ?? default"
+            : $"{variableName} ?? default!";
     }
 
     private static readonly HashSet<string> CSharpKeywords = new(new[]

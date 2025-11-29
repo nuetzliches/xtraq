@@ -241,7 +241,7 @@ internal sealed class SchemaArtifactWriter
             });
         }
 
-        PruneExtraneousFiles(tableTypeRoot, validTableTypeFiles);
+        PruneExtraneousFiles(tableTypeRoot, validTableTypeFiles, tableTypeSchemas);
 
         var scalarTypes = new List<UserDefinedTypeRow>();
         try
@@ -699,7 +699,7 @@ internal sealed class SchemaArtifactWriter
             }
         }
 
-        PruneExtraneousFiles(tableRoot, validTableFiles);
+        PruneExtraneousFiles(tableRoot, validTableFiles, schemaSet);
         RemoveLegacyTableCacheArtifacts(Directory.GetParent(schemaRoot)?.FullName ?? schemaRoot);
 
         summary.Tables.Sort((a, b) =>
@@ -1033,7 +1033,7 @@ internal sealed class SchemaArtifactWriter
         }
 
         summary.FunctionsVersion = 2;
-        PruneExtraneousFiles(functionRoot, validFunctionFiles);
+        PruneExtraneousFiles(functionRoot, validFunctionFiles, schemaSet);
 
         return summary;
     }
@@ -2226,11 +2226,21 @@ internal sealed class SchemaArtifactWriter
         return stream.ToArray();
     }
 
-    private static void PruneExtraneousFiles(string directory, HashSet<string> validFileNames)
+    private static void PruneExtraneousFiles(string directory, HashSet<string> validFileNames, ISet<string>? schemaFilter = null)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
             return;
+        }
+
+        HashSet<string>? normalizedSchemas = null;
+        if (schemaFilter != null && schemaFilter.Count > 0)
+        {
+            normalizedSchemas = new HashSet<string>(schemaFilter.Where(static s => !string.IsNullOrWhiteSpace(s)).Select(static s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+            if (normalizedSchemas.Count == 0)
+            {
+                normalizedSchemas = null;
+            }
         }
 
         try
@@ -2242,6 +2252,15 @@ internal sealed class SchemaArtifactWriter
                 if (validFileNames != null && validFileNames.Contains(fileName))
                 {
                     continue;
+                }
+
+                if (normalizedSchemas != null)
+                {
+                    var schema = TryReadSchemaFromFile(path);
+                    if (string.IsNullOrWhiteSpace(schema) || !normalizedSchemas.Contains(schema))
+                    {
+                        continue;
+                    }
                 }
 
                 try
@@ -2258,6 +2277,29 @@ internal sealed class SchemaArtifactWriter
         {
             // ignore cleanup failures
         }
+    }
+
+    private static string? TryReadSchemaFromFile(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var document = JsonDocument.Parse(stream);
+            if (document.RootElement.TryGetProperty("Schema", out var schemaProperty) && schemaProperty.ValueKind == JsonValueKind.String)
+            {
+                var schema = schemaProperty.GetString();
+                if (!string.IsNullOrWhiteSpace(schema))
+                {
+                    return schema.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore schema probing errors; fallback will skip pruning when schema is unknown.
+        }
+
+        return null;
     }
 
     private static void RemoveLegacyTableCacheArtifacts(string xtraqRoot)

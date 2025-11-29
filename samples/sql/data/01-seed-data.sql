@@ -126,6 +126,60 @@ WHEN NOT MATCHED THEN
     INSERT (OrderId, Gateway, Amount, CapturedAtUtc, FailureReason, Properties)
     VALUES (source.OrderId, source.Gateway, source.Amount, source.CapturedAtUtc, source.FailureReason, source.Properties);
 
+DECLARE @OrderNotes TABLE
+(
+    OrderNumber NVARCHAR(40) NOT NULL,
+    NoteText    NVARCHAR(400) NOT NULL,
+    IsPublic    BIT NOT NULL
+);
+
+INSERT INTO @OrderNotes (OrderNumber, NoteText, IsPublic)
+VALUES
+    (N'ORD-1000', N'Customer confirmed shipping details.', 1),
+    (N'ORD-1001', N'Internal QA hold until fraud check clears.', 0);
+
+MERGE test.OrderNotes AS target
+USING (
+    SELECT o.OrderId, notes.NoteText, notes.IsPublic
+    FROM @OrderNotes AS notes
+    INNER JOIN sample.Orders AS o
+        ON o.OrderNumber = notes.OrderNumber
+) AS source (OrderId, NoteText, IsPublic)
+    ON target.OrderId = source.OrderId
+   AND target.NoteText = source.NoteText
+WHEN MATCHED THEN
+    UPDATE SET IsPublic = source.IsPublic
+WHEN NOT MATCHED THEN
+    INSERT (OrderId, NoteText, IsPublic)
+    VALUES (source.OrderId, source.NoteText, source.IsPublic);
+
+DECLARE @OrderTags TABLE
+(
+    OrderNumber NVARCHAR(40) NOT NULL,
+    TagName     NVARCHAR(80) NOT NULL,
+    IsPrimary   BIT NOT NULL
+);
+
+INSERT INTO @OrderTags (OrderNumber, TagName, IsPrimary)
+VALUES
+    (N'ORD-1000', N'priority:rush', 1),
+    (N'ORD-1001', N'workflow:fraud-hold', 0);
+
+MERGE [test-foo].OrderTags AS target
+USING (
+    SELECT o.OrderId, tags.TagName, tags.IsPrimary
+    FROM @OrderTags AS tags
+    INNER JOIN sample.Orders AS o
+        ON o.OrderNumber = tags.OrderNumber
+) AS source (OrderId, TagName, IsPrimary)
+    ON target.OrderId = source.OrderId
+   AND target.TagName = source.TagName
+WHEN MATCHED THEN
+    UPDATE SET IsPrimary = source.IsPrimary
+WHEN NOT MATCHED THEN
+    INSERT (OrderId, TagName, IsPrimary)
+    VALUES (source.OrderId, source.TagName, source.IsPrimary);
+
 DECLARE @Contacts sample.UserContactTableType;
 
 INSERT INTO @Contacts (UserId, Email, DisplayName, Source, Preferred, LastInteractionUtc)

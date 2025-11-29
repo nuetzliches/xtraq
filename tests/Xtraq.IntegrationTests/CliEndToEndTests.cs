@@ -86,6 +86,21 @@ public sealed class CliEndToEndTests : IAsyncLifetime
             Assert.Contains("partial class UserList", procedureContent, StringComparison.Ordinal);
             Assert.Contains("public static class UserListProcedure", procedureContent, StringComparison.Ordinal);
 
+            var joinDiagnosticsArtifact = Path.Combine(outputDirectory, "Sample", "UserOrderJoinDiagnostics.cs");
+            Assert.True(File.Exists(joinDiagnosticsArtifact), $"Expected generated procedure artifact at {joinDiagnosticsArtifact}.");
+
+            var joinDiagnosticsContent = await File.ReadAllTextAsync(joinDiagnosticsArtifact);
+            Assert.Contains("partial class UserOrderJoinDiagnostics", joinDiagnosticsContent, StringComparison.Ordinal);
+            Assert.Contains("UserOrderJoinDiagnosticsResultSet1Result", joinDiagnosticsContent, StringComparison.Ordinal);
+            Assert.Contains("UserOrderJoinDiagnosticsResultSet2Result", joinDiagnosticsContent, StringComparison.Ordinal);
+
+            var subselectDiagnosticsArtifact = Path.Combine(outputDirectory, "Sample", "UserOrderSubselectDiagnostics.cs");
+            Assert.True(File.Exists(subselectDiagnosticsArtifact), $"Expected generated procedure artifact at {subselectDiagnosticsArtifact}.");
+
+            var subselectDiagnosticsContent = await File.ReadAllTextAsync(subselectDiagnosticsArtifact);
+            Assert.Contains("partial class UserOrderSubselectDiagnostics", subselectDiagnosticsContent, StringComparison.Ordinal);
+            Assert.Contains("PrimaryTagWithNoteSummary", subselectDiagnosticsContent, StringComparison.Ordinal);
+
             var dbContextPath = Path.Combine(outputDirectory, "XtraqDbContext.cs");
             Assert.True(File.Exists(dbContextPath), "DbContext artifact not generated.");
 
@@ -104,6 +119,35 @@ public sealed class CliEndToEndTests : IAsyncLifetime
                 "Sample/UserContactTableType.cs",
                 "Shared/AuditLogEntryTableType.cs"
             }, tableTypeArtifacts);
+
+            var joinDiagnosticsSnapshotPath = Path.Combine(snapshotDirectory, "procedures", "sample.UserOrderJoinDiagnostics.json");
+            Assert.True(File.Exists(joinDiagnosticsSnapshotPath), "sample.UserOrderJoinDiagnostics.json missing under procedures/ after snapshot generation.");
+
+            await using var joinSnapshotStream = File.OpenRead(joinDiagnosticsSnapshotPath);
+            using var joinSnapshotDocument = System.Text.Json.JsonDocument.Parse(joinSnapshotStream);
+            var joinResultSets = joinSnapshotDocument.RootElement.GetProperty("ResultSets");
+            Assert.Equal(2, joinResultSets.GetArrayLength());
+
+            var publicNotesColumns = joinResultSets[0].GetProperty("Columns");
+            Assert.True(ColumnIsNullable(FindColumn(publicNotesColumns, "PublicNote")), "PublicNote should remain nullable when projected from a LEFT JOIN ON predicate.");
+            Assert.True(ColumnIsNullable(FindColumn(publicNotesColumns, "NoteIsPublic")), "NoteIsPublic should be nullable because rows without notes are preserved.");
+
+            var primaryTagsColumns = joinResultSets[1].GetProperty("Columns");
+            // TODO: tighten these expectations once predicate-based nullability inference handles WHERE filters on LEFT JOIN targets.
+            Assert.True(ColumnIsNullable(FindColumn(primaryTagsColumns, "PrimaryTag")), "PrimaryTag currently remains nullable.");
+            Assert.True(ColumnIsNullable(FindColumn(primaryTagsColumns, "IsPrimary")), "IsPrimary currently remains nullable.");
+
+            var subselectSnapshotPath = Path.Combine(snapshotDirectory, "procedures", "sample.UserOrderSubselectDiagnostics.json");
+            Assert.True(File.Exists(subselectSnapshotPath), "sample.UserOrderSubselectDiagnostics.json missing under procedures/ after snapshot generation.");
+
+            await using var subselectSnapshotStream = File.OpenRead(subselectSnapshotPath);
+            using var subselectSnapshotDocument = System.Text.Json.JsonDocument.Parse(subselectSnapshotStream);
+            var subselectResultSets = subselectSnapshotDocument.RootElement.GetProperty("ResultSets");
+            Assert.Equal(1, subselectResultSets.GetArrayLength());
+            var subselectColumns = subselectResultSets[0].GetProperty("Columns");
+            Assert.True(ColumnIsNullable(FindColumn(subselectColumns, "PrimaryTagWithNoteSummary")), "PrimaryTagWithNoteSummary should be nullable because the scalar sub-select can return zero rows.");
+            Assert.True(ColumnIsNullable(FindColumn(subselectColumns, "PrimaryTagNoteIsPublic")), "PrimaryTagNoteIsPublic should be nullable since the LEFT JOIN runs inside the sub-select.");
+            Assert.True(ColumnIsNullable(FindColumn(subselectColumns, "LatestPublicNote")), "LatestPublicNote should be nullable when no public note exists for the order.");
         }
         finally
         {
@@ -833,5 +877,25 @@ public sealed class CliEndToEndTests : IAsyncLifetime
                 Environment.SetEnvironmentVariable(name, original);
             }
         }
+    }
+
+    private static System.Text.Json.JsonElement FindColumn(System.Text.Json.JsonElement columnsElement, string columnName)
+    {
+        foreach (var column in columnsElement.EnumerateArray())
+        {
+            if (column.TryGetProperty("Name", out var nameProperty) &&
+                string.Equals(nameProperty.GetString(), columnName, StringComparison.Ordinal))
+            {
+                return column;
+            }
+        }
+
+        throw new InvalidOperationException($"Column '{columnName}' was not found in the snapshot.");
+    }
+
+    private static bool ColumnIsNullable(System.Text.Json.JsonElement columnElement)
+    {
+        return columnElement.TryGetProperty("IsNullable", out var nullableProperty) &&
+            nullableProperty.ValueKind == System.Text.Json.JsonValueKind.True;
     }
 }

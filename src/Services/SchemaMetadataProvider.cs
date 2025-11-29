@@ -477,8 +477,8 @@ namespace Xtraq.Metadata
                                 ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName)
                                 ?? TableTypeRefFormatter.Combine(ttSchema ?? schema, ttName)
                                 ?? ttName!;
-                            var clrType = $"IReadOnlyList<{pascal}>?";
-                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, true, sqlIdentifier, null, Documentation: null, Attributes: attrs, HasDefaultValue: hasDefaultValue);
+                            var clrType = $"IReadOnlyList<{pascal}>{(isNullable ? "?" : string.Empty)}";
+                            fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clrType, isNullable, sqlIdentifier, null, Documentation: null, Attributes: attrs, HasDefaultValue: hasDefaultValue);
 
                             var referenceSource = effectiveTableTypeRef
                                 ?? TableTypeRefFormatter.Combine(ttCatalog, ttSchema, ttName)
@@ -658,6 +658,7 @@ namespace Xtraq.Metadata
                         var sqlType = resolved?.SqlType ?? columnElement.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         var inferred = resolved?.IsNullable ?? InferNullabilityFromTypeRef(typeRef);
+                        var forcedNullable = columnElement.TryGetProperty("ForcedNullable", out var forcedToken) && forcedToken.ValueKind == JsonValueKind.True;
                         bool isNullable;
                         if (columnElement.TryGetProperty("IsNullable", out var nullableToken))
                         {
@@ -815,7 +816,7 @@ namespace Xtraq.Metadata
                             }
 
                             var arrayClr = ComposeArrayClrType(elementClrType!, isNullable);
-                            collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), arrayClr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: elementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(elementSqlType) ? null : elementSqlType, JsonIncludeNullValues: includeNullValues));
+                            collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), arrayClr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: elementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(elementSqlType) ? null : elementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
                             jsonBuilder?.RegisterLeaf(fullName, true);
                             return true;
                         }
@@ -846,7 +847,7 @@ namespace Xtraq.Metadata
 
                         jsonBuilder?.RegisterLeaf(fullName, returnsJsonArray == true);
 
-                        collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), clr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: string.IsNullOrWhiteSpace(jsonElementClrType) ? null : jsonElementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(jsonElementSqlType) ? null : jsonElementSqlType, JsonIncludeNullValues: includeNullValues));
+                        collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), clr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: string.IsNullOrWhiteSpace(jsonElementClrType) ? null : jsonElementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(jsonElementSqlType) ? null : jsonElementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
                     }
 
                     static string CombineColumnNames(string? prefix, string? name)

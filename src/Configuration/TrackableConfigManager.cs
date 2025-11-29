@@ -403,12 +403,12 @@ internal static class TrackableConfigManager
         var buildSchemas = ParseSchemas(buildSchemasRaw);
 
         var apiModeRaw = ResolveValue(envValues, "XTRAQ_API_MODE") ?? existing?.Api?.Mode;
-        var apiRequestsHydrateRaw = ResolveValue(envValues, "XTRAQ_API_HYDRATE")
-            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.Hydrate));
-        var apiRequestsHydrate = ParseSchemas(apiRequestsHydrateRaw);
-        var apiRequestsHydrateProceduresRaw = ResolveValue(envValues, "XTRAQ_API_HYDRATE_PROCEDURES")
-            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.HydrateProcedures));
-        var apiRequestsHydrateProcedures = ParseSchemas(apiRequestsHydrateProceduresRaw);
+        var apiRequestsAutoBindRaw = ResolveValue(envValues, "XTRAQ_API_AUTOBIND")
+            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.AutoBind));
+        var apiRequestsAutoBind = ParseSchemas(apiRequestsAutoBindRaw);
+        var apiRequestsAutoBindProceduresRaw = ResolveValue(envValues, "XTRAQ_API_AUTOBIND_PROCEDURES")
+            ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.AutoBindProcedures));
+        var apiRequestsAutoBindProcedures = ParseSchemas(apiRequestsAutoBindProceduresRaw);
 
         var entityFrameworkRaw = ResolveValue(envValues, "XTRAQ_ENTITY_FRAMEWORK_ENABLED");
         var entityFrameworkEnabled = existing?.EntityFramework?.Enabled;
@@ -432,8 +432,8 @@ internal static class TrackableConfigManager
                 Mode = apiModeRaw,
                 Requests = new ApiRequestPayload
                 {
-                    Hydrate = apiRequestsHydrate,
-                    HydrateProcedures = apiRequestsHydrateProcedures
+                    AutoBind = apiRequestsAutoBind,
+                    AutoBindProcedures = apiRequestsAutoBindProcedures
                 }
             },
             EntityFramework = new EntityFrameworkPayload { Enabled = entityFrameworkEnabled },
@@ -518,14 +518,14 @@ internal static class TrackableConfigManager
         }
 
         var requestsMap = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        if (requests.Hydrate.Count > 0)
+        if (requests.AutoBind.Count > 0)
         {
-            requestsMap["Hydrate"] = requests.Hydrate;
+            requestsMap["AutoBind"] = requests.AutoBind;
         }
 
-        if (requests.HydrateProcedures.Count > 0)
+        if (requests.AutoBindProcedures.Count > 0)
         {
-            requestsMap["HydrateProcedures"] = requests.HydrateProcedures;
+            requestsMap["AutoBindProcedures"] = requests.AutoBindProcedures;
         }
 
         return requestsMap.Count == 0 ? null : requestsMap;
@@ -653,12 +653,12 @@ internal static class TrackableConfigManager
         var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
         var jsonIncludeNullValues = overrides.ResultSet?.Json?.IncludeNullValues ?? baseline.ResultSet?.Json?.IncludeNullValues;
         var apiMode = SelectString(overrides.Api?.Mode, baseline.Api?.Mode);
-        var apiHydrate = overrides.Api?.Requests?.Hydrate.Count > 0
-            ? overrides.Api!.Requests!.Hydrate
-            : baseline.Api?.Requests?.Hydrate ?? Array.Empty<string>();
-        var apiHydrateProcedures = overrides.Api?.Requests?.HydrateProcedures.Count > 0
-            ? overrides.Api!.Requests!.HydrateProcedures
-            : baseline.Api?.Requests?.HydrateProcedures ?? Array.Empty<string>();
+        var apiAutoBind = overrides.Api?.Requests?.AutoBind.Count > 0
+            ? overrides.Api!.Requests!.AutoBind
+            : baseline.Api?.Requests?.AutoBind ?? Array.Empty<string>();
+        var apiAutoBindProcedures = overrides.Api?.Requests?.AutoBindProcedures.Count > 0
+            ? overrides.Api!.Requests!.AutoBindProcedures
+            : baseline.Api?.Requests?.AutoBindProcedures ?? Array.Empty<string>();
         var entityFramework = overrides.EntityFramework?.Enabled ?? baseline.EntityFramework?.Enabled;
         var schemas = overrides.BuildSchemas.Count > 0
             ? overrides.BuildSchemas
@@ -675,8 +675,8 @@ internal static class TrackableConfigManager
                 Mode = apiMode,
                 Requests = new ApiRequestPayload
                 {
-                    Hydrate = apiHydrate.Count > 0 ? apiHydrate.ToArray() : Array.Empty<string>(),
-                    HydrateProcedures = apiHydrateProcedures.Count > 0 ? apiHydrateProcedures.ToArray() : Array.Empty<string>()
+                    AutoBind = apiAutoBind.Count > 0 ? apiAutoBind.ToArray() : Array.Empty<string>(),
+                    AutoBindProcedures = apiAutoBindProcedures.Count > 0 ? apiAutoBindProcedures.ToArray() : Array.Empty<string>()
                 }
             },
             EntityFramework = new EntityFrameworkPayload { Enabled = entityFramework },
@@ -711,8 +711,8 @@ internal static class TrackableConfigManager
                         ? null
                         : new ApiRequestPayload
                         {
-                            Hydrate = source.Api.Requests.Hydrate.Count > 0 ? source.Api.Requests.Hydrate.ToArray() : Array.Empty<string>(),
-                            HydrateProcedures = source.Api.Requests.HydrateProcedures.Count > 0 ? source.Api.Requests.HydrateProcedures.ToArray() : Array.Empty<string>()
+                            AutoBind = source.Api.Requests.AutoBind.Count > 0 ? source.Api.Requests.AutoBind.ToArray() : Array.Empty<string>(),
+                            AutoBindProcedures = source.Api.Requests.AutoBindProcedures.Count > 0 ? source.Api.Requests.AutoBindProcedures.ToArray() : Array.Empty<string>()
                         }
                 },
             EntityFramework = source.EntityFramework is null ? null : new EntityFrameworkPayload { Enabled = source.EntityFramework.Enabled },
@@ -733,8 +733,8 @@ internal static class TrackableConfigManager
         {
             requests = new ApiRequestPayload
             {
-                Hydrate = ReadStringArray(requestsElement, "Hydrate"),
-                HydrateProcedures = ReadStringArray(requestsElement, "HydrateProcedures")
+                AutoBind = ReadStringArray(requestsElement, "AutoBind"),
+                AutoBindProcedures = ReadStringArray(requestsElement, "AutoBindProcedures")
             };
         }
 
@@ -1002,14 +1002,14 @@ internal static class TrackableConfigManager
             }
         }
 
-        if (payload.Api?.Requests?.Hydrate is { Count: > 0 })
+        if (payload.Api?.Requests?.AutoBind is { Count: > 0 })
         {
-            defaults["XTRAQ_API_HYDRATE"] = string.Join(',', payload.Api.Requests.Hydrate);
+            defaults["XTRAQ_API_AUTOBIND"] = string.Join(',', payload.Api.Requests.AutoBind);
         }
 
-        if (payload.Api?.Requests?.HydrateProcedures is { Count: > 0 })
+        if (payload.Api?.Requests?.AutoBindProcedures is { Count: > 0 })
         {
-            defaults["XTRAQ_API_HYDRATE_PROCEDURES"] = string.Join(',', payload.Api.Requests.HydrateProcedures);
+            defaults["XTRAQ_API_AUTOBIND_PROCEDURES"] = string.Join(',', payload.Api.Requests.AutoBindProcedures);
         }
 
         if (payload.EntityFramework?.Enabled is not null)
@@ -1074,8 +1074,8 @@ internal static class TrackableConfigManager
 
     private sealed record ApiRequestPayload
     {
-        public IReadOnlyList<string> Hydrate { get; init; } = Array.Empty<string>();
-        public IReadOnlyList<string> HydrateProcedures { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<string> AutoBind { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<string> AutoBindProcedures { get; init; } = Array.Empty<string>();
     }
 
     private sealed record EntityFrameworkPayload
