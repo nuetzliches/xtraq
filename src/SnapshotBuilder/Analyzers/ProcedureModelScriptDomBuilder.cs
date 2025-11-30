@@ -578,16 +578,6 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IPr
                 }
             }
 
-            var legacyIntoProperty = output.GetType().GetProperty("OutputIntoTable", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (legacyIntoProperty != null)
-            {
-                var intoValue = legacyIntoProperty.GetValue(output);
-                if (intoValue != null)
-                {
-                    return true;
-                }
-            }
-
             return false;
         }
 

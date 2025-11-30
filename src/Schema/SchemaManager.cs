@@ -14,10 +14,6 @@ internal sealed class SchemaManager(
     ILocalCacheService? localCacheService = null
 )
 {
-    private static bool ShouldDiagJsonMissAst()
-    {
-        return LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug) || LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Trace);
-    }
     // Logging prefixes used in this manager (overview):
     // [proc-fixup-json-reparse]   Added JSON sets after placeholder-only detection via reparse.
     // [proc-fixup-json-cols]      Extracted column names for synthetic JSON set.
@@ -530,26 +526,6 @@ internal sealed class SchemaManager(
                             JsonRootProperty = null,
                             Columns = syntheticColumns
                         };
-                        // Legacy FOR JSON single-column upgrade
-                        if (syntheticSet.Columns.Count == 1 && string.Equals(syntheticSet.Columns[0].Name, "JSON_F52E2B61-18A1-11d1-B105-00805F49916B", StringComparison.OrdinalIgnoreCase) && (syntheticSet.Columns[0].SqlTypeName?.StartsWith("nvarchar", StringComparison.OrdinalIgnoreCase) ?? false))
-                        {
-                            if (LogLevelConfiguration.IsAtLeast(LogLevelThreshold.Debug))
-                            {
-                                syntheticSet = new StoredProcedureContentModel.ResultSet
-                                {
-                                    ReturnsJson = true,
-                                    ReturnsJsonArray = true,
-                                    JsonRootProperty = null,
-                                    Columns = Array.Empty<StoredProcedureContentModel.ResultColumn>()
-                                };
-                                if (jsonTypeLogLevel == JsonTypeLogLevel.Detailed)
-                                    consoleService.Verbose($"[proc-json-legacy-upgrade] {storedProcedure.SchemaName}.{storedProcedure.Name} single synthetic FOR JSON column upgraded (flag)");
-                            }
-                            else if (ShouldDiagJsonMissAst())
-                            {
-                                consoleService.Output($"[proc-json-legacy-skip] {storedProcedure.SchemaName}.{storedProcedure.Name} legacy single-column FOR JSON sentinel ignored (flag disabled)");
-                            }
-                        }
                         storedProcedure.Content = new StoredProcedureContentModel
                         {
                             Definition = storedProcedure.Content?.Definition ?? definition,

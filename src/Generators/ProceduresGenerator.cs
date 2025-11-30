@@ -554,21 +554,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
             // if (Environment.GetEnvironmentVariable("XTRAQ_FORWARDING_DIAG") == "1")
             //     try { Console.Out.WriteLine($"[proc-forward-xschema][skip] Missing SqlText metadata for {proc.Schema}.{proc.ProcedureName}"); } catch { }
 
-            // Remove legacy files (<Proc>Result.cs, <Proc>Input.cs, <Proc>Output.cs) before writing the new consolidated file
-            try
-            {
-                var legacyFiles = new[]
-                {
-                    Path.Combine(schemaDir, procPart + "Result.cs"),
-                    Path.Combine(schemaDir, procPart + "Input.cs"),
-                    Path.Combine(schemaDir, procPart + "Output.cs")
-                };
-                foreach (var lf in legacyFiles)
-                {
-                    if (File.Exists(lf)) File.Delete(lf);
-                }
-            }
-            catch { }
             string finalCode;
             if (hasUnifiedTemplate && unifiedTemplateRaw != null)
             {

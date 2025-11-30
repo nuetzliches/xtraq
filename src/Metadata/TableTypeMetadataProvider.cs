@@ -97,7 +97,7 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
 
         // Strategy:
         // 1. Prefer expanded snapshot index.json if it contains UserDefinedTableTypes.
-        // 2. Fallback to latest monolith json containing UserDefinedTableTypes.
+        // 2. Fallback to split tabletypes/*.json files.
         // 3. If none found -> empty.
         JsonElement udtts = default;
         JsonDocument? udttsDocument = null;
@@ -117,28 +117,6 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                 }
             }
             catch { /* ignore and fallback */ }
-        }
-        if (!found)
-        {
-            var files = Directory.GetFiles(schemaDir, "*.json")
-                .Where(f => !string.Equals(Path.GetFileName(f), "index.json", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            foreach (var fi in files.Select(f => new FileInfo(f)).OrderByDescending(fi => fi.LastWriteTimeUtc))
-            {
-                try
-                {
-                    using var fs = File.OpenRead(fi.FullName);
-                    using var doc = JsonDocument.Parse(fs);
-                    if (doc.RootElement.TryGetProperty("UserDefinedTableTypes", out var monolithUdtts) && monolithUdtts.ValueKind == JsonValueKind.Array)
-                    {
-                        udttsDocument = JsonDocument.Parse(monolithUdtts.GetRawText());
-                        udtts = udttsDocument.RootElement;
-                        found = true;
-                        break;
-                    }
-                }
-                catch { /* continue search */ }
-            }
         }
         if (!found)
         {
