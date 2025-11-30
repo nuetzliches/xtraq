@@ -24,7 +24,7 @@ test plans mirror the actual behaviour.
 - **Guardrail driven diagnostics.** Reuse existing switches (`--verbose`,
   `XTRAQ_SNAPSHOT_SUMMARY[_PATH]`) and document any new flags here before wiring them into
   the CLI.
-- **ENV-first configuration.** The `.env` flow owns configuration. Warn when legacy files
+- **ENV-first configuration.** The `.env` flow owns configuration. Warn when outdated files
   resurface and capture remediation guidance.
 
 ## Pipeline Overview
@@ -101,7 +101,7 @@ Document any new artefacts in this section before merging code.
 ## Result Set Resolution Flow
 
 `ProcedureModelScriptDomBuilder` walks the ScriptDom AST emitted for each stored procedure
-and derives structured result-set metadata without relying on the legacy
+and derives structured result-set metadata without relying on the retired
 `StoredProcedureContentModel`. Understanding its resolution pipeline is essential when
 adjusting analyzer fallbacks.
 

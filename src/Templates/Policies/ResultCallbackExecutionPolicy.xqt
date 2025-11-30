@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 /// <summary>
 /// Generic execution policy that can tap or transform the result (or failure) of a procedure call without changing the executor signature.
-/// Useful for wrapping outputs into legacy envelopes or triggering side effects such as history logging.
+/// Useful for wrapping outputs into custom envelopes or triggering side effects such as history logging.
 /// </summary>
 public sealed class ResultCallbackExecutionPolicy<TInput, TResult> : IProcedureExecutionPolicy
 {
