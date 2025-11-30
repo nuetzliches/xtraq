@@ -24,12 +24,11 @@ internal static class SnapshotBuilderServiceCollectionExtensions
             provider.GetRequiredService<DbContext>(),
             provider.GetRequiredService<IConsoleService>(),
             provider.GetRequiredService<SchemaSnapshotFileLayoutService>()));
-        services.AddSingleton<IProcedureModelBuilder>(provider =>
+        services.AddSingleton<IProcedureAstBuilder>(provider =>
         {
             var schemaMetadataProvider = provider.GetService<IEnhancedSchemaMetadataProvider>();
             return new ProcedureModelScriptDomBuilder(schemaMetadataProvider);
         });
-        services.AddSingleton<IProcedureAstBuilder>(provider => (IProcedureAstBuilder)provider.GetRequiredService<IProcedureModelBuilder>());
         services.AddSingleton<IProcedureMetadataEnricher>(provider => new ProcedureMetadataEnricher(
             provider.GetRequiredService<IConsoleService>(),
             provider.GetRequiredService<IFunctionJsonMetadataProvider>(),

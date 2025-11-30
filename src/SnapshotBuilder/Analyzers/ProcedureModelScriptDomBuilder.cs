@@ -12,26 +12,13 @@ namespace Xtraq.SnapshotBuilder.Analyzers;
 /// <summary>
 /// Builds <see cref="ProcedureModel"/> instances directly from ScriptDom ASTs without relying on the legacy StoredProcedureContentModel.
 /// </summary>
-internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder, IProcedureModelBuilder
+internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
 {
     private readonly IEnhancedSchemaMetadataProvider? _schemaMetadataProvider;
 
     public ProcedureModelScriptDomBuilder(IEnhancedSchemaMetadataProvider? schemaMetadataProvider = null)
     {
         _schemaMetadataProvider = schemaMetadataProvider;
-    }
-
-    /// <summary>
-    /// Builds a <see cref="ProcedureModel"/> using the legacy model builder signature.
-    /// </summary>
-    /// <param name="definition">The raw stored procedure definition.</param>
-    /// <param name="defaultSchema">Default schema used for unqualified identifiers.</param>
-    /// <param name="defaultCatalog">Default catalog used for unqualified identifiers.</param>
-    /// <param name="verboseParsing">Enables verbose diagnostics during parsing.</param>
-    /// <returns>The constructed <see cref="ProcedureModel"/> or <c>null</c> when parsing fails.</returns>
-    public ProcedureModel? Build(string? definition, string? defaultSchema, string? defaultCatalog, bool verboseParsing)
-    {
-        return Build(new ProcedureAstBuildRequest(definition, defaultSchema, defaultCatalog, verboseParsing));
     }
 
     public ProcedureModel? Build(ProcedureAstBuildRequest request)
