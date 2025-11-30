@@ -55,7 +55,7 @@ internal sealed class DatabaseProcedureCollector : IProcedureCollector
         }
 
         var schemaFilter = BuildSchemaFilter(options.Schemas);
-        var matcher = BuildProcedureMatcher(options.ProcedureWildcard, out var explicitProcedureRequests);
+        var matcher = BuildProcedureMatcher(options.ProcedureFilter, out var explicitProcedureRequests);
 
         var seedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var procedure in allProcedures)

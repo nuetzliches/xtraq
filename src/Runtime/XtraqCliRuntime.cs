@@ -152,14 +152,14 @@ internal sealed class XtraqCliRuntime(
         var snapshotOptions = new SnapshotBuildOptions
         {
             Schemas = effectiveSchemas,
-            ProcedureWildcard = string.IsNullOrWhiteSpace(procedureFilter) ? null : procedureFilter,
+            ProcedureFilter = string.IsNullOrWhiteSpace(procedureFilter) ? null : procedureFilter,
             NoCache = options.NoCache,
             Verbose = options.Verbose
         };
 
-        if (!string.IsNullOrWhiteSpace(snapshotOptions.ProcedureWildcard))
+        if (!string.IsNullOrWhiteSpace(snapshotOptions.ProcedureFilter))
         {
-            consoleService.Verbose($"[snapshot] Procedure filter: {snapshotOptions.ProcedureWildcard}");
+            consoleService.Verbose($"[snapshot] Procedure filter: {snapshotOptions.ProcedureFilter}");
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -319,7 +319,7 @@ internal sealed class XtraqCliRuntime(
                         EffectiveSchemaCount = effectiveSchemas.Count,
                         MissingSnapshotCount = resolutionPlan.MissingSnapshots.Count,
                         SelectedProcedureCount = selectedProcedures.Count,
-                        ProcedureFilter = snapshotOptions.ProcedureWildcard,
+                        ProcedureFilter = snapshotOptions.ProcedureFilter,
                         PlanDurationMs = planStopwatch.Elapsed.TotalMilliseconds,
                         CollectDurationMs = result.CollectDuration.TotalMilliseconds,
                         AnalyzeDurationMs = result.AnalyzeDuration.TotalMilliseconds,

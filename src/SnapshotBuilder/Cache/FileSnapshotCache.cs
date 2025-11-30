@@ -296,7 +296,7 @@ internal sealed class FileSnapshotCache : ISnapshotCache
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(options.ProcedureWildcard))
+        if (!string.IsNullOrWhiteSpace(options.ProcedureFilter))
         {
             return false;
         }
