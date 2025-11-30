@@ -702,10 +702,7 @@ public sealed class CliEndToEndTests : IAsyncLifetime
         };
 
         var envContent = new System.Text.StringBuilder()
-            .AppendLine("XTRAQ_NAMESPACE=Xtraq.Sample")
-            .AppendLine("XTRAQ_OUTPUT_DIR=Xtraq")
             .AppendLine($"XTRAQ_GENERATOR_DB={builder.ConnectionString}")
-            .AppendLine($"XTRAQ_BUILD_SCHEMAS={SampleSchema}")
             .ToString();
 
         var envPath = Path.Combine(restApiProjectRoot, ".env");

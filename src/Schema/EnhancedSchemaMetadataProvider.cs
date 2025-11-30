@@ -1116,10 +1116,11 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         try
         {
             var projectRoot = DirectoryUtils.GetWorkingDirectory();
-            var defaults = TrackableConfigManager.ReadDefaults(projectRoot);
-            if (defaults.TryGetValue("XTRAQ_BUILD_SCHEMAS", out var raw) && !string.IsNullOrWhiteSpace(raw))
+            var snapshot = TrackableConfigManager.ReadMergedConfiguration(projectRoot);
+            if (snapshot is not null && snapshot.BuildSchemas.Count > 0)
             {
-                return raw;
+                var value = string.Join(',', snapshot.BuildSchemas);
+                return string.IsNullOrWhiteSpace(value) ? null : value;
             }
         }
         catch

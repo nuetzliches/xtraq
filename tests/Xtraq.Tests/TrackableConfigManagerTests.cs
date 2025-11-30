@@ -208,7 +208,7 @@ public sealed class TrackableConfigManagerTests
     }
 
     [Xunit.Fact]
-    public void ReadDefaults_WhenMinimalApiSet_ExposesEnvironmentFlag()
+    public void ReadMergedConfiguration_WhenMinimalApiSet_ExposesSettings()
     {
         var directory = Directory.CreateTempSubdirectory("xtraq-config-defaults-");
         try
@@ -216,16 +216,13 @@ public sealed class TrackableConfigManagerTests
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
             File.WriteAllText(configPath, "{\n  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
 
-            var defaults = Xtraq.Configuration.TrackableConfigManager.ReadDefaults(directory.FullName);
+            var snapshot = Xtraq.Configuration.TrackableConfigManager.ReadMergedConfiguration(directory.FullName);
 
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_MODE", out var flag));
-            Xunit.Assert.Equal("Minimal", flag);
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_AUTOBIND", out var autoBindFlag));
-            Xunit.Assert.Equal("@UserId INT", autoBindFlag);
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_API_AUTOBIND_PROCEDURES", out var autoBindProcFlag));
-            Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", autoBindProcFlag);
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_ENTITY_FRAMEWORK_ENABLED", out var efFlag));
-            Xunit.Assert.Equal("1", efFlag);
+            Xunit.Assert.NotNull(snapshot);
+            Xunit.Assert.Equal("Minimal", snapshot!.ApiMode);
+            Xunit.Assert.Collection(snapshot.ApiAutoBind, item => Xunit.Assert.Equal("@UserId INT", item));
+            Xunit.Assert.Collection(snapshot.ApiAutoBindProcedures, item => Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", item));
+            Xunit.Assert.True(snapshot.EntityFrameworkEnabled);
         }
         finally
         {

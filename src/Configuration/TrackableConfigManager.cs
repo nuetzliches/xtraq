@@ -1051,16 +1051,15 @@ internal static class TrackableConfigManager
     }
 
     /// <summary>
-    /// Reads tracked defaults from the project configuration file and converts them to environment keys.
+    /// Reads the merged tracked configuration (tracked + local overlays) for the specified project root.
     /// </summary>
     /// <param name="projectRoot">Resolved project root that hosts the tracked configuration.</param>
-    /// <returns>Dictionary containing tracked defaults keyed by their corresponding environment variables.</returns>
-    public static IReadOnlyDictionary<string, string?> ReadDefaults(string projectRoot)
+    /// <returns>A snapshot of the merged configuration, or <c>null</c> when none is available.</returns>
+    public static TrackableConfigSnapshot? ReadMergedConfiguration(string projectRoot)
     {
-        var defaults = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(projectRoot))
         {
-            return defaults;
+            return null;
         }
 
         var normalizedRoot = SafeGetFullPath(projectRoot);
@@ -1068,57 +1067,34 @@ internal static class TrackableConfigManager
         var localPayload = ReadConfigPayload(normalizedRoot, LocalConfigFileName);
         var payload = MergePayloads(trackedPayload, localPayload);
 
-        if (payload is null)
-        {
-            return defaults;
-        }
+        return payload is null ? null : ToSnapshot(payload);
+    }
 
-        if (!string.IsNullOrWhiteSpace(payload.Namespace))
-        {
-            defaults["XTRAQ_NAMESPACE"] = payload.Namespace!.Trim();
-        }
+    private static TrackableConfigSnapshot ToSnapshot(TrackableConfigPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
 
-        if (!string.IsNullOrWhiteSpace(payload.OutputDir))
-        {
-            defaults["XTRAQ_OUTPUT_DIR"] = payload.OutputDir!.Trim();
-        }
+        static IReadOnlyList<string> SnapshotList(IReadOnlyList<string> source)
+            => source.Count > 0 ? source.ToArray() : Array.Empty<string>();
 
-        if (!string.IsNullOrWhiteSpace(payload.TargetFramework))
-        {
-            defaults["XTRAQ_TARGET_FRAMEWORK"] = payload.TargetFramework!.Trim();
-        }
+        var apiAutoBind = payload.Api?.Requests?.AutoBind is { Count: > 0 }
+            ? payload.Api.Requests.AutoBind.ToArray()
+            : Array.Empty<string>();
+        var apiAutoBindProcedures = payload.Api?.Requests?.AutoBindProcedures is { Count: > 0 }
+            ? payload.Api.Requests.AutoBindProcedures.ToArray()
+            : Array.Empty<string>();
 
-        if (payload.BuildSchemas.Count > 0)
-        {
-            defaults["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', payload.BuildSchemas);
-        }
-
-        if (payload.ResultSet?.Json?.IncludeNullValues is not null)
-        {
-            defaults["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = payload.ResultSet.Json.IncludeNullValues!.Value ? "1" : "0";
-        }
-
-        if (!string.IsNullOrWhiteSpace(payload.Api?.Mode))
-        {
-            defaults["XTRAQ_API_MODE"] = payload.Api!.Mode!.Trim();
-        }
-
-        if (payload.Api?.Requests?.AutoBind is { Count: > 0 })
-        {
-            defaults["XTRAQ_API_AUTOBIND"] = string.Join(',', payload.Api.Requests.AutoBind);
-        }
-
-        if (payload.Api?.Requests?.AutoBindProcedures is { Count: > 0 })
-        {
-            defaults["XTRAQ_API_AUTOBIND_PROCEDURES"] = string.Join(',', payload.Api.Requests.AutoBindProcedures);
-        }
-
-        if (payload.EntityFramework?.Enabled is not null)
-        {
-            defaults["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = payload.EntityFramework.Enabled!.Value ? "1" : "0";
-        }
-
-        return defaults;
+        return new TrackableConfigSnapshot(
+            Namespace: string.IsNullOrWhiteSpace(payload.Namespace) ? null : payload.Namespace!.Trim(),
+            OutputDir: string.IsNullOrWhiteSpace(payload.OutputDir) ? null : payload.OutputDir!.Trim(),
+            TargetFramework: string.IsNullOrWhiteSpace(payload.TargetFramework) ? null : payload.TargetFramework!.Trim(),
+            BuildSchemas: SnapshotList(payload.BuildSchemas),
+            ApiMode: string.IsNullOrWhiteSpace(payload.Api?.Mode) ? null : payload.Api!.Mode!.Trim(),
+            ApiAutoBind: apiAutoBind,
+            ApiAutoBindProcedures: apiAutoBindProcedures,
+            EntityFrameworkEnabled: payload.EntityFramework?.Enabled,
+            ResultSetJsonIncludeNullValues: payload.ResultSet?.Json?.IncludeNullValues
+        );
     }
 
     private static bool ContainsRedirect(string configPath)
@@ -1194,3 +1170,18 @@ internal static class TrackableConfigManager
         public bool? IncludeNullValues { get; init; }
     }
 }
+
+/// <summary>
+/// Represents the merged tracked configuration snapshot sourced from .xtraqconfig overlays.
+/// </summary>
+public sealed record TrackableConfigSnapshot(
+    string? Namespace,
+    string? OutputDir,
+    string? TargetFramework,
+    IReadOnlyList<string> BuildSchemas,
+    string? ApiMode,
+    IReadOnlyList<string> ApiAutoBind,
+    IReadOnlyList<string> ApiAutoBindProcedures,
+    bool? EntityFrameworkEnabled,
+    bool? ResultSetJsonIncludeNullValues
+);

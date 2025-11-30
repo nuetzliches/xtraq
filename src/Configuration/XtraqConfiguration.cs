@@ -116,7 +116,8 @@ public sealed class XtraqConfiguration
         }
 
         projectRoot = TrackableConfigManager.ResolveRedirectTargets(configDirectory) ?? configDirectory;
-        var trackedDefaults = TrackableConfigManager.ReadDefaults(projectRoot);
+        var trackedSnapshot = TrackableConfigManager.ReadMergedConfiguration(projectRoot);
+        var trackedDefaults = BuildSnapshotMap(trackedSnapshot);
 
         var envFilePath = ResolveEnvFile(projectRoot);
         var filePairs = LoadDotEnv(envFilePath);
@@ -160,8 +161,10 @@ public sealed class XtraqConfiguration
             Console.Error.WriteLine("[xtraq] Warning: XTRAQ_GENERATOR_DB is not set. Run 'xtraq init' or provide the connection string via environment variables.");
         }
 
-        var namespaceValue = NullIfEmpty(Get("XTRAQ_NAMESPACE"))?.Trim();
-        var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR")) ?? "Xtraq";
+        // Namespace and output directory are tracked exclusively in .xtraqconfig/.xtraqconfig.local
+        // to avoid per-machine overrides leaking in via environment variables.
+        var namespaceValue = NullIfEmpty(Get("XTRAQ_NAMESPACE", allowProcessEnvironment: false, allowEnvFile: false))?.Trim();
+        var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR", allowProcessEnvironment: false, allowEnvFile: false)) ?? "Xtraq";
         var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE", allowProcessEnvironment: false, allowEnvFile: false));
         var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
             ? ApiMode.None
@@ -356,6 +359,58 @@ public sealed class XtraqConfiguration
                   .Where(p => p.Length > 0)
                   .Distinct(StringComparer.OrdinalIgnoreCase)
                   .ToList();
+    }
+
+    private static IReadOnlyDictionary<string, string?> BuildSnapshotMap(TrackableConfigSnapshot? snapshot)
+    {
+        var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (snapshot is null)
+        {
+            return map;
+        }
+
+        static void Set(Dictionary<string, string?> target, string key, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            target[key] = value.Trim();
+        }
+
+        Set(map, "XTRAQ_NAMESPACE", snapshot.Namespace);
+        Set(map, "XTRAQ_OUTPUT_DIR", snapshot.OutputDir);
+        Set(map, "XTRAQ_TARGET_FRAMEWORK", snapshot.TargetFramework);
+
+        if (snapshot.BuildSchemas.Count > 0)
+        {
+            map["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', snapshot.BuildSchemas);
+        }
+
+        Set(map, "XTRAQ_API_MODE", snapshot.ApiMode);
+
+        if (snapshot.ApiAutoBind.Count > 0)
+        {
+            map["XTRAQ_API_AUTOBIND"] = string.Join(',', snapshot.ApiAutoBind);
+        }
+
+        if (snapshot.ApiAutoBindProcedures.Count > 0)
+        {
+            map["XTRAQ_API_AUTOBIND_PROCEDURES"] = string.Join(',', snapshot.ApiAutoBindProcedures);
+        }
+
+        if (snapshot.EntityFrameworkEnabled is not null)
+        {
+            map["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = snapshot.EntityFrameworkEnabled.Value ? "1" : "0";
+        }
+
+        if (snapshot.ResultSetJsonIncludeNullValues is not null)
+        {
+            map["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = snapshot.ResultSetJsonIncludeNullValues.Value ? "1" : "0";
+        }
+
+        return map;
     }
 
 }

@@ -758,9 +758,15 @@ internal sealed class ConsoleService : IConsoleService
     {
         var safeTitle = string.IsNullOrWhiteSpace(title) ? "[xtraq]" : title;
         var safeMessage = message ?? string.Empty;
+        var needsLeadingBlankLine = string.Equals(safeTitle, "[xtraq] Update available", StringComparison.OrdinalIgnoreCase);
 
         if (UseSpectre)
         {
+            if (needsLeadingBlankLine)
+            {
+                AnsiConsole.WriteLine();
+            }
+
             var body = new Text(safeMessage, new Style(Color.LightSkyBlue1))
             {
                 Justification = Justify.Left
@@ -780,6 +786,11 @@ internal sealed class ConsoleService : IConsoleService
 
         lock (_writeLock)
         {
+            if (needsLeadingBlankLine)
+            {
+                StdOut.WriteLine();
+            }
+
             TrySetColors(ConsoleColor.Cyan, null);
             StdOut.WriteLine($"=== {safeTitle} ===");
             TryResetColors();

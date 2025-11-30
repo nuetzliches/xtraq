@@ -78,7 +78,7 @@ internal static class DirectoryUtils
         return Directory.GetCurrentDirectory();
     }
 
-    // Match historical behavior by trimming trailing directory separators.
+    // Preserve existing behavior by trimming trailing directory separators.
     return baseDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 #endif
     }

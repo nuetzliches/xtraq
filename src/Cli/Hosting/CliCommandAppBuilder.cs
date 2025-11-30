@@ -834,13 +834,16 @@ internal sealed class CliCommandAppBuilder
 
         var console = _services.GetRequiredService<IConsoleService>();
 
+        var currentVersion = FormatVersionLabel(updateInfo.CurrentVersion);
+        var latestVersion = FormatVersionLabel(updateInfo.LatestVersion);
+
         if (options.CiMode)
         {
-            console.RenderPanel("[xtraq] Update available", $"Current: {updateInfo.CurrentVersion}\nLatest: {updateInfo.LatestVersion}\nCI mode - skipping prompt. Run 'xtraq update' when appropriate.");
+            console.RenderPanel("[xtraq] Update available", $"Current: {currentVersion}\nLatest: {latestVersion}\nCI mode - skipping prompt. Run 'xtraq update' when appropriate.");
             return;
         }
 
-        var panelMessage = $"Current: {updateInfo.CurrentVersion}\nLatest: {updateInfo.LatestVersion}\nRun 'xtraq update' to apply or pass --no-update to suppress this reminder.";
+        var panelMessage = $"Current: {currentVersion}\nLatest: {latestVersion}\nRun 'xtraq update' to apply or pass --no-update to suppress this reminder.";
         if (console.IsPromptActive)
         {
             console.EnqueuePanel("[xtraq] Update available", panelMessage);
@@ -948,5 +951,16 @@ internal sealed class CliCommandAppBuilder
 
         var metadataJson = CliHostUtilities.BuildSessionMetadataJson(commandName, options, projectPath, _environment, refreshRequested);
         console.RenderJsonPayload($"{(string.IsNullOrWhiteSpace(commandName) ? "session" : commandName)} metadata", metadataJson);
+    }
+
+    private static string FormatVersionLabel(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return string.Empty;
+        }
+
+        var plusIndex = version.IndexOf('+');
+        return plusIndex >= 0 ? version.Substring(0, plusIndex) : version.Trim();
     }
 }
