@@ -12,6 +12,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Xtraq.Engine;
 using Xunit;
 
 namespace Xtraq.Tests.TemplateTests;
@@ -25,45 +26,43 @@ public sealed class TransactionOrchestratorTemplateTests
         var templatePath = Path.Combine(root, "src", "Templates", "TransactionOrchestrator.xqt");
         Assert.True(File.Exists(templatePath), $"Template not found: {templatePath}");
 
+        var engine = new SimpleTemplateEngine();
+        var templateModel = new
+        {
+            HEADER = "// generated for tests",
+            Namespace = "TestNamespace",
+            EntityFrameworkEnabled = true
+        };
+
         var template = File.ReadAllText(templatePath);
         var globalUsingsPath = Path.Combine(root, "src", "GlobalUsings.cs");
         Assert.True(File.Exists(globalUsingsPath), $"Global usings not found: {globalUsingsPath}");
         var globalUsingsSource = File.ReadAllText(globalUsingsPath);
 
-        var orchestratorSource = template
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var orchestratorSource = engine.Render(template, templateModel);
 
         var optionsTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextOptions.xqt");
         Assert.True(File.Exists(optionsTemplatePath), $"Options template not found: {optionsTemplatePath}");
         var optionsTemplate = File.ReadAllText(optionsTemplatePath);
         Assert.Contains("TransactionOrchestratorFactory", optionsTemplate, StringComparison.Ordinal);
-        var optionsSource = optionsTemplate
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var optionsSource = engine.Render(optionsTemplate, templateModel);
 
         var serviceTemplatePath = Path.Combine(root, "src", "Templates", "DbContext", "XtraqDbContextServiceCollectionExtensions.xqt");
         Assert.True(File.Exists(serviceTemplatePath), $"Service extensions template not found: {serviceTemplatePath}");
         var serviceTemplate = File.ReadAllText(serviceTemplatePath);
         Assert.Contains("AddScoped<IXtraqTransactionOrchestrator>", serviceTemplate, StringComparison.Ordinal);
-        var serviceSource = serviceTemplate
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var serviceSource = engine.Render(serviceTemplate, templateModel);
         var serviceSourceForHarness = serviceSource.Replace("new XtraqDbContext(sp.GetRequiredService<XtraqDbContextOptions>(), sp)", "new FakeDbContext(sp.GetRequiredService<XtraqDbContextOptions>())");
 
         var adapterTemplatePath = Path.Combine(root, "src", "Templates", "ProcedureResultEntityAdapter.xqt");
         Assert.True(File.Exists(adapterTemplatePath), $"Adapter template not found: {adapterTemplatePath}");
         var adapterTemplate = File.ReadAllText(adapterTemplatePath);
-        var adapterSource = adapterTemplate
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var adapterSource = engine.Render(adapterTemplate, templateModel);
 
         var policyTemplatePath = Path.Combine(root, "src", "Templates", "Policies", "TransactionExecutionPolicy.xqt");
         Assert.True(File.Exists(policyTemplatePath), $"Transaction policy template not found: {policyTemplatePath}");
         var policyTemplate = File.ReadAllText(policyTemplatePath);
-        var policySource = policyTemplate
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var policySource = engine.Render(policyTemplate, templateModel);
 
         var harnessSource = """
 // harness

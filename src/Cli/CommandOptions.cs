@@ -9,10 +9,6 @@ internal interface ICommandOptions
     bool NoUpdate { get; }
     string Procedure { get; }
     bool Telemetry { get; }
-    bool JsonIncludeNullValues { get; }
-    bool HasJsonIncludeNullValuesOverride { get; }
-    bool EntityFrameworkIntegration { get; }
-    bool HasEntityFrameworkIntegrationOverride { get; }
     bool CiMode { get; }
 }
 
@@ -45,10 +41,6 @@ internal class CommandOptions : ICommandOptions
         _current.NoUpdate = options.NoUpdate;
         _current.Procedure = Normalize(options.Procedure);
         _current.Telemetry = options.Telemetry;
-        _current.JsonIncludeNullValues = options.JsonIncludeNullValues;
-        _current.HasJsonIncludeNullValuesOverride = options.HasJsonIncludeNullValuesOverride;
-        _current.EntityFrameworkIntegration = options.EntityFrameworkIntegration;
-        _current.HasEntityFrameworkIntegrationOverride = options.HasEntityFrameworkIntegrationOverride;
         _current.CiMode = options.CiMode;
     }
 
@@ -59,10 +51,6 @@ internal class CommandOptions : ICommandOptions
     public bool NoUpdate => _current.NoUpdate;
     public string Procedure => Normalize(_current.Procedure);
     public bool Telemetry => _current.Telemetry;
-    public bool JsonIncludeNullValues => _current.JsonIncludeNullValues;
-    public bool HasJsonIncludeNullValuesOverride => _current.HasJsonIncludeNullValuesOverride;
-    public bool EntityFrameworkIntegration => _current.EntityFrameworkIntegration;
-    public bool HasEntityFrameworkIntegrationOverride => _current.HasEntityFrameworkIntegrationOverride;
     public bool CiMode => _current.CiMode;
 
     private static string Normalize(string? value)
@@ -83,9 +71,5 @@ internal sealed class CliCommandOptions : ICommandOptions
     public bool NoUpdate { get; set; }
     public string Procedure { get; set; } = string.Empty;
     public bool Telemetry { get; set; }
-    public bool JsonIncludeNullValues { get; set; }
-    public bool HasJsonIncludeNullValuesOverride { get; set; }
-    public bool EntityFrameworkIntegration { get; set; }
-    public bool HasEntityFrameworkIntegrationOverride { get; set; }
     public bool CiMode { get; set; }
 }

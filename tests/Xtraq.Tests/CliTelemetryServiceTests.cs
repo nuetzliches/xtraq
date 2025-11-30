@@ -55,7 +55,6 @@ public static class CliTelemetryServiceTests
             TelemetryOptionEnabled: enableTelemetry,
             VerboseOptionEnabled: true,
             NoCacheOptionEnabled: false,
-            EntityFrameworkOptionEnabled: false,
             RefreshSnapshotRequested: false,
             ProcedureFilter: null,
             AdditionalMetadata: new Dictionary<string, string>());

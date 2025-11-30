@@ -428,11 +428,6 @@ internal static class CliHostUtilities
             metadata["telemetry"] = true;
         }
 
-        if (options.JsonIncludeNullValues)
-        {
-            metadata["jsonIncludeNullValues"] = true;
-        }
-
         if (options.CiMode)
         {
             metadata["ciMode"] = true;

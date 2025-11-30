@@ -28,8 +28,6 @@ internal sealed class CliCommandAppBuilder
     private Option<bool> _noUpdateOption = null!;
     private Option<string?> _procedureOption = null!;
     private Option<bool> _telemetryOption = null!;
-    private Option<bool> _jsonIncludeNullValuesOption = null!;
-    private Option<bool> _entityFrameworkOption = null!;
     private Option<bool> _ciOption = null!;
     private Option<string?> _projectOption = null!;
 
@@ -109,16 +107,6 @@ internal sealed class CliCommandAppBuilder
             Description = "Persist a database telemetry report to .xtraq/telemetry",
             Recursive = true
         };
-        _jsonIncludeNullValuesOption = new Option<bool>("--json-include-null-values")
-        {
-            Description = "Emit JsonIncludeNullValues attribute for JSON result properties",
-            Recursive = true
-        };
-        _entityFrameworkOption = new Option<bool>("--entity-framework")
-        {
-            Description = "Enable Entity Framework integration helper generation (sets XTRAQ_ENTITY_FRAMEWORK_ENABLED)",
-            Recursive = true
-        };
         _ciOption = new Option<bool>("--ci")
         {
             Description = "Disable Spectre.Console enhancements for CI/plain output modes",
@@ -179,8 +167,6 @@ internal sealed class CliCommandAppBuilder
         root.Add(_noUpdateOption);
         root.Add(_procedureOption);
         root.Add(_telemetryOption);
-        root.Add(_jsonIncludeNullValuesOption);
-        root.Add(_entityFrameworkOption);
         root.Add(_ciOption);
         root.Add(_projectOption);
 
@@ -274,7 +260,6 @@ internal sealed class CliCommandAppBuilder
                         options.Telemetry,
                         options.Verbose,
                         options.NoCache,
-                        options.EntityFrameworkIntegration,
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         null);
@@ -326,7 +311,6 @@ internal sealed class CliCommandAppBuilder
                         options.Telemetry,
                         options.Verbose,
                         options.NoCache,
-                        options.EntityFrameworkIntegration,
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         null);
@@ -527,7 +511,6 @@ internal sealed class CliCommandAppBuilder
                         options.Telemetry,
                         options.Verbose,
                         options.NoCache,
-                        options.EntityFrameworkIntegration,
                         RefreshSnapshotRequested: false,
                         string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                         metadata);
@@ -556,10 +539,6 @@ internal sealed class CliCommandAppBuilder
             NoUpdate = parseResult.GetValue(_noUpdateOption),
             Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValue(_procedureOption)),
             Telemetry = parseResult.GetValue(_telemetryOption),
-            JsonIncludeNullValues = parseResult.GetValue(_jsonIncludeNullValuesOption),
-            HasJsonIncludeNullValuesOverride = parseResult.GetResult(_jsonIncludeNullValuesOption)?.Implicit is false,
-            EntityFrameworkIntegration = parseResult.GetValue(_entityFrameworkOption),
-            HasEntityFrameworkIntegrationOverride = parseResult.GetResult(_entityFrameworkOption)?.Implicit is false,
             CiMode = parseResult.GetValue(_ciOption)
         };
 
@@ -589,10 +568,6 @@ internal sealed class CliCommandAppBuilder
             NoUpdate = parseResult.GetValue(_noUpdateOption),
             Procedure = CliHostUtilities.NormalizeProcedureFilter(parseResult.GetValue(_procedureOption)),
             Telemetry = parseResult.GetValue(_telemetryOption),
-            JsonIncludeNullValues = parseResult.GetValue(_jsonIncludeNullValuesOption),
-            HasJsonIncludeNullValuesOverride = parseResult.GetResult(_jsonIncludeNullValuesOption)?.Implicit is false,
-            EntityFrameworkIntegration = parseResult.GetValue(_entityFrameworkOption),
-            HasEntityFrameworkIntegrationOverride = parseResult.GetResult(_entityFrameworkOption)?.Implicit is false,
             CiMode = parseResult.GetValue(_ciOption)
         };
 
@@ -667,7 +642,6 @@ internal sealed class CliCommandAppBuilder
                     options.Telemetry,
                     options.Verbose,
                     options.NoCache,
-                    options.EntityFrameworkIntegration,
                     shouldRefresh,
                     string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure,
                     null);
@@ -781,11 +755,6 @@ internal sealed class CliCommandAppBuilder
 
         var procedureFilter = string.IsNullOrWhiteSpace(options.Procedure) ? null : options.Procedure;
         Environment.SetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES", procedureFilter);
-
-        if (options.HasEntityFrameworkIntegrationOverride)
-        {
-            Environment.SetEnvironmentVariable("XTRAQ_ENTITY_FRAMEWORK_ENABLED", options.EntityFrameworkIntegration ? "1" : null);
-        }
     }
 
     private Task<UpdateInfo?>? ScheduleUpdateCheck(CliCommandOptions options)

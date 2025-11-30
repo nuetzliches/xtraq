@@ -50,8 +50,7 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0",
                 ["XTRAQ_API_MODE"] = "Minimal",
                 ["XTRAQ_API_AUTOBIND"] = "@UserId INT",
-                ["XTRAQ_API_AUTOBIND_PROCEDURES"] = "sample.UserCompositeJsonSnapshot",
-                ["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = "1"
+                ["XTRAQ_API_AUTOBIND_PROCEDURES"] = "sample.UserCompositeJsonSnapshot"
             };
 
             Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
@@ -76,8 +75,7 @@ public sealed class TrackableConfigManagerTests
             var requests = apiElement.GetProperty("Requests");
             Xunit.Assert.Equal("@UserId INT", requests.GetProperty("AutoBind").EnumerateArray().First().GetString());
             Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", requests.GetProperty("AutoBindProcedures").EnumerateArray().First().GetString());
-            var efElement = root.GetProperty("EntityFramework");
-            Xunit.Assert.True(efElement.GetProperty("Enabled").GetBoolean());
+            Xunit.Assert.False(root.TryGetProperty("EntityFramework", out _));
             Xunit.Assert.False(root.TryGetProperty("ResultSet", out _));
         }
         finally

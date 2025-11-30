@@ -29,7 +29,6 @@ internal interface ICliTelemetryService
 /// <param name="TelemetryOptionEnabled">Indicates whether the <c>--telemetry</c> switch was specified.</param>
 /// <param name="VerboseOptionEnabled">Indicates whether verbose output was enabled.</param>
 /// <param name="NoCacheOptionEnabled">Indicates whether cache usage was disabled via <c>--no-cache</c>.</param>
-/// <param name="EntityFrameworkOptionEnabled">Indicates whether Entity Framework integration helpers were enabled.</param>
 /// <param name="RefreshSnapshotRequested">Indicates whether snapshot refresh was requested.</param>
 /// <param name="ProcedureFilter">Raw procedure filter (hashed before persistence).</param>
 /// <param name="AdditionalMetadata">Optional metadata bag containing non-sensitive, pre-sanitised keys and values.</param>
@@ -43,7 +42,6 @@ internal sealed record CliTelemetryEvent(
     bool TelemetryOptionEnabled,
     bool VerboseOptionEnabled,
     bool NoCacheOptionEnabled,
-    bool EntityFrameworkOptionEnabled,
     bool RefreshSnapshotRequested,
     string? ProcedureFilter,
     IReadOnlyDictionary<string, string>? AdditionalMetadata);
@@ -172,7 +170,6 @@ internal sealed class CliTelemetryService : ICliTelemetryService
             CiMode = telemetryEvent.CiMode,
             Verbose = telemetryEvent.VerboseOptionEnabled,
             NoCache = telemetryEvent.NoCacheOptionEnabled,
-            EntityFramework = telemetryEvent.EntityFrameworkOptionEnabled,
             RefreshSnapshot = telemetryEvent.RefreshSnapshotRequested,
             ProjectRootHash = projectHash,
             ProcedureFilterHash = procedureFilterHash,
@@ -201,7 +198,6 @@ internal sealed class CliTelemetryService : ICliTelemetryService
         public bool CiMode { get; init; }
         public bool Verbose { get; init; }
         public bool NoCache { get; init; }
-        public bool EntityFramework { get; init; }
         public bool RefreshSnapshot { get; init; }
         public string? ProjectRootHash { get; init; }
         public string? ProcedureFilterHash { get; init; }

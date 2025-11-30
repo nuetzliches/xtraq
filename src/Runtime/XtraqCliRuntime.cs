@@ -42,14 +42,13 @@ internal sealed class XtraqCliRuntime(
     private async Task<ExecuteResultEnum> SnapshotCoreAsync(ICommandOptions options)
     {
         var workingDirectory = DirectoryUtils.GetWorkingDirectory();
-        var cliOverrides = BuildCliOverrides(options);
         XtraqConfiguration cfg;
         var attemptedInit = false;
         while (true)
         {
             try
             {
-                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides, requireGeneratorConnection: false);
+                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, requireGeneratorConnection: false);
                 if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
                     !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
                 {
@@ -381,8 +380,7 @@ internal sealed class XtraqCliRuntime(
         {
             try
             {
-                var cliOverrides = BuildCliOverrides(options);
-                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, cliOverrides: cliOverrides, requireGeneratorConnection: false);
+                cfg = XtraqConfiguration.Load(projectRoot: workingDirectory, requireGeneratorConnection: false);
                 if (!string.IsNullOrWhiteSpace(cfg.ProjectRoot) &&
                     !string.Equals(cfg.ProjectRoot, workingDirectory, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1165,27 +1163,6 @@ internal sealed class XtraqCliRuntime(
         }
 
         return added;
-    }
-
-    private static IDictionary<string, string?>? BuildCliOverrides(ICommandOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-
-        Dictionary<string, string?>? map = null;
-
-        if (options.HasJsonIncludeNullValuesOverride)
-        {
-            map ??= new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            map["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = options.JsonIncludeNullValues ? "1" : "0";
-        }
-
-        if (options.HasEntityFrameworkIntegrationOverride)
-        {
-            map ??= new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            map["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = options.EntityFrameworkIntegration ? "1" : "0";
-        }
-
-        return map;
     }
 
     /// <summary>

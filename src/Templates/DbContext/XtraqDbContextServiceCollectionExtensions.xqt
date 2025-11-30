@@ -1,20 +1,18 @@
 {{ HEADER }}
 #nullable enable
-namespace {{ Namespace }};
 
-using System;
 using System.Data;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
-#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
+{{#if EntityFrameworkEnabled}}
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-#endif
+{{/if}}
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace {{ Namespace }};
 
 public static class XtraqDbContextServiceCollectionExtensions
 {
@@ -69,7 +67,7 @@ public static class XtraqDbContextServiceCollectionExtensions
         return services;
     }
 
-#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
+    {{#if EntityFrameworkEnabled}}
     /// <summary>Replace <see cref="IXtraqDbContext"/> so generated procedures reuse the scoped Entity Framework Core <see cref="DbContext"/> connection and transaction when available.</summary>
     public static IServiceCollection UseXtraqProcedures<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
@@ -87,10 +85,10 @@ public static class XtraqDbContextServiceCollectionExtensions
 
         return services;
     }
-#endif
+    {{/if}}
 }
 
-#if XTRAQ_ENTITY_FRAMEWORK_ENABLED
+{{#if EntityFrameworkEnabled}}
 internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDbContext, IXtraqAmbientTransactionAccessor, IXtraqParameterBindingProvider
     where TDbContext : DbContext
 {
@@ -310,5 +308,5 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
     partial void OnAmbientConnectionResolved(DbConnection connection);
     partial void OnConnectionOpened(DbConnection connection);
 }
-#endif
+{{/if}}
 

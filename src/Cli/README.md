@@ -18,8 +18,6 @@ xtraq [options]
   - `--no-update`: suppress update checks and prompts for the current invocation (also honoured via `XTRAQ_NO_UPDATE`).
   - `--procedure <schema.name,...>`: restrict execution to a comma-separated allow-list; validation rejects malformed tokens.
   - `--telemetry`: persist telemetry snapshots under `.xtraq/telemetry` after successful runs.
-  - `--json-include-null-values`: opt into JSON-null emission; tracked even when explicitly `false` so generators can distinguish overrides.
-- `--entity-framework`: toggle Entity Framework helper generation (`XTRAQ_ENTITY_FRAMEWORK_ENABLED`).
   - `--ci`: suppress Spectre.Console enhancements for plain-text/CI logs.
   - `--project-path`, `--project`, `-p`: supply a directory or `.env` file used to locate `.xtraqconfig`; defaults to the current directory when omitted.
 
@@ -35,7 +33,7 @@ xtraq [options]
 
 - Description: capture database metadata into `.xtraq` snapshots without generating code.
 - Arguments: optional `project-path` (alias: `--project-path`/`-p`).
-- Options: inherits all global switches; honours `--procedure`, `--no-cache`, `--telemetry`, and `--entity-framework`.
+- Options: inherits all global switches; honours `--procedure`, `--no-cache`, and `--telemetry`.
 - Notes: schedules asynchronous update checks unless disabled.
 
 ### `xtraq build`
@@ -69,7 +67,6 @@ xtraq [options]
 ## Option semantics
 
 - `--procedure` supports `*`/`?` wildcards, trims tokens, deduplicates entries, and surfaces invalid filters at parse time (`CliHostUtilities.TryNormalizeProcedureFilter`).
-- `--json-include-null-values` and `--entity-framework` both record `Has*Override` flags so downstream processors can tell whether the option was explicitly set.
 - `--telemetry` is honoured on successful snapshot/build runs; version/update/init still capture lightweight telemetry envelopes without touching disk.
 - `--project-path` accepts either a directory or an `.env` file; the CLI normalizes the root path before invoking the runtime.
 

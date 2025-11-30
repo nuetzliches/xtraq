@@ -469,16 +469,7 @@ internal static class TrackableConfigManager
             ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.AutoBindProcedures));
         var apiRequestsAutoBindProcedures = ParseSchemas(apiRequestsAutoBindProceduresRaw);
 
-        var entityFrameworkRaw = ResolveValue(envValues, "XTRAQ_ENTITY_FRAMEWORK_ENABLED");
         var entityFrameworkEnabled = existing?.EntityFramework?.Enabled;
-        if (entityFrameworkRaw is not null)
-        {
-            var parsed = ParseBoolean(entityFrameworkRaw);
-            if (parsed.HasValue)
-            {
-                entityFrameworkEnabled = parsed;
-            }
-        }
 
         var payload = new TrackableConfigPayload
         {

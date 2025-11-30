@@ -171,7 +171,7 @@ public sealed class XtraqConfiguration
             : apiModeRaw!.Equals("minimal", StringComparison.OrdinalIgnoreCase) ? ApiMode.Minimal : ApiMode.None;
         var autoBindParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND", allowProcessEnvironment: false, allowEnvFile: false)));
         var autoBindProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND_PROCEDURES", allowProcessEnvironment: false, allowEnvFile: false)));
-        var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK_ENABLED", allowProcessEnvironment: false, allowEnvFile: false));
+        var enableEntityFramework = trackedSnapshot?.EntityFrameworkEnabled ?? false;
         var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES", allowProcessEnvironment: false, allowEnvFile: false));
 
         var cfg = new XtraqConfiguration
@@ -398,11 +398,6 @@ public sealed class XtraqConfiguration
         if (snapshot.ApiAutoBindProcedures.Count > 0)
         {
             map["XTRAQ_API_AUTOBIND_PROCEDURES"] = string.Join(',', snapshot.ApiAutoBindProcedures);
-        }
-
-        if (snapshot.EntityFrameworkEnabled is not null)
-        {
-            map["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = snapshot.EntityFrameworkEnabled.Value ? "1" : "0";
         }
 
         if (snapshot.ResultSetJsonIncludeNullValues is not null)

@@ -125,7 +125,13 @@ internal sealed class DbContextGenerator : GeneratorBase
             }
         }
 
-        var model = new { Namespace = finalNs, MethodsInterface = methodBlocksInterface.ToString(), MethodsImpl = methodBlocksImpl.ToString() };
+        var model = new
+        {
+            Namespace = finalNs,
+            MethodsInterface = methodBlocksInterface.ToString(),
+            MethodsImpl = methodBlocksImpl.ToString(),
+            EntityFrameworkEnabled = cfg.EntityFrameworkEnabled
+        };
 
         // Generate core artifacts (always)
         await WriteAsync(xtraqDir, "IXtraqDbContext.cs", Render("IXtraqDbContext", GetTemplate_Interface(finalNs, model.MethodsInterface), model), isDryRun);
