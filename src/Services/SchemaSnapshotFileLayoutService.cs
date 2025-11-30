@@ -587,25 +587,24 @@ internal sealed class SchemaSnapshotFileLayoutService
         {
             using var stream = File.OpenRead(indexPath);
             var index = JsonSerializer.Deserialize<ExpandedSnapshotIndex>(stream, _jsonOptions);
-            if (index?.TableTypes != null)
+            if (index is null)
             {
-                foreach (var tt in index.TableTypes)
+                return schemas;
+            }
+
+            foreach (var tt in index.TableTypes)
+            {
+                if (!string.IsNullOrWhiteSpace(tt?.Schema))
                 {
-                    if (!string.IsNullOrWhiteSpace(tt?.Schema))
-                    {
-                        schemas.Add(tt.Schema);
-                    }
+                    schemas.Add(tt.Schema);
                 }
             }
 
-            if (index?.UserDefinedTypes != null)
+            foreach (var udt in index.UserDefinedTypes)
             {
-                foreach (var udt in index.UserDefinedTypes)
+                if (!string.IsNullOrWhiteSpace(udt?.Schema))
                 {
-                    if (!string.IsNullOrWhiteSpace(udt?.Schema))
-                    {
-                        schemas.Add(udt.Schema);
-                    }
+                    schemas.Add(udt.Schema);
                 }
             }
         }
@@ -1266,7 +1265,6 @@ internal sealed class SchemaSnapshotFileLayoutService
         public List<FileHashEntry> TableTypes { get; set; } = new();
         public int? FunctionsVersion { get; set; }
         public List<FileHashEntry> Functions { get; set; } = new();
-        // New categories (optional / left empty for compatibility with older index.json versions)
         public List<FileHashEntry> UserDefinedTypes { get; set; } = new();
         public List<FileHashEntry> Tables { get; set; } = new();
         public List<FileHashEntry> Views { get; set; } = new();

@@ -247,7 +247,7 @@ namespace Xtraq.Metadata
             var indexPath = Path.Combine(schemaDir, "index.json");
             if (!File.Exists(indexPath))
             {
-                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: expanded snapshot index missing: {indexPath}");
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: snapshot index missing: {indexPath}");
                 return;
             }
 
@@ -256,11 +256,11 @@ namespace Xtraq.Metadata
             {
                 using var fs = File.OpenRead(indexPath);
                 doc = JsonDocument.Parse(fs);
-                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Using expanded snapshot index: {indexPath}");
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Using snapshot index: {indexPath}");
             }
             catch (Exception ex)
             {
-                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse expanded index.json: {ex.Message}");
+                SchemaMetadataProviderLogHelper.TryLog($"[xtraq] Warning: failed to parse index.json: {ex.Message}");
                 return;
             }
 
@@ -299,7 +299,7 @@ namespace Xtraq.Metadata
             }
             else
             {
-                SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: expanded index.json missing Procedures array");
+                SchemaMetadataProviderLogHelper.TryLog("[xtraq] Warning: index.json missing Procedures array");
                 return;
             }
 
@@ -822,7 +822,6 @@ namespace Xtraq.Metadata
             _resultSets = rsList.OrderBy(r => r.Name).ToList();
             _results = resultDescriptors.OrderBy(r => r.OperationName).ToList();
 
-            // Functions (expanded snapshot only)
             try
             {
                 // Load functions directory entries from index.json? index.json holds FunctionsVersion + Function file hashes

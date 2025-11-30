@@ -1190,7 +1190,6 @@ internal sealed class XtraqCliRuntime(
         }
     }
 
-
     /// <summary>
     /// Ensures snapshot artifacts exist before executing the build pipeline.
     /// </summary>
@@ -1504,7 +1503,4 @@ internal sealed class XtraqCliRuntime(
         consoleService.Output($"[xtraq init] Template available at {examplePath}");
     }
 }
-
-
-
 
