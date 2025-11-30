@@ -61,7 +61,7 @@ xtraq [options]
 - Arguments: optional `project-path` argument or `--project-path` option for the target directory.
 - Options:
   - `--force`, `-f`: overwrite an existing `.env`.
-  - `--namespace`, `-n`: seed `XTRAQ_NAMESPACE`.
+  - `--namespace`, `-n`: override the auto-resolved `XTRAQ_NAMESPACE`.
   - `--connection`, `-c`: seed `XTRAQ_GENERATOR_DB`.
   - `--schemas`, `-s`: seed `XTRAQ_BUILD_SCHEMAS` (comma-separated allow-list).
 - Side effects: normalises key casing, writes `.xtraqconfig`, and ensures `.gitignore` excludes generated folders.

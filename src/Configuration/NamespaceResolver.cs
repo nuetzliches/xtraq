@@ -88,7 +88,11 @@ internal sealed class NamespaceResolver
         }
 
         var ns = string.Join('.', baseName.Split('.').Where(p => !string.IsNullOrWhiteSpace(p)));
-        _logWarn?.Invoke($"[xtraq namespace] ");
+        if (string.IsNullOrWhiteSpace(ns))
+        {
+            _logWarn?.Invoke("[xtraq namespace] namespace resolver returned an empty value.");
+            return string.Empty;
+        }
 
         return ns;
     }

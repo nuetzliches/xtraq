@@ -150,7 +150,7 @@ internal static partial class UserOrderHierarchyJsonPlan
 		{
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserOrderHierarchyJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UserOrderHierarchyJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

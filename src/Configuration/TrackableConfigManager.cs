@@ -11,6 +11,7 @@ internal static class TrackableConfigManager
     private const string LocalConfigFileName = ".xtraqconfig.local";
     private const int MaxRedirectDepth = 10;
     private const string SchemaUrl = "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json";
+    internal const string ProjectRootLockEnvironmentVariableName = "XTRAQ_PROJECT_ROOT_LOCK";
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
@@ -103,7 +104,11 @@ internal static class TrackableConfigManager
             return Directory.GetCurrentDirectory();
         }
 
-        var current = new DirectoryInfo(SafeGetFullPath(startDirectory));
+        var normalizedStart = SafeGetFullPath(startDirectory);
+        var lockRoot = GetProjectRootLock();
+        var enforceLock = lockRoot is not null && IsSameOrChild(normalizedStart, lockRoot);
+
+        var current = new DirectoryInfo(normalizedStart);
         while (current is not null)
         {
             var candidate = Path.Combine(current.FullName, ConfigFileName);
@@ -112,10 +117,59 @@ internal static class TrackableConfigManager
                 return current.FullName;
             }
 
+            if (enforceLock)
+            {
+                var parent = current.Parent;
+                if (parent is null || !IsSameOrChild(parent.FullName, lockRoot!))
+                {
+                    break;
+                }
+            }
+
             current = current.Parent;
         }
 
-        return SafeGetFullPath(startDirectory);
+        return normalizedStart;
+    }
+
+    private static string? GetProjectRootLock()
+    {
+        var value = Environment.GetEnvironmentVariable(ProjectRootLockEnvironmentVariableName);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return SafeGetFullPath(value);
+    }
+
+    private static bool IsSameOrChild(string candidate, string normalizedRoot)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        string normalizedCandidate;
+        try
+        {
+            normalizedCandidate = Path.GetFullPath(candidate);
+        }
+        catch
+        {
+            normalizedCandidate = candidate;
+        }
+
+        if (normalizedCandidate.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var rootWithSeparator = normalizedRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? normalizedRoot
+            : normalizedRoot + Path.DirectorySeparatorChar;
+
+        return normalizedCandidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -383,7 +437,7 @@ internal static class TrackableConfigManager
     private static Dictionary<string, object?> BuildPayload(string projectRoot, IReadOnlyDictionary<string, string?>? envValues)
     {
         var existing = ReadConfigPayload(projectRoot, ConfigFileName);
-        var ns = ResolveValue(envValues, "XTRAQ_NAMESPACE") ?? existing?.Namespace;
+        var ns = ResolveNamespaceValue(projectRoot, envValues, existing);
         var outputDir = ResolveValue(envValues, "XTRAQ_OUTPUT_DIR") ?? existing?.OutputDir ?? "Xtraq";
         var targetFramework = ResolveValue(envValues, "XTRAQ_TARGET_FRAMEWORK") ?? existing?.TargetFramework ?? Constants.DefaultTargetFramework.ToFrameworkString();
 
@@ -441,6 +495,36 @@ internal static class TrackableConfigManager
         };
 
         return NormalizePayload(payload);
+    }
+
+    private static string ResolveNamespaceValue(string projectRoot, IReadOnlyDictionary<string, string?>? envValues, TrackableConfigPayload? existing)
+    {
+        var fromEnv = ResolveValue(envValues, "XTRAQ_NAMESPACE");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv!.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(existing?.Namespace))
+        {
+            return existing!.Namespace!.Trim();
+        }
+
+        var normalizedRoot = string.IsNullOrWhiteSpace(projectRoot) ? Directory.GetCurrentDirectory() : SafeGetFullPath(projectRoot);
+        var cfg = new XtraqConfiguration
+        {
+            ProjectRoot = normalizedRoot,
+            ConfigPath = Path.Combine(normalizedRoot, ConfigFileName)
+        };
+
+        var resolver = new NamespaceResolver(cfg);
+        var resolved = resolver.Resolve(normalizedRoot);
+        if (string.IsNullOrWhiteSpace(resolved))
+        {
+            throw new InvalidOperationException("Failed to resolve root namespace – run 'xtraq init -n <Namespace>' or ensure a .csproj is colocated with .xtraqconfig.");
+        }
+
+        return resolved.Trim();
     }
 
     private static Dictionary<string, object?> NormalizePayload(TrackableConfigPayload payload)
@@ -538,10 +622,26 @@ internal static class TrackableConfigManager
             return;
         }
 
-        if (!payload.ContainsKey("$schema"))
+        var hasSchema = payload.TryGetValue("$schema", out var schemaValue);
+        schemaValue ??= SchemaUrl;
+
+        if (payload is Dictionary<string, object?> dictionary)
         {
-            payload["$schema"] = SchemaUrl;
+            var snapshot = dictionary
+                .Where(static kvp => !kvp.Key.Equals("$schema", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            dictionary.Clear();
+            dictionary["$schema"] = schemaValue;
+            foreach (var (key, value) in snapshot)
+            {
+                dictionary[key] = value;
+            }
+
+            return;
         }
+
+        payload["$schema"] = schemaValue;
     }
 
     private static Dictionary<string, object?>? NormalizeEntityFrameworkPayload(EntityFrameworkPayload? entityFramework)

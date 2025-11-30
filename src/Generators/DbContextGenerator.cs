@@ -1,4 +1,4 @@
-using Xtraq.Configuration; // for XtraqConfiguration & NamespaceResolver
+using Xtraq.Configuration; // for XtraqConfiguration
 using Xtraq.Engine;
 using Xtraq.Metadata; // ProcedureDescriptor
 using Xtraq.Services;
@@ -29,39 +29,9 @@ internal sealed class DbContextGenerator : GeneratorBase
     {
         // Load .env configuration (primary source) with safe fallback to diagnostic defaults.
         var projectRoot = DirectoryUtils.GetWorkingDirectory();
-        XtraqConfiguration cfg;
-        try
-        {
-            cfg = XtraqConfiguration.Load(projectRoot: projectRoot);
-        }
-        catch (Exception ex)
-        {
-            _console.Warn("[dbctx] Failed to load .env configuration: " + ex.Message);
-            cfg = new XtraqConfiguration();
-        }
+        var cfg = XtraqConfiguration.Load(projectRoot: projectRoot);
 
-        // Resolve namespace from .env first, fall back to legacy configuration.
-        string? explicitNs = cfg.NamespaceRoot?.Trim();
-
-        string baseNs;
-        if (!string.IsNullOrWhiteSpace(explicitNs))
-        {
-            baseNs = explicitNs!;
-        }
-        else
-        {
-            try
-            {
-                var resolver = new NamespaceResolver(cfg, msg => _console.Warn("[dbctx] ns-resolver: " + msg));
-                baseNs = resolver.Resolve(projectRoot);
-                _console.Verbose($"[dbctx] Derived namespace '{baseNs}' via resolver");
-            }
-            catch (Exception ex)
-            {
-                _console.Warn("[dbctx] Unable to determine namespace: " + ex.Message);
-                return;
-            }
-        }
+        var baseNs = cfg.NamespaceRoot ?? throw new InvalidOperationException("XTRAQ_NAMESPACE is not configured.");
 
         // Determine output directory using XTRAQ_OUTPUT_DIR (defaults to Xtraq).
         string outputDir = string.IsNullOrWhiteSpace(cfg.OutputDir) ? "Xtraq" : cfg.OutputDir.Trim();

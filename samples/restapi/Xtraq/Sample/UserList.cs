@@ -77,6 +77,10 @@ internal static class UserListRequestMapper
         bool? IncludeInactive = request.IncludeInactive;
         if (!HasValue(IncludeInactive))
         {
+	    IncludeInactive = await ResolveAsync<bool?>(bindingProvider, "[sample].[UserList]", "@IncludeInactive", false, IncludeInactive, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(IncludeInactive))
+        {
             throw new InvalidOperationException("Parameter @IncludeInactive must be supplied by the request or a configured binding.");
         }
 
@@ -159,7 +163,7 @@ internal static partial class UserListPlan
 			cmd.Parameters["@IncludeInactive"].Value = input.IncludeInactive;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

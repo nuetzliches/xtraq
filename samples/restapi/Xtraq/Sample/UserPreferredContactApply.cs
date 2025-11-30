@@ -102,9 +102,17 @@ internal static class UserPreferredContactApplyRequestMapper
         int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserPreferredContactApply]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(UserId))
+        {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
         bool? OnlyPreferred = request.OnlyPreferred;
+        if (!HasValue(OnlyPreferred))
+        {
+	    OnlyPreferred = await ResolveAsync<bool?>(bindingProvider, "[sample].[UserPreferredContactApply]", "@OnlyPreferred", false, OnlyPreferred, cancellationToken).ConfigureAwait(false);
+        }
         if (!HasValue(OnlyPreferred))
         {
             throw new InvalidOperationException("Parameter @OnlyPreferred must be supplied by the request or a configured binding.");
@@ -226,7 +234,7 @@ internal static partial class UserPreferredContactApplyPlan
 			cmd.Parameters["@OnlyPreferred"].Value = input.OnlyPreferred;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserPreferredContactApply]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UserPreferredContactApply]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

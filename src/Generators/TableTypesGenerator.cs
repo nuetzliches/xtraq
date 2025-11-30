@@ -43,8 +43,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
     public TableTypeGenerationResult Generate(IReadOnlyCollection<string>? requiredTableTypeReferences = null)
     {
         var types = _provider.GetAll();
-        var resolver = new NamespaceResolver(_cfg);
-        var resolvedBase = resolver.Resolve();
+        var resolvedBase = _cfg.NamespaceRoot ?? throw new InvalidOperationException("XTRAQ_NAMESPACE is not configured.");
         var outputDirName = _cfg.OutputDir ?? "Xtraq";
         var rootOut = Path.Combine(_projectRoot, outputDirName);
         // Updated rule: namespace = <BaseRoot>.<OutputDirName> (no duplicate suffixing); schema added per file.

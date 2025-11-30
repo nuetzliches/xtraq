@@ -104,10 +104,11 @@ public sealed class TrackableConfigManagerTests
             using var document = JsonDocument.Parse(File.ReadAllText(configPath));
             var root = document.RootElement;
             Xunit.Assert.Equal(SchemaUrl, root.GetProperty("$schema").GetString());
+            var expectedNamespace = ToPascalCase(new DirectoryInfo(directory.FullName).Name);
+            Xunit.Assert.Equal(expectedNamespace, root.GetProperty("Namespace").GetString());
             Xunit.Assert.True(root.TryGetProperty("TargetFramework", out var framework));
             Xunit.Assert.Equal("net8.0", framework.GetString());
             Xunit.Assert.False(root.TryGetProperty("OutputDir", out _));
-            Xunit.Assert.False(root.TryGetProperty("Namespace", out _));
             Xunit.Assert.False(root.TryGetProperty("BuildSchemas", out _));
         }
         finally
@@ -117,7 +118,7 @@ public sealed class TrackableConfigManagerTests
     }
 
     [Xunit.Fact]
-    public void Write_WhenEnvIsDefault_WritesSchemaOnly()
+    public void Write_WhenEnvIsDefault_WritesSchemaAndNamespaceOnly()
     {
         var directory = Directory.CreateTempSubdirectory("xtraq-config-default-");
         try
@@ -136,14 +137,45 @@ public sealed class TrackableConfigManagerTests
             var root = document.RootElement;
             Xunit.Assert.Equal(JsonValueKind.Object, root.ValueKind);
             var properties = root.EnumerateObject().ToArray();
-            var schemaProperty = Xunit.Assert.Single(properties);
-            Xunit.Assert.Equal("$schema", schemaProperty.Name);
+            Xunit.Assert.Equal(2, properties.Length);
+            var schemaProperty = properties.First(p => p.Name == "$schema");
             Xunit.Assert.Equal(SchemaUrl, schemaProperty.Value.GetString());
+            var namespaceProperty = properties.First(p => p.Name == "Namespace");
+            var expectedNamespace = ToPascalCase(new DirectoryInfo(directory.FullName).Name);
+            Xunit.Assert.Equal(expectedNamespace, namespaceProperty.Value.GetString());
         }
         finally
         {
             Directory.Delete(directory.FullName, true);
         }
+    }
+
+    private static string ToPascalCase(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return "Xtraq";
+        }
+
+        var parts = input
+            .Split(new[] { '-', '_', ' ', '.', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(static segment => segment.Trim())
+            .Where(static segment => segment.Length > 0)
+            .Select(static segment => char.ToUpperInvariant(segment[0]) + (segment.Length > 1 ? segment[1..].ToLowerInvariant() : string.Empty));
+
+        var candidate = string.Concat(parts);
+        candidate = new string(candidate.Where(static ch => char.IsLetterOrDigit(ch) || ch == '_').ToArray());
+        if (string.IsNullOrEmpty(candidate))
+        {
+            candidate = "Xtraq";
+        }
+
+        if (char.IsDigit(candidate[0]))
+        {
+            candidate = "N" + candidate;
+        }
+
+        return candidate;
     }
 
     [Xunit.Fact]

@@ -119,7 +119,7 @@ internal static partial class UnionOrderStatusesPlan
 		{
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UnionOrderStatuses]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UnionOrderStatuses]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

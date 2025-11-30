@@ -32,6 +32,8 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class WriteAuditLogEntriesRequest
 {
+    [System.ComponentModel.DataAnnotations.Required]
+    public IReadOnlyList<AuditLogEntryTableType> Entries { get; init; }
 }
 
 public readonly record struct WriteAuditLogEntriesInput(
@@ -55,7 +57,7 @@ internal static class WriteAuditLogEntriesRequestMapper
     public static async ValueTask<WriteAuditLogEntriesInput> ToInputAsync(WriteAuditLogEntriesRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new WriteAuditLogEntriesRequest();
-        IReadOnlyList<AuditLogEntryTableType>? Entries = default;
+        IReadOnlyList<AuditLogEntryTableType>? Entries = request.Entries;
         if (!HasValue(Entries))
         {
             Entries = await ResolveTableAsync<AuditLogEntryTableType>(bindingProvider, "[sample].[WriteAuditLogEntries]", "@Entries", Entries, cancellationToken).ConfigureAwait(false);

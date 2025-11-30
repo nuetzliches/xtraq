@@ -1,3 +1,4 @@
 {
+    "$schema": "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json",
     "ProjectPath": "debug"
 }

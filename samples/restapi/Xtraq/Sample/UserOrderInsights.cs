@@ -79,6 +79,10 @@ internal static class UserOrderInsightsRequestMapper
         int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserOrderInsights]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(UserId))
+        {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
 
@@ -161,7 +165,7 @@ internal static partial class UserOrderInsightsPlan
 			cmd.Parameters["@UserId"].Value = input.UserId;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserOrderInsights]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UserOrderInsights]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

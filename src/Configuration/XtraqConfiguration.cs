@@ -157,6 +157,7 @@ public sealed class XtraqConfiguration
             Console.Error.WriteLine("[xtraq] Warning: XTRAQ_GENERATOR_DB is not set. Run 'xtraq init' or provide the connection string via environment variables.");
         }
 
+        var namespaceValue = NullIfEmpty(Get("XTRAQ_NAMESPACE"))?.Trim();
         var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR")) ?? "Xtraq";
         var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE"));
         var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
@@ -170,7 +171,7 @@ public sealed class XtraqConfiguration
         var cfg = new XtraqConfiguration
         {
             GeneratorConnectionString = fullConn,
-            NamespaceRoot = NullIfEmpty(Get("XTRAQ_NAMESPACE")),
+            NamespaceRoot = namespaceValue,
             OutputDir = outputDirResolved,
             ConfigPath = File.Exists(effectiveConfigPath) ? effectiveConfigPath : null,
             BuildSchemas = buildSchemasList,
@@ -199,14 +200,14 @@ public sealed class XtraqConfiguration
     /// <exception cref="InvalidOperationException">Thrown when validation fails.</exception>
     private static void Validate(XtraqConfiguration cfg, string? envFilePath, bool requireGeneratorConnection)
     {
-        if (!string.IsNullOrWhiteSpace(cfg.NamespaceRoot))
-        {
-            var ns = cfg.NamespaceRoot.Trim();
-            if (!System.Text.RegularExpressions.Regex.IsMatch(ns, @"^[A-Za-z_][A-Za-z0-9_\.]*$"))
-                throw new InvalidOperationException($"XTRAQ_NAMESPACE '{ns}' invalid.");
-            if (ns.Contains(".."))
-                throw new InvalidOperationException("XTRAQ_NAMESPACE contains '..'.");
-        }
+        if (string.IsNullOrWhiteSpace(cfg.NamespaceRoot))
+            throw new InvalidOperationException("XTRAQ_NAMESPACE is required. Run 'xtraq init' to capture the namespace.");
+
+        var ns = cfg.NamespaceRoot.Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(ns, @"^[A-Za-z_][A-Za-z0-9_\.]*$"))
+            throw new InvalidOperationException($"XTRAQ_NAMESPACE '{ns}' invalid.");
+        if (ns.Contains(".."))
+            throw new InvalidOperationException("XTRAQ_NAMESPACE contains '..'.");
         if (!string.IsNullOrWhiteSpace(cfg.OutputDir) && cfg.OutputDir.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             throw new InvalidOperationException($"XTRAQ_OUTPUT_DIR '{cfg.OutputDir}' contains invalid chars.");
         if (string.IsNullOrWhiteSpace(cfg.ConfigPath) || !File.Exists(cfg.ConfigPath))

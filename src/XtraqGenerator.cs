@@ -85,8 +85,7 @@ public sealed class XtraqGenerator
         // Template cache-state check (hash .xqt templates). If changed, force metadata reload.
         TryApplyTemplateCacheState(projectRoot);
         // Derive namespace considering the configuration path (-p)
-        var resolver = new NamespaceResolver(cfg, msg => Console.Out.WriteLine(msg));
-        var nsBase = resolver.Resolve(projectRoot); // simplified: just directory of configPath or projectRoot
+        var nsBase = cfg.NamespaceRoot ?? throw new InvalidOperationException("XTRAQ_NAMESPACE is not configured.");
         // Compose final namespace: append output dir once
         var outSeg = string.IsNullOrWhiteSpace(cfg.OutputDir) ? "Xtraq" : cfg.OutputDir!.Trim('.');
         var ns = nsBase.EndsWith('.' + outSeg, StringComparison.OrdinalIgnoreCase) ? nsBase : nsBase + '.' + outSeg;

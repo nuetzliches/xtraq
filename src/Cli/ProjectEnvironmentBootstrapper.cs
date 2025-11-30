@@ -200,7 +200,7 @@ internal static class ProjectEnvironmentBootstrapper
             }
 
             var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-            var itemGroup = $"{newline}  <ItemGroup>{newline}    <Content Include=\".xtraq\\\\**\\\\*\" />{newline}  </ItemGroup>{newline}";
+            var itemGroup = $"{newline}  <ItemGroup>{newline}    <Content Include=\".xtraq\\**\\*\" />{newline}  </ItemGroup>{newline}";
             var insertIndex = content.LastIndexOf("</Project>", StringComparison.OrdinalIgnoreCase);
             content = insertIndex >= 0
                 ? content.Insert(insertIndex, itemGroup)

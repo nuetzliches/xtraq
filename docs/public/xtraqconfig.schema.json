@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nuetzliches.github.io/xtraq/xtraqconfig.schema.json",
   "title": "Xtraq tracked configuration",
-  "description": "JSON schema for .xtraqconfig and .xtraqconfig.local files. All properties are optional; omit defaults to keep the file minimal.",
+  "description": "JSON schema for .xtraqconfig and .xtraqconfig.local files. Root-level files always include the resolved Namespace; other properties remain optional so the file stays minimal.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -21,7 +21,7 @@
     },
     "Namespace": {
       "type": "string",
-      "description": "Root namespace for generated artifacts."
+      "description": "Root namespace for generated artifacts. xtraq init resolves and persists this automatically for the root configuration."
     },
     "OutputDir": {
       "type": "string",
@@ -47,7 +47,10 @@
       "properties": {
         "Mode": {
           "type": "string",
-          "enum": ["Minimal", "None"],
+          "enum": [
+            "Minimal",
+            "None"
+          ],
           "description": "API helper generation mode."
         },
         "Requests": {
@@ -57,13 +60,17 @@
             "AutoBind": {
               "type": "array",
               "uniqueItems": true,
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Global parameter auto-bind allow-list for API endpoints."
             },
             "AutoBindProcedures": {
               "type": "array",
               "uniqueItems": true,
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Schema-qualified procedures that should participate in automatic parameter auto-binding."
             }
           }

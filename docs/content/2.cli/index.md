@@ -5,17 +5,17 @@ description: Overview of xtraq command-line interface and global options. The xt
 
 ## Global Options
 
-| Option                              | Description                                                                                           |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `-p, --project-path <project-path>` | Override the working directory (must contain the target `.env`).                                      |
-| `-v, --verbose`                     | Emit detailed logging (pipeline steps, timings, cache hints).                                         |
-| `--debug`                           | Use the debug environment wiring for additional diagnostics.                                          |
-| `--no-cache`                        | Skip cached metadata (forces a full snapshot refresh).                                                |
-| `--procedure <schema.proc>`         | Limit snapshot/build operations to matching stored procedures (comma separated, wildcards supported). |
-| `--telemetry`                       | Persist a detailed database telemetry report for the executed command under `.xtraq/telemetry`.       |
-| `--json-include-null-values`        | Emit `[JsonIncludeNullValues]` attributes and keep null JSON fields during serialization.             |
-| `--entity-framework`                | Opt in to Entity Framework Core integration helpers (sets `XTRAQ_ENTITY_FRAMEWORK_ENABLED` for the run). |
-| `--ci`                              | Switch console output to CI-friendly mode (plain progress, no ANSI art).                              |
+| Option                              | Description                                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `-p, --project-path <project-path>` | Override the working directory (never climbs to parent folders; init will run if the folder lacks `.xtraqconfig`). |
+| `-v, --verbose`                     | Emit detailed logging (pipeline steps, timings, cache hints).                                                      |
+| `--debug`                           | Use the debug environment wiring for additional diagnostics.                                                       |
+| `--no-cache`                        | Skip cached metadata (forces a full snapshot refresh).                                                             |
+| `--procedure <schema.proc>`         | Limit snapshot/build operations to matching stored procedures (comma separated, wildcards supported).              |
+| `--telemetry`                       | Persist a detailed database telemetry report for the executed command under `.xtraq/telemetry`.                    |
+| `--json-include-null-values`        | Emit `[JsonIncludeNullValues]` attributes and keep null JSON fields during serialization.                          |
+| `--entity-framework`                | Opt in to Entity Framework Core integration helpers (sets `XTRAQ_ENTITY_FRAMEWORK_ENABLED` for the run).           |
+| `--ci`                              | Switch console output to CI-friendly mode (plain progress, no ANSI art).                                           |
 
 > `--debug-alias` exists for internal debugging and is intentionally undocumented for the first public release.
 

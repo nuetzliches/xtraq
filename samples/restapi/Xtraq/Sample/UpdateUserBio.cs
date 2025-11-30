@@ -76,9 +76,17 @@ internal static class UpdateUserBioRequestMapper
         int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UpdateUserBio]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(UserId))
+        {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
         string? Bio = request.Bio;
+        if (!HasValue(Bio))
+        {
+	    Bio = await ResolveAsync<string?>(bindingProvider, "[sample].[UpdateUserBio]", "@Bio", false, Bio, cancellationToken).ConfigureAwait(false);
+        }
         if (!HasValue(Bio))
         {
             throw new InvalidOperationException("Parameter @Bio must be supplied by the request or a configured binding.");
@@ -166,7 +174,7 @@ internal static partial class UpdateUserBioPlan
 			cmd.Parameters["@Bio"].Value = input.Bio;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UpdateUserBio]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UpdateUserBio]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

@@ -561,13 +561,7 @@ internal sealed class XtraqCliRuntime(
             }
             else
             {
-                var namespaceResolver = new NamespaceResolver(cfg, msg => consoleService.Verbose($"[proc-ns] {msg}"));
-                var nsRoot = namespaceResolver.Resolve(workingDirectory);
-                if (string.IsNullOrWhiteSpace(nsRoot))
-                {
-                    nsRoot = "Xtraq";
-                    consoleService.Warn("Namespace resolution returned empty value. Falling back to 'Xtraq'.");
-                }
+                var nsRoot = cfg.NamespaceRoot ?? throw new InvalidOperationException("XTRAQ_NAMESPACE is not configured.");
 
                 static string ResolveNamespaceSegment(string? outputSetting)
                 {

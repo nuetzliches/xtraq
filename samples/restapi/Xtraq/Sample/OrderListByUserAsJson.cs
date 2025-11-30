@@ -87,6 +87,10 @@ internal static class OrderListByUserAsJsonRequestMapper
         int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[OrderListByUserAsJson]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(UserId))
+        {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
 
@@ -196,7 +200,7 @@ internal static partial class OrderListByUserAsJsonPlan
 			cmd.Parameters["@UserId"].Value = input.UserId;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[OrderListByUserAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[OrderListByUserAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

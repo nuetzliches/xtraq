@@ -105,9 +105,22 @@ internal static class CliHostUtilities
         var fallback = Directory.GetCurrentDirectory();
         if (string.IsNullOrWhiteSpace(value))
         {
+            Environment.SetEnvironmentVariable(Xtraq.Configuration.TrackableConfigManager.ProjectRootLockEnvironmentVariableName, null);
             var resolvedDefault = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(fallback);
             UpdateProjectEnvironment(resolvedDefault);
             return resolvedDefault;
+        }
+
+        string NormalizeDirectory(string candidate)
+        {
+            try
+            {
+                return Path.GetFullPath(candidate);
+            }
+            catch
+            {
+                return candidate;
+            }
         }
 
         var trimmed = value.Trim();
@@ -121,42 +134,30 @@ internal static class CliHostUtilities
             candidate = trimmed;
         }
 
-        string DetermineRootForFilePath(string path)
+        string ResolveExplicitRoot(string path)
         {
-            var directory = Path.GetDirectoryName(path) ?? fallback;
+            if (File.Exists(path))
+            {
+                var directory = Path.GetDirectoryName(path) ?? fallback;
+                return NormalizeDirectory(directory);
+            }
+
             if (LooksLikeEnv(path))
             {
-                return Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
+                var directory = Path.GetDirectoryName(path) ?? fallback;
+                return NormalizeDirectory(directory);
             }
 
-            if (string.Equals(Path.GetFileName(path), ".xtraqconfig", StringComparison.OrdinalIgnoreCase))
+            if (Directory.Exists(path))
             {
-                var redirected = Xtraq.Configuration.TrackableConfigManager.ResolveRedirectTargets(directory);
-                return redirected ?? directory;
+                return NormalizeDirectory(path);
             }
 
-            return Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
+            return NormalizeDirectory(path);
         }
 
-        string resolvedRoot;
-        if (File.Exists(candidate))
-        {
-            resolvedRoot = DetermineRootForFilePath(candidate);
-        }
-        else if (Directory.Exists(candidate))
-        {
-            resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(candidate);
-        }
-        else if (LooksLikeEnv(candidate))
-        {
-            var directory = Path.GetDirectoryName(candidate) ?? fallback;
-            resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(directory);
-        }
-        else
-        {
-            resolvedRoot = Xtraq.Configuration.TrackableConfigManager.ResolveProjectRoot(candidate);
-        }
-
+        var resolvedRoot = ResolveExplicitRoot(candidate);
+        Environment.SetEnvironmentVariable(Xtraq.Configuration.TrackableConfigManager.ProjectRootLockEnvironmentVariableName, resolvedRoot);
         UpdateProjectEnvironment(resolvedRoot);
         return resolvedRoot;
     }

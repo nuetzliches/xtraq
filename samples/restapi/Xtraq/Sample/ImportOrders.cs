@@ -31,13 +31,8 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class ImportOrdersRequest
 {
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
-    [System.ComponentModel.DataAnnotations.Required]
-    public IReadOnlyList<OrderImportTableTypeRequest> Orders { get; init; }
-#else
     [System.ComponentModel.DataAnnotations.Required]
     public IReadOnlyList<OrderImportTableType> Orders { get; init; }
-#endif
 }
 
 public readonly record struct ImportOrdersInput(
@@ -72,11 +67,11 @@ internal static class ImportOrdersRequestMapper
     public static async ValueTask<ImportOrdersInput> ToInputAsync(ImportOrdersRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new ImportOrdersRequest();
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
-        IReadOnlyList<OrderImportTableType>? Orders = OrderImportTableTypeRequest.ToTableTypes(request.Orders);
-#else
         IReadOnlyList<OrderImportTableType>? Orders = request.Orders;
-#endif
+        if (!HasValue(Orders))
+        {
+            Orders = await ResolveTableAsync<OrderImportTableType>(bindingProvider, "[sample].[ImportOrders]", "@Orders", Orders, cancellationToken).ConfigureAwait(false);
+        }
         if (!HasValue(Orders))
         {
             throw new InvalidOperationException("Parameter @Orders must be supplied by the request or a configured binding.");
@@ -161,7 +156,7 @@ internal static partial class ImportOrdersPlan
 			{ var prm = cmd.Parameters["@Orders"]; var source = input.Orders; var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) { sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= "sample.OrderImportTableType"; } }
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[ImportOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[ImportOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

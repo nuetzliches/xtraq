@@ -31,6 +31,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserCompositeJsonSnapshotRequest
 {
+    public int UserId { get; init; }
     public int RecentPaymentCount { get; init; }
 }
 
@@ -111,7 +112,7 @@ internal static class UserCompositeJsonSnapshotRequestMapper
     public static async ValueTask<UserCompositeJsonSnapshotInput> ToInputAsync(UserCompositeJsonSnapshotRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
     {
         request ??= new UserCompositeJsonSnapshotRequest();
-        int? UserId = default;
+        int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
 	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);

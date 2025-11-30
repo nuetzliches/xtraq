@@ -75,9 +75,17 @@ internal static class OrderStatusReportRequestMapper
         DateTime? FromUtc = request.FromUtc;
         if (!HasValue(FromUtc))
         {
+	    FromUtc = await ResolveAsync<DateTime?>(bindingProvider, "[sample].[OrderStatusReport]", "@FromUtc", false, FromUtc, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(FromUtc))
+        {
             throw new InvalidOperationException("Parameter @FromUtc must be supplied by the request or a configured binding.");
         }
         DateTime? ToUtc = request.ToUtc;
+        if (!HasValue(ToUtc))
+        {
+	    ToUtc = await ResolveAsync<DateTime?>(bindingProvider, "[sample].[OrderStatusReport]", "@ToUtc", false, ToUtc, cancellationToken).ConfigureAwait(false);
+        }
         if (!HasValue(ToUtc))
         {
             throw new InvalidOperationException("Parameter @ToUtc must be supplied by the request or a configured binding.");
@@ -165,7 +173,7 @@ internal static partial class OrderStatusReportPlan
 			cmd.Parameters["@ToUtc"].Value = input.ToUtc;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

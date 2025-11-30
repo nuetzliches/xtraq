@@ -95,6 +95,10 @@ internal static class UserDetailsWithOrdersRequestMapper
         int? UserId = request.UserId;
         if (!HasValue(UserId))
         {
+	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserDetailsWithOrders]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
+        }
+        if (!HasValue(UserId))
+        {
             throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
         }
 
@@ -184,7 +188,7 @@ internal static partial class UserDetailsWithOrdersPlan
 			cmd.Parameters["@UserId"].Value = input.UserId;
 		}
 		return new ProcedureExecutionPlan(
-			"[sample].[UserDetailsWithOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);
+			"[sample].[UserDetailsWithOrders]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);
 	}
 }
 

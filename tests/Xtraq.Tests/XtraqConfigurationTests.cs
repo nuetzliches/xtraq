@@ -122,6 +122,46 @@ public sealed class XtraqConfigurationTests
     }
 
     /// <summary>
+    /// Ensures that missing namespaces are rejected because init must capture them.
+    /// </summary>
+    [Xunit.Fact]
+    public void Load_WhenNamespaceMissing_ThrowsInvalidOperation()
+    {
+        var cleanupKeys = new[]
+        {
+            "XTRAQ_PROJECT_PATH",
+            "XTRAQ_NAMESPACE"
+        };
+
+        var snapshot = new Dictionary<string, string?>(cleanupKeys.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in cleanupKeys)
+        {
+            snapshot[key] = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, null);
+        }
+
+        var projectRoot = Directory.CreateTempSubdirectory("xtraq-ns-missing-").FullName;
+
+        try
+        {
+            File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"), "{ }\n");
+
+            var ex = Xunit.Record.Exception(() => Xtraq.Configuration.XtraqConfiguration.Load(projectRoot, requireGeneratorConnection: false));
+            Xunit.Assert.IsType<InvalidOperationException>(ex);
+            Xunit.Assert.Contains("XTRAQ_NAMESPACE", ex!.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            foreach (var kvp in snapshot)
+            {
+                Environment.SetEnvironmentVariable(kvp.Key, kvp.Value);
+            }
+
+            TryDeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// Ensures the loader fails when no tracked configuration is present alongside the .env.
     /// </summary>
     [Xunit.Fact]
