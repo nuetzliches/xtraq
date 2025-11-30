@@ -84,7 +84,7 @@ internal sealed class DbContextGenerator : GeneratorBase
 
         // Append .Xtraq suffix only if not already present.
         var finalNs = baseNs.EndsWith(".Xtraq", StringComparison.Ordinal) ? baseNs : baseNs + ".Xtraq";
-        // Collect procedure descriptors (may be empty in legacy mode or early pipeline stages)
+        // Collect procedure descriptors (may be empty in early pipeline stages)
         var procedures = _proceduresProvider();
         // Build method metadata (naming + signatures) only if we have procedures
         var methodBlocksInterface = new StringBuilder();

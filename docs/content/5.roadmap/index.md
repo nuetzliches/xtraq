@@ -13,4 +13,5 @@ description: Release-candidate milestones and near-term tasks.
 
 - Legacy SchemaManager, SchemaSelectionContext, and SchemaStatusEvaluator were removed. Snapshot/build commands already run exclusively through `XtraqCliRuntime`, so the unused manager layer was deleted to reduce dead code and lower maintenance cost.
 - The standalone JSON result type enricher (and its `jsonTypeLogLevel` toggle) no longer ships; ScriptDom analysis is the single source of truth and logging now rides on the standard `XTRAQ_LOG_LEVEL` + `XTRAQ_JSON_AST_DIAG` switches.
+- The per-run `LocalCacheService`/`ProcedureCacheSnapshot` layer was removed; after the manager cleanup no component consumes the cache, so keeping it would only incur dead configuration choices.
 
