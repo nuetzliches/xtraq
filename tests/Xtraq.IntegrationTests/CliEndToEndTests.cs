@@ -722,7 +722,7 @@ public sealed class CliEndToEndTests : IAsyncLifetime
                     "OutputDir": "Xtraq",
                     "TargetFramework": "net10.0",
                     "BuildSchemas": [
-                        "{SampleSchema}"
+                        "{{SampleSchema}}"
                     ]
                 }
                 """;
