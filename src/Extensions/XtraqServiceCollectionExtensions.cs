@@ -43,7 +43,6 @@ public static class XtraqServiceCollectionExtensions
     {
         services.AddSingleton<OutputService>();
         services.AddSingleton<Services.SchemaSnapshotFileLayoutService>();
-        services.AddSingleton<SchemaManager>();
         services.AddSingleton<XtraqCliRuntime>();
         services.AddSingleton<ILocalCacheService, LocalCacheService>();
         services.AddSingleton<ISnapshotResolutionService, SnapshotResolutionService>();

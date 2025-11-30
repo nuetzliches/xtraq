@@ -9,3 +9,7 @@ description: Release-candidate milestones and near-term tasks.
 - **T-3 days**: Address RC feedback, rerun full test suite, verify telemetry/CLI summaries and parameter-binding docs.
 - **Release**: Tag stable, publish packages, update README/landing, and archive RC notes.
 
+## Maintenance Updates
+
+- Legacy SchemaManager, SchemaSelectionContext, and SchemaStatusEvaluator were removed. Snapshot/build commands already run exclusively through `XtraqCliRuntime`, so the unused manager layer was deleted to reduce dead code and lower maintenance cost.
+
