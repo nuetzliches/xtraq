@@ -10,6 +10,7 @@ using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Xtraq.Engine;
 using Xunit;
 
 namespace Xtraq.Tests.TemplateTests;
@@ -27,11 +28,16 @@ public sealed class ProcedureBuilderTemplateTests
         var globalUsingsPath = Path.Combine(root, "src", "GlobalUsings.cs");
         Assert.True(File.Exists(globalUsingsPath), $"Global usings not found: {globalUsingsPath}");
         var globalUsingsSource = File.ReadAllText(globalUsingsPath);
-        var builderSource = template
-            .Replace("{{ HEADER }}", "// generated for tests")
-            .Replace("{{ Namespace }}", "TestNamespace");
+        var engine = new SimpleTemplateEngine();
+        var builderModel = new
+        {
+            HEADER = "// generated for tests",
+            Namespace = "TestNamespace",
+            EmitMinimalApi = false
+        };
+        var builderSource = engine.Render(template, builderModel);
 
-var harnessSource = @"// harness
+        var harnessSource = @"// harness
 using System;
 using System.Collections.Generic;
 using System.Data;

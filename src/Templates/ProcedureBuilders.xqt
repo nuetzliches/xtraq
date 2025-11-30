@@ -1,10 +1,10 @@
 {{ HEADER }}
 #nullable enable
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+{{#if EmitMinimalApi}}
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-#endif
+{{/if}}
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -104,8 +104,7 @@ public static class ProcedurePipelineExtensions
     }
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
-
+{{#if EmitMinimalApi}}
 public static class ProcedureRouteHandlerBuilderExtensions
 {
     public static RouteHandlerBuilder WithProcedure<TInput, TResult>(
@@ -337,8 +336,7 @@ public static class ProcedureRouteHandlerBuilderExtensions
         }
     }
 }
-
-#endif
+{{/if}}
 
 public interface IProcedureExecutionContext
 {

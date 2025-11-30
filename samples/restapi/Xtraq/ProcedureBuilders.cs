@@ -3,6 +3,11 @@
 // Changes may be overwritten. For customization extend generated partials.
 
 #nullable enable
+#if XTRAQ_API_MODE_MINIMAL
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+#endif
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -102,7 +107,7 @@ public static class ProcedurePipelineExtensions
     }
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+#if XTRAQ_API_MODE_MINIMAL
 
 public static class ProcedureRouteHandlerBuilderExtensions
 {

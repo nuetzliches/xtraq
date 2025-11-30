@@ -94,7 +94,7 @@ public sealed record AuditLogEntryTableType : ITableType
 #endif
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+#if XTRAQ_API_MODE_MINIMAL
 /// <summary>
 /// Minimal API request row mirroring the SQL table type <c>Shared.AuditLogEntryTableType</c> with DataAnnotations metadata.
 /// </summary>

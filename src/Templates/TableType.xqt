@@ -69,7 +69,7 @@ public sealed record {{ TypeName }} : ITableType
 #endif
 }
 
-#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL
+{{#if EmitMinimalApiContracts}}
 /// <summary>
 /// Minimal API request row mirroring the SQL table type <c>{{ Schema }}.{{ Name }}</c> with DataAnnotations metadata.
 /// </summary>
@@ -103,4 +103,4 @@ public sealed record {{ TypeName }}Request
 		return buffer;
 	}
 }
-#endif
+{{/if}}

@@ -1096,10 +1096,6 @@ internal static class TrackableConfigManager
         if (!string.IsNullOrWhiteSpace(payload.Api?.Mode))
         {
             defaults["XTRAQ_API_MODE"] = payload.Api!.Mode!.Trim();
-            if (string.Equals(payload.Api.Mode, "Minimal", StringComparison.OrdinalIgnoreCase))
-            {
-                defaults["XTRAQ_API_MODE_MINIMAL"] = "1";
-            }
         }
 
         if (payload.Api?.Requests?.AutoBind is { Count: > 0 })

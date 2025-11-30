@@ -60,6 +60,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
 
         // Load optional shared header template
         var headerBlock = Templates.HeaderBlock;
+        var emitMinimalApiContracts = ShouldEmitMinimalApiExtensions();
 
         // Ensure interface exists (ITableType) and has correct namespace; rewrite if outdated
         var interfacePath = Path.Combine(rootOut, "ITableType.cs");
@@ -198,7 +199,19 @@ internal sealed class TableTypesGenerator : GeneratorBase
                 // Deterministic placeholder instead of real timestamp
                 GeneratedAt = "<generated>"
             };
-            var extendedModel = new { model.Namespace, model.Schema, model.Name, model.TypeName, model.TableTypeName, model.Columns, model.ColumnsCount, model.GeneratedAt, HEADER = headerBlock };
+            var extendedModel = new
+            {
+                model.Namespace,
+                model.Schema,
+                model.Name,
+                model.TypeName,
+                model.TableTypeName,
+                model.Columns,
+                model.ColumnsCount,
+                model.GeneratedAt,
+                HEADER = headerBlock,
+                EmitMinimalApiContracts = emitMinimalApiContracts
+            };
             var code = Templates.RenderRawTemplate(tableTypeTemplate, extendedModel);
             var fileName = typeName + ".cs";
             File.WriteAllText(Path.Combine(schemaDir, fileName), code, Encoding.UTF8);

@@ -26,6 +26,7 @@ public sealed class ProcedureBuilderMinimalApiTemplateTests
         {
             HEADER = "// generated for tests",
             Namespace = "TestNamespace",
+            EmitMinimalApi = true,
             Procedures = new[]
             {
                 new
@@ -39,7 +40,7 @@ public sealed class ProcedureBuilderMinimalApiTemplateTests
                 }
             }
         };
-        var builderSource = "#define XTRAQ_API_MODE_MINIMAL\n#define NET8_0_OR_GREATER\n" + engine.Render(template, builderModel);
+        var builderSource = engine.Render(template, builderModel);
 
         var harnessSource = """
 // harness

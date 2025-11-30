@@ -1,3 +1,4 @@
+using Xtraq.Configuration;
 using Xtraq.Utils;
 
 namespace Xtraq.Cli.Hosting;
@@ -359,10 +360,17 @@ internal static class CliHostUtilities
         var workingDirectory = NormalizePathSafe(Directory.GetCurrentDirectory());
         var normalizedProjectPath = NormalizePathSafe(projectPath);
         var normalizedProjectRoot = NormalizePathSafe(resolvedRoot);
+        var commandValue = string.IsNullOrWhiteSpace(commandName) ? "default" : commandName;
         var metadata = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["version"] = ResolveProductVersion()
         };
+
+        var namespaceHint = TryResolveNamespaceHint(normalizedProjectPath);
+        if (!string.IsNullOrWhiteSpace(namespaceHint))
+        {
+            metadata["namespace"] = namespaceHint;
+        }
 
         if (!string.Equals(normalizedProjectPath, workingDirectory, StringComparison.OrdinalIgnoreCase))
         {
@@ -370,17 +378,17 @@ internal static class CliHostUtilities
             metadata["projectPath"] = string.IsNullOrWhiteSpace(relativeProject) ? normalizedProjectPath : relativeProject;
         }
 
-        metadata["command"] = string.IsNullOrWhiteSpace(commandName) ? "default" : commandName;
+        if (!string.IsNullOrWhiteSpace(environment) && !string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata["environment"] = environment;
+        }
+
+        metadata["command"] = commandValue;
 
         if (options.Verbose)
         {
             metadata["workingDirectory"] = workingDirectory;
             metadata["timestampUtc"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        }
-
-        if (!string.IsNullOrWhiteSpace(environment) && !string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase))
-        {
-            metadata["environment"] = environment;
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedProjectRoot))
@@ -436,6 +444,24 @@ internal static class CliHostUtilities
         }
 
         return JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string? TryResolveNamespaceHint(string projectPath)
+    {
+        try
+        {
+            var cfg = XtraqConfiguration.Load(projectRoot: projectPath, requireGeneratorConnection: false);
+            if (!string.IsNullOrWhiteSpace(cfg?.NamespaceRoot))
+            {
+                return cfg.NamespaceRoot!.Trim();
+            }
+        }
+        catch
+        {
+            // Config not ready yet (xtraq init) or load failed; ignore.
+        }
+
+        return null;
     }
 
     public static string ResolveProductBanner() => "Xtraq";

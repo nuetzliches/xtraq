@@ -31,12 +31,7 @@ internal abstract class GeneratorBase
 
     protected bool ShouldEmitMinimalApiExtensions()
     {
-        if (Configuration?.ApiMode == ApiMode.Minimal)
-        {
-            return true;
-        }
-
-        return EnvironmentHelper.IsTrue("XTRAQ_API_MODE_MINIMAL") || string.Equals(Environment.GetEnvironmentVariable("XTRAQ_API_MODE"), "minimal", StringComparison.OrdinalIgnoreCase);
+        return Configuration?.ApiMode == ApiMode.Minimal;
     }
 
     protected bool ShouldEmitEntityFrameworkIntegration()

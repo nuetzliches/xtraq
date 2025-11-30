@@ -72,37 +72,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return (schema, name);
     }
 
-    private static string StripMinimalApiExtensions(string builderCode)
-    {
-        if (string.IsNullOrEmpty(builderCode))
-        {
-            return builderCode;
-        }
-
-        const string startMarker = "#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL";
-        const string endMarker = "#endif";
-
-        var startIndex = builderCode.IndexOf(startMarker, StringComparison.Ordinal);
-        if (startIndex < 0)
-        {
-            return builderCode;
-        }
-
-        var endIndex = builderCode.IndexOf(endMarker, startIndex, StringComparison.Ordinal);
-        if (endIndex < 0)
-        {
-            return builderCode;
-        }
-
-        var removalEnd = endIndex + endMarker.Length;
-        while (removalEnd < builderCode.Length && (builderCode[removalEnd] == '\r' || builderCode[removalEnd] == '\n'))
-        {
-            removalEnd++;
-        }
-
-        return builderCode.Remove(startIndex, removalEnd - startIndex);
-    }
-
     public ProcedureGenerationResult Generate(string ns, string baseOutputDir)
     {
         // Capture full unfiltered list (needed for cross-schema forwarding even if target schema excluded by allow-list)
@@ -384,12 +353,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures };
+                var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures, EmitMinimalApi = emitMinimalApiExtensions };
                 var builderCode = Templates.RenderRawTemplate(builderTpl, builderModel);
-                if (!emitMinimalApiExtensions)
-                {
-                    builderCode = StripMinimalApiExtensions(builderCode);
-                }
                 File.WriteAllText(builderPath, builderCode);
             }
         }
@@ -1629,6 +1594,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     Namespace = finalNs,
                     UsingDirectives = usingBlock,
                     HEADER = headerBlock,
+                    EmitMinimalApi = emitMinimalApiExtensions,
                     HasParameters = proc.InputParameters.Count + proc.OutputFields.Count > 0,
                     HasInput = proc.InputParameters.Count > 0,
                     HasOutput = proc.OutputFields.Count > 0,
@@ -2419,22 +2385,13 @@ internal sealed class ProceduresGenerator : GeneratorBase
     private static IReadOnlyList<string> BuildRequestPropertyBlockLines(string propertyName, string requestClrType, IReadOnlyList<string> attributes, bool hasApiRequestProjection, string? apiRequestClrType)
     {
         var lines = new List<string>();
-        if (hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiRequestClrType))
-        {
-            lines.Add("#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL");
-            AppendAttributeLines(lines, attributes);
-            lines.Add($"    public {apiRequestClrType} {propertyName} {{ get; init; }}");
-            lines.Add("#else");
-            AppendAttributeLines(lines, attributes);
-            lines.Add($"    public {requestClrType} {propertyName} {{ get; init; }}");
-            lines.Add("#endif");
-        }
-        else
-        {
-            AppendAttributeLines(lines, attributes);
-            lines.Add($"    public {requestClrType} {propertyName} {{ get; init; }}");
-        }
+        AppendAttributeLines(lines, attributes);
 
+        var propertyClrType = hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiRequestClrType)
+            ? apiRequestClrType
+            : requestClrType;
+
+        lines.Add($"    public {propertyClrType} {propertyName} {{ get; init; }}");
         return lines;
     }
 
@@ -2456,19 +2413,11 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
     private static IReadOnlyList<string> BuildRequestInitializationLines(string resolverClrType, string propertyName, string defaultInitializer, string? apiInitializer, bool hasApiRequestProjection)
     {
-        if (hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiInitializer))
-        {
-            return new[]
-            {
-                "#if NET8_0_OR_GREATER && XTRAQ_API_MODE_MINIMAL",
-                $"        {resolverClrType} {propertyName} = {apiInitializer};",
-                "#else",
-                $"        {resolverClrType} {propertyName} = {defaultInitializer};",
-                "#endif"
-            };
-        }
+        var initializer = hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiInitializer)
+            ? apiInitializer
+            : defaultInitializer;
 
-        return new[] { $"        {resolverClrType} {propertyName} = {defaultInitializer};" };
+        return new[] { $"        {resolverClrType} {propertyName} = {initializer};" };
     }
 
     private static bool IsStringType(string clrType)
