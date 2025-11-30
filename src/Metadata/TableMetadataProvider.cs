@@ -1,8 +1,7 @@
 namespace Xtraq.Metadata;
 
 /// <summary>
-/// Reads table metadata from the expanded snapshot (.xtraq/snapshots/tables).
-/// Lightweight read-only layer (no heuristics and no fallback to legacy monolithic files).
+/// Reads table metadata from the expanded snapshot (.xtraq/snapshots/tables) using a lightweight read-only layer with no heuristic fallbacks.
 /// </summary>
 internal interface ITableMetadataProvider
 {

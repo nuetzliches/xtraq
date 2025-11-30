@@ -10,7 +10,7 @@ using ScriptDomParameterModifier = Microsoft.SqlServer.TransactSql.ScriptDom.Par
 namespace Xtraq.SnapshotBuilder.Analyzers;
 
 /// <summary>
-/// Builds <see cref="ProcedureModel"/> instances directly from ScriptDom ASTs without relying on the legacy StoredProcedureContentModel.
+/// Builds <see cref="ProcedureModel"/> instances directly from ScriptDom ASTs.
 /// </summary>
 internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
 {

@@ -3,7 +3,7 @@ using Xtraq.SnapshotBuilder.Models;
 namespace Xtraq.SnapshotBuilder.Analyzers;
 
 /// <summary>
-/// Applies lightweight normalizations to the intermediate procedure model until dedicated analyzers replace the legacy parser.
+/// Applies lightweight normalizations to the intermediate procedure model after the AST analyzers complete.
 /// </summary>
 internal static class ProcedureModelPostProcessor
 {

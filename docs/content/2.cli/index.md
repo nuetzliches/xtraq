@@ -1,6 +1,7 @@
 ---
 title: CLI Overview
 description: Overview of xtraq command-line interface and global options. The xtraq CLI uses a dual-file configuration model anchored on the tracked `.xtraqconfig` snapshot. Secrets remain outside of source control (typically in `.env` or environment variables). Run `xtraq init` once to scaffold both files, then reuse them across `snapshot`, `build`, and the default `xtraq` entry point.
+aiTags: ["cli"]
 ---
 
 ## Global Options

@@ -16,7 +16,7 @@ internal sealed class OutputService(IConsoleService consoleService)
         var fileAction = FileActionEnum.Created;
         var outputFileText = content;
 
-        // Legacy XML auto-generated header removed to reduce diff churn and align with minimalist output style.
+        // XML auto-generated headers stay omitted to reduce diff churn and align with the minimalist output style.
 
         bool exists = File.Exists(targetFileName);
         if (exists)
@@ -27,7 +27,7 @@ internal sealed class OutputService(IConsoleService consoleService)
             static string NormalizeForComparison(string text)
             {
                 if (string.IsNullOrEmpty(text)) return text;
-                // Remove legacy volatile <remarks> lines (no longer emitted) for backward compatibility when comparing existing files.
+                // Remove volatile <remarks> lines (no longer emitted) for backward compatibility when comparing existing files.
                 text = System.Text.RegularExpressions.Regex.Replace(
                     text,
                     @"^.*///\s<remarks>Generated at .*?</remarks>.*$",

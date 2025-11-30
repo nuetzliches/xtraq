@@ -290,7 +290,7 @@ internal static class TrackableConfigManager
     }
 
     /// <summary>
-    /// Writes a legacy payload representing non-sensitive defaults captured from environment values.
+    /// Writes a payload representing non-sensitive defaults captured from environment values.
     /// </summary>
     /// <param name="projectRoot">Target project root.</param>
     /// <param name="envValues">Environment key/value pairs gathered from .env.</param>

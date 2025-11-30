@@ -2,8 +2,7 @@
 namespace Xtraq.Metadata;
 
 /// <summary>
-/// Minimal reader for user defined table type metadata sourced from the latest snapshot under .xtraq/snapshots.
-/// Avoids legacy runtime model dependencies; produces a lightweight immutable model collection for code generation.
+/// Minimal reader for user defined table type metadata sourced from the latest snapshot under .xtraq/snapshots, producing a lightweight immutable model collection for code generation.
 /// </summary>
 public interface ITableTypeMetadataProvider
 {

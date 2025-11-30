@@ -4,7 +4,7 @@ using Xtraq.SnapshotBuilder.Models;
 namespace Xtraq.SnapshotBuilder.Analyzers;
 
 /// <summary>
-/// Re-parses procedure definitions to capture EXEC dependencies independently from the legacy model.
+/// Re-parses procedure definitions to capture EXEC dependencies straight from the AST.
 /// </summary>
 internal static class ProcedureModelExecAnalyzer
 {

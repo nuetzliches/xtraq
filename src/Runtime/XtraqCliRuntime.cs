@@ -14,9 +14,7 @@ using SnapshotProcedureDescriptor = Xtraq.SnapshotBuilder.Models.ProcedureDescri
 namespace Xtraq.Runtime;
 
 /// <summary>
-/// Central runtime orchestration for the CLI commands (snapshot/build/version/update).
-/// Previously implemented as XtraqManager under src/Managers.
-/// Consolidated here to retire the legacy manager layer.
+/// Central runtime orchestration for the CLI commands (snapshot/build/version/update) and the single entry point for command coordination.
 /// </summary>
 internal sealed class XtraqCliRuntime(
     XtraqService service,

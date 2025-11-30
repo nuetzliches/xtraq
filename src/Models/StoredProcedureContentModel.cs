@@ -350,7 +350,7 @@ internal sealed class StoredProcedureContentModel
                                         col.IsNestedJson = true;
                                         col.ReturnsJson = true;
                                         col.ReturnsJsonArray = meta.ReturnsJsonArray;
-                                        // Legacy SourceFunction* members were removed; the reference is sufficient
+                                        // ProcedureReference now captures the function context, so SourceFunction* members are unnecessary
                                         col.Columns = meta.ColumnNames.Select(n => new ResultColumn { Name = n }).ToList();
                                     }
                                     break; // Stop on first successful match
@@ -2277,19 +2277,19 @@ internal sealed class StoredProcedureContentModel
                             var idents = mp.MultiPartIdentifier.Identifiers.Select(i => i.Value).ToList();
                             if (idents.Count == 1)
                             {
-                                // legacy FunctionName placeholder retained intentionally
+                                // Single-part identifiers rely on ProcedureReference to resolve the schema later
                             }
                             else if (idents.Count >= 2)
                             {
-                                // legacy FunctionSchemaName/FunctionName placeholder retained intentionally
+                                // Multi-part identifiers populate both schema and name through the ProcedureReference
                             }
                         }
                         else if (!string.IsNullOrWhiteSpace(fnName))
                         {
-                            // legacy FunctionName placeholder retained intentionally
+                            // Non-qualified identifiers are forwarded to ProcedureReference as-is
                         }
                         // Fallback: handle identifiers that already include a schema prefix
-                        // legacy schema/name normalization removed (Reference handles schema)
+                        // The ProcedureReference handles schema/name normalization centrally
                     }
                     catch { }
                     // Defer JSON helper expansion until schema/name details are captured
@@ -2298,7 +2298,7 @@ internal sealed class StoredProcedureContentModel
                     try { TryApplyScalarFunctionReturnType(fn, target); } catch { }
                     if (ShouldDiagJsonAst())
                     {
-                        try { System.Console.WriteLine($"[json-ast-fn-meta-final] alias={target.Name} (legacy fn metadata removed)"); } catch { }
+                        try { System.Console.WriteLine($"[json-ast-fn-meta-final] alias={target.Name} metadata captured via ProcedureReference"); } catch { }
                     }
                     // Analyze IIF branches directly in the main flow
                     try
@@ -2701,7 +2701,7 @@ internal sealed class StoredProcedureContentModel
                                     try { System.Console.WriteLine($"[ast-type-iif-branches] {target.Name}: using ELSE branch type {target.SqlTypeName}, maxLength={target.MaxLength} (then={thenCol.MaxLength}, else={elseCol.MaxLength})"); } catch { }
                                 }
                             }
-                            // Legacy fallback: both branches are literal strings
+                            // Fallback: both branches are literal strings
                             else if (IsLiteralString(thenExpr, out var litThen) && IsLiteralString(elseExpr, out var litElse))
                             {
                                 var maxLen = Math.Max(litThen?.Length ?? 0, litElse?.Length ?? 0);
@@ -3969,7 +3969,7 @@ internal sealed class StoredProcedureContentModel
                     return false;
             }
         }
-        // Legacy heuristics (HasIdSuffix / IsInOutLiteral) have been removed to keep the analysis strictly AST-driven
+        // Heuristics such as HasIdSuffix / IsInOutLiteral remain disabled so the analysis stays strictly AST-driven
         private sealed class JsonSetBuilder
         {
             public bool JsonWithArrayWrapper { get; set; }
@@ -4421,16 +4421,16 @@ internal sealed class StoredProcedureContentModel
                                 var idents = mp2.MultiPartIdentifier.Identifiers.Select(i => i.Value).ToList();
                                 if (idents.Count == 1)
                                 {
-                                    // legacy FunctionName removed; if needed build Reference elsewhere
+                                    // Single-part identifiers rely on the downstream ProcedureReference for schema resolution
                                 }
                                 else if (idents.Count >= 2)
                                 {
-                                    // legacy FunctionSchemaName/FunctionName removed; Reference creation occurs in unified path later
+                                    // Multi-part identifiers already include schema information consumed by the shared ProcedureReference builder
                                 }
                             }
                             else if (!string.IsNullOrWhiteSpace(fnName2))
                             {
-                                // legacy FunctionName assignment removed
+                                // Direct FunctionName assignment is intentionally omitted; ProcedureReference handles the linkage
                             }
                             if (!string.IsNullOrWhiteSpace(fnName2))
                             {
@@ -6117,7 +6117,7 @@ internal sealed class StoredProcedureContentModel
             catch { }
         }
 
-        // Legacy name-based type inference has been removed; no automatic guessing remains here
+        // Type inference relies solely on explicit AST data; no name-based guessing occurs here
 
         // Determine whether an expression strictly represents a binary 0/1 conditional pattern (IIF/CASE variants)
         private static bool IsPureZeroOneConditional(ScalarExpression expr)

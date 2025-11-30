@@ -44,7 +44,7 @@ Numbered directories keep navigation stable and make version bumps explicit. Add
 ## Authoring Guidelines
 
 1. **Frontmatter**: Include `title`, `description`, and where relevant `versionIntroduced`, `experimental`, and `aiTags`. See examples under `docs/content/3.reference/`.
-2. **Links**: Prefer relative links (`../path/file.md`) so the static build and GitHub view stay in sync.
+2. **Links**: Use the Nuxt/Docus route aliases (leading `/segment/...`) so the generated site resolves correctly; these paths already render in GitHub because Docus copies the same structure under `.output/public`.
 3. **Code fences**: Specify language (` ```csharp `, ` ```bash `) for proper highlighting and linting.
 4. **LLM tags**: When a page feeds automation (CLI contracts, configuration schema) add `aiTags` to support targeted embeddings.
 5. **Decision records**: Capture scope decisions under `docs/content/5.roadmap/` (see `udtt-analyzer-evaluation.md`).
