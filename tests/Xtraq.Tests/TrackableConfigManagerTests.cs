@@ -20,16 +20,19 @@ public sealed class TrackableConfigManagerTests
         {
             "XTRAQ_NAMESPACE=Acme.Core",
             "PATH=/usr/bin",
-            "XTRAQ_OUTPUT_DIR=Artifacts",
+            "XTRAQ_GENERATOR_DB=Server=(local);Database=App;",
+            "XTRAQ_LOG_LEVEL=debug",
             "  # comment",
-            "XTRAQ_BUILD_SCHEMAS=core,identity"
+            "XTRAQ_ALIAS_DEBUG=1"
         };
 
         var map = Xtraq.Configuration.TrackableConfigManager.BuildEnvMap(lines);
 
-        Xunit.Assert.Equal("Acme.Core", map["XTRAQ_NAMESPACE"]);
-        Xunit.Assert.Equal("Artifacts", map["XTRAQ_OUTPUT_DIR"]);
-        Xunit.Assert.Equal("core,identity", map["XTRAQ_BUILD_SCHEMAS"]);
+        Xunit.Assert.Equal("Server=(local);Database=App;", map["XTRAQ_GENERATOR_DB"]);
+        Xunit.Assert.Equal("debug", map["XTRAQ_LOG_LEVEL"]);
+        Xunit.Assert.Equal("1", map["XTRAQ_ALIAS_DEBUG"]);
+        Xunit.Assert.False(map.ContainsKey("XTRAQ_NAMESPACE"));
+        Xunit.Assert.False(map.ContainsKey("XTRAQ_OUTPUT_DIR"));
         Xunit.Assert.False(map.ContainsKey("PATH"));
     }
 
@@ -48,8 +51,7 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_API_MODE"] = "Minimal",
                 ["XTRAQ_API_AUTOBIND"] = "@UserId INT",
                 ["XTRAQ_API_AUTOBIND_PROCEDURES"] = "sample.UserCompositeJsonSnapshot",
-                ["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = "1",
-                ["XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"] = "1"
+                ["XTRAQ_ENTITY_FRAMEWORK_ENABLED"] = "1"
             };
 
             Xtraq.Configuration.TrackableConfigManager.Write(directory.FullName, envValues);
@@ -76,8 +78,7 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", requests.GetProperty("AutoBindProcedures").EnumerateArray().First().GetString());
             var efElement = root.GetProperty("EntityFramework");
             Xunit.Assert.True(efElement.GetProperty("Enabled").GetBoolean());
-            var resultSet = root.GetProperty("ResultSet");
-            Xunit.Assert.True(resultSet.GetProperty("Json").GetProperty("IncludeNullValues").GetBoolean());
+            Xunit.Assert.False(root.TryGetProperty("ResultSet", out _));
         }
         finally
         {
@@ -213,7 +214,7 @@ public sealed class TrackableConfigManagerTests
         try
         {
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
-            File.WriteAllText(configPath, "{\n  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true },\n  \"ResultSet\": { \"Json\": { \"IncludeNullValues\": true } }\n}\n");
+            File.WriteAllText(configPath, "{\n  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
 
             var defaults = Xtraq.Configuration.TrackableConfigManager.ReadDefaults(directory.FullName);
 
@@ -225,8 +226,6 @@ public sealed class TrackableConfigManagerTests
             Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", autoBindProcFlag);
             Xunit.Assert.True(defaults.TryGetValue("XTRAQ_ENTITY_FRAMEWORK_ENABLED", out var efFlag));
             Xunit.Assert.Equal("1", efFlag);
-            Xunit.Assert.True(defaults.TryGetValue("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES", out var jsonFlag));
-            Xunit.Assert.Equal("1", jsonFlag);
         }
         finally
         {

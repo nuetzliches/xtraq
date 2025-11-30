@@ -179,15 +179,6 @@ internal sealed class SnapshotResolutionService : ISnapshotResolutionService
         {
             throw new ArgumentNullException(nameof(plan));
         }
-
-        if (plan.EffectiveSchemas == null || plan.EffectiveSchemas.Count == 0)
-        {
-            Environment.SetEnvironmentVariable("XTRAQ_BUILD_SCHEMAS", null);
-            return;
-        }
-
-        var value = string.Join(',', plan.EffectiveSchemas);
-        Environment.SetEnvironmentVariable("XTRAQ_BUILD_SCHEMAS", value);
     }
 
     private static List<SchemaObjectRef> CalculateMissingSnapshots(SchemaInvalidationResult? result)

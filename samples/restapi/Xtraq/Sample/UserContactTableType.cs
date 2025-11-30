@@ -4,9 +4,6 @@
 
 #nullable enable
 using System;
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-using FluentValidation;
-#endif
 
 namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
@@ -24,9 +21,6 @@ public sealed record UserContactTableType : ITableType
     public string? Source { get; init; }
     public bool? Preferred { get; init; }
     public DateTime? LastInteractionUtc { get; init; }
-#if XTRAQ_ENFORCE_TABLETYPE_BUILDER
-	#warning Use the 'UserContactTableTypeBuilder' or factory method instead of object initializers.
-#endif
 
 	[Obsolete("Use the static Create(...) or builder for construction.")]
 	public UserContactTableType() { }
@@ -80,27 +74,12 @@ public sealed record UserContactTableType : ITableType
                 LastInteractionUtc = _LastInteractionUtc
             };
 			#pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-            UserContactTableTypeValidator.Instance.ValidateAndThrow(result);
-#endif
             return result;
         }
 	}
 #pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-	private sealed class UserContactTableTypeValidator : AbstractValidator<UserContactTableType>
-	{
-		public static readonly UserContactTableTypeValidator Instance = new();
-		public UserContactTableTypeValidator()
-		{
-			// Add rules (placeholder - extend generator to emit rules per column metadata, e.g. nullability / max length)
-			// Example: RuleFor(x => x.SomeColumn).NotNull();
-		}
-	}
-#endif
 }
 
-#if XTRAQ_API_MODE_MINIMAL
 /// <summary>
 /// Minimal API request row mirroring the SQL table type <c>Sample.UserContactTableType</c> with DataAnnotations metadata.
 /// </summary>
@@ -147,4 +126,3 @@ public sealed record UserContactTableTypeRequest
 		return buffer;
 	}
 }
-#endif

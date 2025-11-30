@@ -4,9 +4,6 @@
 
 #nullable enable
 using System;
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-using FluentValidation;
-#endif
 
 namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
@@ -24,9 +21,6 @@ public sealed record OrderImportTableType : ITableType
     public string Currency { get; init; } = string.Empty;
     public DateTime PlacedAtUtc { get; init; }
     public string? Metadata { get; init; }
-#if XTRAQ_ENFORCE_TABLETYPE_BUILDER
-	#warning Use the 'OrderImportTableTypeBuilder' or factory method instead of object initializers.
-#endif
 
 	[Obsolete("Use the static Create(...) or builder for construction.")]
 	public OrderImportTableType() { }
@@ -80,27 +74,12 @@ public sealed record OrderImportTableType : ITableType
                 Metadata = _Metadata
             };
 			#pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-            OrderImportTableTypeValidator.Instance.ValidateAndThrow(result);
-#endif
             return result;
         }
 	}
 #pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-	private sealed class OrderImportTableTypeValidator : AbstractValidator<OrderImportTableType>
-	{
-		public static readonly OrderImportTableTypeValidator Instance = new();
-		public OrderImportTableTypeValidator()
-		{
-			// Add rules (placeholder - extend generator to emit rules per column metadata, e.g. nullability / max length)
-			// Example: RuleFor(x => x.SomeColumn).NotNull();
-		}
-	}
-#endif
 }
 
-#if XTRAQ_API_MODE_MINIMAL
 /// <summary>
 /// Minimal API request row mirroring the SQL table type <c>Sample.OrderImportTableType</c> with DataAnnotations metadata.
 /// </summary>
@@ -148,4 +127,3 @@ public sealed record OrderImportTableTypeRequest
 		return buffer;
 	}
 }
-#endif

@@ -355,6 +355,11 @@ internal static class TrackableConfigManager
                 continue;
             }
 
+            if (!EnvironmentVariablePolicy.IsEnvFileAllowedKey(key))
+            {
+                continue;
+            }
+
             var value = line.Substring(separatorIndex + 1).Trim();
             if (value.Length > 1 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
             {

@@ -1,6 +1,5 @@
 using Xtraq.Configuration;
 using Xtraq.Engine;
-using Xtraq.Utils;
 
 namespace Xtraq.Generators;
 
@@ -21,12 +20,7 @@ internal abstract class GeneratorBase
 
     protected bool ShouldEmitJsonIncludeNullValues()
     {
-        if (Configuration?.ResultSetJsonIncludeNullValues == true)
-        {
-            return true;
-        }
-
-        return EnvironmentHelper.IsTrue("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES");
+        return Configuration?.ResultSetJsonIncludeNullValues == true;
     }
 
     protected bool ShouldEmitMinimalApiExtensions()
@@ -36,12 +30,7 @@ internal abstract class GeneratorBase
 
     protected bool ShouldEmitEntityFrameworkIntegration()
     {
-        if (Configuration?.EntityFrameworkEnabled == true)
-        {
-            return true;
-        }
-
-        return EnvironmentHelper.IsTrue("XTRAQ_ENTITY_FRAMEWORK_ENABLED");
+        return Configuration?.EntityFrameworkEnabled == true;
     }
 
 }

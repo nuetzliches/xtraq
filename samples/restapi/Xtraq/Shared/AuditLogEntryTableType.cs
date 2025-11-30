@@ -4,9 +4,6 @@
 
 #nullable enable
 using System;
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-using FluentValidation;
-#endif
 
 namespace Xtraq.Samples.RestApi.Xtraq.Shared;
 
@@ -23,9 +20,6 @@ public sealed record AuditLogEntryTableType : ITableType
     public byte Severity { get; init; }
     public Guid? CorrelationId { get; init; }
     public string? Details { get; init; }
-#if XTRAQ_ENFORCE_TABLETYPE_BUILDER
-	#warning Use the 'AuditLogEntryTableTypeBuilder' or factory method instead of object initializers.
-#endif
 
 	[Obsolete("Use the static Create(...) or builder for construction.")]
 	public AuditLogEntryTableType() { }
@@ -74,27 +68,12 @@ public sealed record AuditLogEntryTableType : ITableType
                 Details = _Details
             };
 			#pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-            AuditLogEntryTableTypeValidator.Instance.ValidateAndThrow(result);
-#endif
             return result;
         }
 	}
 #pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-	private sealed class AuditLogEntryTableTypeValidator : AbstractValidator<AuditLogEntryTableType>
-	{
-		public static readonly AuditLogEntryTableTypeValidator Instance = new();
-		public AuditLogEntryTableTypeValidator()
-		{
-			// Add rules (placeholder - extend generator to emit rules per column metadata, e.g. nullability / max length)
-			// Example: RuleFor(x => x.SomeColumn).NotNull();
-		}
-	}
-#endif
 }
 
-#if XTRAQ_API_MODE_MINIMAL
 /// <summary>
 /// Minimal API request row mirroring the SQL table type <c>Shared.AuditLogEntryTableType</c> with DataAnnotations metadata.
 /// </summary>
@@ -138,4 +117,3 @@ public sealed record AuditLogEntryTableTypeRequest
 		return buffer;
 	}
 }
-#endif

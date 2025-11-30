@@ -1,9 +1,6 @@
 {{ HEADER }}
 #nullable enable
 using System;
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-using FluentValidation;
-#endif
 
 namespace {{ Namespace }};
 
@@ -17,9 +14,6 @@ public sealed record {{ TypeName }} : ITableType
 {
 {{#each Columns as column}}    public {{ column.ClrType }} {{ column.PropertyName }} { get; init; }{{ column.PropertyInitializer }}
 {{/each}}
-#if XTRAQ_ENFORCE_TABLETYPE_BUILDER
-	#warning Use the '{{ TypeName }}Builder' or factory method instead of object initializers.
-#endif
 
 	[Obsolete("Use the static Create(...) or builder for construction.")]
 	public {{ TypeName }}() { }
@@ -49,24 +43,10 @@ public sealed record {{ TypeName }} : ITableType
 {{#each Columns as column}}                {{ column.PropertyName }} = _{{ column.PropertyName }}{{ column.Separator }}
 {{/each}}            };
 			#pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-            {{ TypeName }}Validator.Instance.ValidateAndThrow(result);
-#endif
             return result;
         }
 	}
 #pragma warning restore CS0612, CS0618
-#if XTRAQ_ENABLE_TABLETYPE_VALIDATION
-	private sealed class {{ TypeName }}Validator : AbstractValidator<{{ TypeName }}>
-	{
-		public static readonly {{ TypeName }}Validator Instance = new();
-		public {{ TypeName }}Validator()
-		{
-			// Add rules (placeholder - extend generator to emit rules per column metadata, e.g. nullability / max length)
-			// Example: RuleFor(x => x.SomeColumn).NotNull();
-		}
-	}
-#endif
 }
 
 {{#if EmitMinimalApiContracts}}

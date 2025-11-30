@@ -12,11 +12,9 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-#if XTRAQ_API_MODE_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-#endif
 
 namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
@@ -72,9 +70,6 @@ public sealed class UserOrderHierarchyJsonResult
 	/// </summary>
 	public string? UsersRawJson { get; init; } = null;
 }
-
-#if XTRAQ_API_MODE_MINIMAL
-#endif
 
 internal static partial class UserOrderHierarchyJsonPlan
 {
@@ -160,8 +155,6 @@ internal static partial class UserOrderHierarchyJsonPlan
 /// <summary>Convenience extension for executing '[sample].[UserOrderHierarchyJson]' via an <see cref="IXtraqDbContext"/>.</summary>
 public static class UserOrderHierarchyJsonExtensions
 {
-#if XTRAQ_API_MODE_MINIMAL
-#endif
 
 	public static async Task<UserOrderHierarchyJsonResult> UserOrderHierarchyJsonAsync(this IXtraqDbContext db, CancellationToken cancellationToken = default)
 	{
@@ -171,7 +164,6 @@ public static class UserOrderHierarchyJsonExtensions
 
 }
 
-#if XTRAQ_API_MODE_MINIMAL
 /// <summary>Minimal API extension for '[sample].[UserOrderHierarchyJson]'.</summary>
 public static class UserOrderHierarchyJsonRouteHandlerBuilderExtensions
 {
@@ -187,7 +179,6 @@ public static class UserOrderHierarchyJsonRouteHandlerBuilderExtensions
                 }));
     }
 }
-#endif
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
 public static class UserOrderHierarchyJsonProcedure

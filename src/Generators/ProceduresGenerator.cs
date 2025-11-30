@@ -97,7 +97,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
         var buildProceduresRaw = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
         var hasExplicitProcedures = !string.IsNullOrWhiteSpace(buildProceduresRaw);
 
-        // 1) Positive allow-list: prefer XtraqConfiguration.BuildSchemas; fallback to direct env var only if cfg missing
+        // 1) Positive allow-list: driven exclusively by XtraqConfiguration.BuildSchemas captures
         // Skip schema filtering if procedures are explicitly specified
         HashSet<string>? buildSchemas = null;
         if (!hasExplicitProcedures)
@@ -106,17 +106,6 @@ internal sealed class ProceduresGenerator : GeneratorBase
             if (cfg?.BuildSchemas is { Count: > 0 })
             {
                 buildSchemas = new HashSet<string>(cfg.BuildSchemas, StringComparer.OrdinalIgnoreCase);
-            }
-            else
-            {
-                var buildSchemasRaw = Environment.GetEnvironmentVariable("XTRAQ_BUILD_SCHEMAS");
-                if (!string.IsNullOrWhiteSpace(buildSchemasRaw))
-                {
-                    buildSchemas = new HashSet<string>(buildSchemasRaw!
-                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => s.Trim())
-                        .Where(s => s.Length > 0), StringComparer.OrdinalIgnoreCase);
-                }
             }
             if (buildSchemas is { Count: > 0 })
             {

@@ -140,18 +140,21 @@ public sealed class XtraqConfiguration
             if (verbose) Console.Error.WriteLine("[xtraq] Warning: Failed to publish project root environment variables.");
         }
 
-        string Get(string key)
+        string Get(string key, bool allowProcessEnvironment = true, bool allowEnvFile = true)
         {
             if (cliOverrides != null && cliOverrides.TryGetValue(key, out var fromCli) && !string.IsNullOrWhiteSpace(fromCli)) return fromCli!;
-            var fromProcess = Environment.GetEnvironmentVariable(key);
-            if (!string.IsNullOrWhiteSpace(fromProcess)) return fromProcess!;
-            if (filePairs.TryGetValue(key, out var fromFile) && !string.IsNullOrWhiteSpace(fromFile)) return fromFile!;
+            if (allowProcessEnvironment)
+            {
+                var fromProcess = Environment.GetEnvironmentVariable(key);
+                if (!string.IsNullOrWhiteSpace(fromProcess)) return fromProcess!;
+            }
+            if (allowEnvFile && filePairs.TryGetValue(key, out var fromFile) && !string.IsNullOrWhiteSpace(fromFile)) return fromFile!;
             if (trackedDefaults.TryGetValue(key, out var fromTracked) && !string.IsNullOrWhiteSpace(fromTracked)) return fromTracked!;
             return string.Empty;
         }
 
         var fullConn = NullIfEmpty(Get("XTRAQ_GENERATOR_DB"));
-        var buildSchemasList = ParseList(NullIfEmpty(Get("XTRAQ_BUILD_SCHEMAS")));
+        var buildSchemasList = ParseList(NullIfEmpty(Get("XTRAQ_BUILD_SCHEMAS", allowProcessEnvironment: false, allowEnvFile: false)));
         if (string.IsNullOrWhiteSpace(fullConn) && verbose)
         {
             Console.Error.WriteLine("[xtraq] Warning: XTRAQ_GENERATOR_DB is not set. Run 'xtraq init' or provide the connection string via environment variables.");
@@ -159,14 +162,14 @@ public sealed class XtraqConfiguration
 
         var namespaceValue = NullIfEmpty(Get("XTRAQ_NAMESPACE"))?.Trim();
         var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR")) ?? "Xtraq";
-        var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE"));
+        var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE", allowProcessEnvironment: false, allowEnvFile: false));
         var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
             ? ApiMode.None
             : apiModeRaw!.Equals("minimal", StringComparison.OrdinalIgnoreCase) ? ApiMode.Minimal : ApiMode.None;
-        var autoBindParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND")));
-        var autoBindProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND_PROCEDURES")));
-        var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK_ENABLED"));
-        var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES"));
+        var autoBindParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND", allowProcessEnvironment: false, allowEnvFile: false)));
+        var autoBindProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND_PROCEDURES", allowProcessEnvironment: false, allowEnvFile: false)));
+        var enableEntityFramework = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_ENTITY_FRAMEWORK_ENABLED", allowProcessEnvironment: false, allowEnvFile: false));
+        var emitJsonIncludeNullValues = Xtraq.Utils.EnvironmentHelper.EqualsTrue(Get("XTRAQ_RESULTSET_JSON_INCLUDE_NULL_VALUES", allowProcessEnvironment: false, allowEnvFile: false));
 
         var cfg = new XtraqConfiguration
         {
@@ -280,6 +283,11 @@ public sealed class XtraqConfiguration
             var idx = line.IndexOf('=');
             if (idx <= 0) continue;
             var key = line.Substring(0, idx).Trim();
+            if (!EnvironmentVariablePolicy.IsEnvFileAllowedKey(key))
+            {
+                continue;
+            }
+
             var value = line.Substring(idx + 1).Trim();
             if ((value.StartsWith('"') && value.EndsWith('"')) || (value.StartsWith('\'') && value.EndsWith('\'')))
                 value = value.Substring(1, value.Length - 2);
@@ -304,6 +312,11 @@ public sealed class XtraqConfiguration
         {
             var key = pair.Key;
             if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("XTRAQ_", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!EnvironmentVariablePolicy.IsEnvFileAllowedKey(key))
             {
                 continue;
             }

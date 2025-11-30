@@ -12,11 +12,9 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-#if XTRAQ_API_MODE_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-#endif
 
 namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
@@ -53,9 +51,6 @@ public sealed class UnionOrderStatusesResult
 	/// </summary>
 	public string? ResultRawJson { get; init; } = null;
 }
-
-#if XTRAQ_API_MODE_MINIMAL
-#endif
 
 internal static partial class UnionOrderStatusesPlan
 {
@@ -129,8 +124,6 @@ internal static partial class UnionOrderStatusesPlan
 /// <summary>Convenience extension for executing '[sample].[UnionOrderStatuses]' via an <see cref="IXtraqDbContext"/>.</summary>
 public static class UnionOrderStatusesExtensions
 {
-#if XTRAQ_API_MODE_MINIMAL
-#endif
 
 	public static async Task<UnionOrderStatusesResult> UnionOrderStatusesAsync(this IXtraqDbContext db, CancellationToken cancellationToken = default)
 	{
@@ -140,7 +133,6 @@ public static class UnionOrderStatusesExtensions
 
 }
 
-#if XTRAQ_API_MODE_MINIMAL
 /// <summary>Minimal API extension for '[sample].[UnionOrderStatuses]'.</summary>
 public static class UnionOrderStatusesRouteHandlerBuilderExtensions
 {
@@ -156,7 +148,6 @@ public static class UnionOrderStatusesRouteHandlerBuilderExtensions
                 }));
     }
 }
-#endif
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>
 public static class UnionOrderStatusesProcedure

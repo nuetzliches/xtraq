@@ -1,3 +1,4 @@
+using Xtraq.Configuration;
 using Xtraq.Data;
 using Xtraq.Data.Models;
 using Xtraq.Data.Queries;
@@ -1051,7 +1052,7 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
                 return;
             }
 
-            var schemaFilter = ParseSchemaFilter(Environment.GetEnvironmentVariable("XTRAQ_BUILD_SCHEMAS"));
+            var schemaFilter = ParseSchemaFilter(ResolveConfiguredSchemaFilter());
             var columns = await _dbContext.TableColumnsCatalogAsync(catalogName: null, schemaFilter: schemaFilter, cancellationToken).ConfigureAwait(false) ?? new List<Column>();
             var bySchema = new Dictionary<string, Dictionary<string, List<Column>>>(StringComparer.OrdinalIgnoreCase);
 
@@ -1108,6 +1109,25 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             .ToArray();
 
         return parts.Length == 0 ? null : parts;
+    }
+
+    private static string? ResolveConfiguredSchemaFilter()
+    {
+        try
+        {
+            var projectRoot = DirectoryUtils.GetWorkingDirectory();
+            var defaults = TrackableConfigManager.ReadDefaults(projectRoot);
+            if (defaults.TryGetValue("XTRAQ_BUILD_SCHEMAS", out var raw) && !string.IsNullOrWhiteSpace(raw))
+            {
+                return raw;
+            }
+        }
+        catch
+        {
+            // best-effort only – schema filtering is optional during catalog prefetch
+        }
+
+        return null;
     }
 
     private async Task<List<Column>> LoadTableColumnsDirectAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)

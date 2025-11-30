@@ -36,19 +36,21 @@ public sealed class XtraqConfigurationTests
         try
         {
             File.WriteAllText(Path.Combine(innerPath, ".env"),
-                "XTRAQ_GENERATOR_DB=Server=(local);Database=App;\n"
-                + "XTRAQ_NAMESPACE=Redirect.Namespace\n");
+                "XTRAQ_GENERATOR_DB=Server=(local);Database=App;\n");
 
             Xtraq.Configuration.TrackableConfigManager.WriteDefaultProjectPath(innerPath);
 
             File.WriteAllText(Path.Combine(outer.FullName, ".xtraqconfig"),
                 "{\n  \"ProjectPath\": \"project-root\"\n}\n");
 
+            using var configDocument = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(innerPath, ".xtraqconfig")));
+            var expectedNamespace = configDocument.RootElement.GetProperty("Namespace").GetString();
+
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(outer.FullName);
 
             var expectedRoot = Path.GetFullPath(innerPath);
             Xunit.Assert.Equal(expectedRoot, configuration.ProjectRoot);
-            Xunit.Assert.Equal("Redirect.Namespace", configuration.NamespaceRoot);
+            Xunit.Assert.Equal(expectedNamespace, configuration.NamespaceRoot);
             Xunit.Assert.Equal("Server=(local);Database=App;", configuration.GeneratorConnectionString);
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH"));
             Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.None, configuration.ApiMode);

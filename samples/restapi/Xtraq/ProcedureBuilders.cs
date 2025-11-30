@@ -3,11 +3,9 @@
 // Changes may be overwritten. For customization extend generated partials.
 
 #nullable enable
-#if XTRAQ_API_MODE_MINIMAL
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-#endif
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -106,8 +104,6 @@ public static class ProcedurePipelineExtensions
         return ProcedureStreamPipeline<TInput, TRow>.Create(dbContext, input).WithExecutor(streamExecutor);
     }
 }
-
-#if XTRAQ_API_MODE_MINIMAL
 
 public static class ProcedureRouteHandlerBuilderExtensions
 {
@@ -340,8 +336,6 @@ public static class ProcedureRouteHandlerBuilderExtensions
         }
     }
 }
-
-#endif
 
 public interface IProcedureExecutionContext
 {
