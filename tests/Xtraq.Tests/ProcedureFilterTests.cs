@@ -1,1 +1,0 @@
-// Legacy ProcedureFilter tests removed.
