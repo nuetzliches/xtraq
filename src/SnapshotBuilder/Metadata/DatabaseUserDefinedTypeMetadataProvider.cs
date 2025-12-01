@@ -50,16 +50,17 @@ internal sealed class DatabaseUserDefinedTypeMetadataProvider : IUserDefinedType
 
         try
         {
-            var sql = BuildScalarTypeLookupSql(catalog);
+            var effectiveCatalog = NormalizeCatalogHint(catalog);
+            var sql = BuildScalarTypeLookupSql(effectiveCatalog);
             var parameters = new List<Microsoft.Data.SqlClient.SqlParameter>
             {
                 new("@schemaName", schema),
                 new("@typeName", name)
             };
 
-            if (!string.IsNullOrWhiteSpace(catalog))
+            if (!string.IsNullOrWhiteSpace(effectiveCatalog))
             {
-                parameters.Add(new("@catalogName", catalog));
+                parameters.Add(new("@catalogName", effectiveCatalog));
             }
 
             return await _dbContext.SingleAsync<UserDefinedTypeRow>(
@@ -102,6 +103,28 @@ internal sealed class DatabaseUserDefinedTypeMetadataProvider : IUserDefinedType
                AND t1.is_table_type = 0
                AND s.name = @schemaName
                AND t1.name = @typeName;";
+    }
+
+    private static string? NormalizeCatalogHint(string? catalog)
+    {
+        if (string.IsNullOrWhiteSpace(catalog))
+        {
+            return null;
+        }
+
+        var trimmed = catalog.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        // Avoid generating sys.sys.types when callers pass the sys schema as a catalog hint.
+        if (string.Equals(trimmed, "sys", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return trimmed;
     }
 
     private static string QuoteIdentifier(string value)

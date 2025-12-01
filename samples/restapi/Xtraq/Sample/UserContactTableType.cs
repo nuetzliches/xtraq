@@ -33,9 +33,9 @@ public sealed record UserContactTableType : ITableType
         bool? Preferred,
         DateTime? LastInteractionUtc
     ) =>
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
-	new UserContactTableType
-	{
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
+    new UserContactTableType
+    {
         UserId = UserId,
         Email = Email,
         DisplayName = DisplayName,
@@ -43,9 +43,9 @@ public sealed record UserContactTableType : ITableType
         Preferred = Preferred,
         LastInteractionUtc = LastInteractionUtc
     };
-	#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
 
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
 
 	public sealed class UserContactTableTypeBuilder
 	{
@@ -63,8 +63,8 @@ public sealed record UserContactTableType : ITableType
         public UserContactTableTypeBuilder WithLastInteractionUtc(DateTime? value) { _LastInteractionUtc = value; return this; }
         public UserContactTableType Build()
         {
-			#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
-			var result = new UserContactTableType
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
+            var result = new UserContactTableType
             {
                 UserId = _UserId,
                 Email = _Email,
@@ -73,7 +73,7 @@ public sealed record UserContactTableType : ITableType
                 Preferred = _Preferred,
                 LastInteractionUtc = _LastInteractionUtc
             };
-			#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
             return result;
         }
 	}

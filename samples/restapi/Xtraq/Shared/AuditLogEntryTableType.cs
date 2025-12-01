@@ -31,18 +31,18 @@ public sealed record AuditLogEntryTableType : ITableType
         Guid? CorrelationId,
         string? Details
     ) =>
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
-	new AuditLogEntryTableType
-	{
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
+    new AuditLogEntryTableType
+    {
         Source = Source,
         Message = Message,
         Severity = Severity,
         CorrelationId = CorrelationId,
         Details = Details
     };
-	#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
 
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
 
 	public sealed class AuditLogEntryTableTypeBuilder
 	{
@@ -58,8 +58,8 @@ public sealed record AuditLogEntryTableType : ITableType
         public AuditLogEntryTableTypeBuilder WithDetails(string? value) { _Details = value; return this; }
         public AuditLogEntryTableType Build()
         {
-			#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
-			var result = new AuditLogEntryTableType
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
+            var result = new AuditLogEntryTableType
             {
                 Source = _Source,
                 Message = _Message,
@@ -67,7 +67,7 @@ public sealed record AuditLogEntryTableType : ITableType
                 CorrelationId = _CorrelationId,
                 Details = _Details
             };
-			#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
             return result;
         }
 	}

@@ -159,7 +159,7 @@ internal static partial class UserPreferredContactApplyPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, false),
+            new("@UserId", System.Data.DbType.Int32, 4, false, false),
             new("@OnlyPreferred", System.Data.DbType.Boolean, null, false, false),
         };
 

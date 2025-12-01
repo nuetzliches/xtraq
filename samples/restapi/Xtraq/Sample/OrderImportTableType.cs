@@ -33,9 +33,9 @@ public sealed record OrderImportTableType : ITableType
         DateTime PlacedAtUtc,
         string? Metadata
     ) =>
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
-	new OrderImportTableType
-	{
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
+    new OrderImportTableType
+    {
         UserAlias = UserAlias,
         OrderNumber = OrderNumber,
         TotalAmount = TotalAmount,
@@ -43,9 +43,9 @@ public sealed record OrderImportTableType : ITableType
         PlacedAtUtc = PlacedAtUtc,
         Metadata = Metadata
     };
-	#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
 
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
 
 	public sealed class OrderImportTableTypeBuilder
 	{
@@ -63,8 +63,8 @@ public sealed record OrderImportTableType : ITableType
         public OrderImportTableTypeBuilder WithMetadata(string? value) { _Metadata = value; return this; }
         public OrderImportTableType Build()
         {
-			#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
-			var result = new OrderImportTableType
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
+            var result = new OrderImportTableType
             {
                 UserAlias = _UserAlias,
                 OrderNumber = _OrderNumber,
@@ -73,7 +73,7 @@ public sealed record OrderImportTableType : ITableType
                 PlacedAtUtc = _PlacedAtUtc,
                 Metadata = _Metadata
             };
-			#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
             return result;
         }
 	}

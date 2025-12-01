@@ -21,14 +21,14 @@ public sealed record {{ TypeName }} : ITableType
 	public static {{ TypeName }} Create(
 {{#each Columns as column}}        {{ column.ClrType }} {{ column.PropertyName }}{{ column.Separator }}
 {{/each}}    ) =>
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
-	new {{ TypeName }}
-	{
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in factory
+    new {{ TypeName }}
+    {
 {{#each Columns as column}}        {{ column.PropertyName }} = {{ column.PropertyName }}{{ column.Separator }}
 {{/each}}    };
-	#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
 
-	#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage warnings for internal factory construction
 
 	public sealed class {{ TypeName }}Builder
 	{
@@ -37,12 +37,12 @@ public sealed record {{ TypeName }} : ITableType
 {{#each Columns as column}}        public {{ TypeName }}Builder With{{ column.PropertyName }}({{ column.ClrType }} value) { _{{ column.PropertyName }} = value; return this; }
 {{/each}}        public {{ TypeName }} Build()
         {
-			#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
-			var result = new {{ TypeName }}
+#pragma warning disable CS0612, CS0618 // Suppress obsolete ctor usage in builder
+            var result = new {{ TypeName }}
             {
 {{#each Columns as column}}                {{ column.PropertyName }} = _{{ column.PropertyName }}{{ column.Separator }}
 {{/each}}            };
-			#pragma warning restore CS0612, CS0618
+#pragma warning restore CS0612, CS0618
             return result;
         }
 	}

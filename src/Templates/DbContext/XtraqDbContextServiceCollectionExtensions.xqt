@@ -1,6 +1,7 @@
 {{ HEADER }}
 #nullable enable
 
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Data.SqlClient;
@@ -309,4 +310,3 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
     partial void OnConnectionOpened(DbConnection connection);
 }
 {{/if}}
-

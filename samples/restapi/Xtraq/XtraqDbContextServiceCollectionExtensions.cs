@@ -1,6 +1,7 @@
 
 #nullable enable
 
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Data.SqlClient;
@@ -64,5 +65,4 @@ public static class XtraqDbContextServiceCollectionExtensions
     }
 
 }
-
 

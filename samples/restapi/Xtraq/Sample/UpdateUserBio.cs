@@ -30,14 +30,13 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 public sealed record class UpdateUserBioRequest
 {
     public int UserId { get; init; }
-    [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(4000)]
-    public string Bio { get; init; }
+    public string? Bio { get; init; }
 }
 
 public readonly record struct UpdateUserBioInput(
     int UserId,
-    string Bio
+    string? Bio
 );
 
 /// <summary>
@@ -84,7 +83,7 @@ internal static class UpdateUserBioRequestMapper
 
         return new UpdateUserBioInput(
             UserId ?? default,
-            Bio ?? default!
+            Bio
         );
     }
 
@@ -134,7 +133,7 @@ internal static partial class UpdateUserBioPlan
 		var parameters = new ProcedureParameter[]
 		{
             new("@UserId", System.Data.DbType.Int32, null, false, false),
-            new("@Bio", System.Data.DbType.String, 4000, false, false),
+            new("@Bio", System.Data.DbType.String, 4000, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -161,7 +160,7 @@ internal static partial class UpdateUserBioPlan
 		{
 			var input = (UpdateUserBioInput)state!;
 			cmd.Parameters["@UserId"].Value = input.UserId;
-			cmd.Parameters["@Bio"].Value = input.Bio;
+			cmd.Parameters["@Bio"].Value = (object?)input.Bio ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UpdateUserBio]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

@@ -338,11 +338,14 @@ namespace Xtraq.Metadata
                         if (string.IsNullOrWhiteSpace(raw)) continue;
                         var clean = raw.TrimStart('@');
                         var typeRef = ip.GetPropertyOrDefault("TypeRef");
+                        var userTypeRef = ip.GetPropertyOrDefault("UserTypeRef");
                         var maxLen = ip.GetPropertyOrDefaultInt("MaxLength");
                         var precision = ip.GetPropertyOrDefaultInt("Precision");
                         var scale = ip.GetPropertyOrDefaultInt("Scale");
                         var hasDefaultValue = ip.GetPropertyOrDefaultBoolStrict("HasDefaultValue");
-                        var isNullable = ip.GetPropertyOrDefaultBoolStrict("IsNullable");
+                        var resolved = typeResolver.Resolve(string.IsNullOrWhiteSpace(userTypeRef) ? typeRef : userTypeRef, maxLen, precision, scale);
+                        var inferredNullable = ip.GetPropertyOrNullBool("IsNullable") ?? resolved?.IsNullable;
+                        var isNullable = inferredNullable ?? false;
                         if (hasDefaultValue)
                         {
                             // Allow omission on the client when the server defines a default.
@@ -364,7 +367,6 @@ namespace Xtraq.Metadata
                                 ?? TableTypeRefFormatter.Normalize(TableTypeRefFormatter.Combine(tableTypeSchema, tableTypeName));
                         }
 
-                        var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? ip.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         var effectivePrecision = resolved?.Precision ?? precision;
@@ -456,15 +458,16 @@ namespace Xtraq.Metadata
                         var clean = raw.TrimStart('@');
                         if (outputParams.Any(o => o.Name.Equals(clean, StringComparison.OrdinalIgnoreCase))) continue;
                         var typeRef = opEl.GetPropertyOrDefault("TypeRef");
+                        var userTypeRef = opEl.GetPropertyOrDefault("UserTypeRef");
                         var maxLen = opEl.GetPropertyOrDefaultInt("MaxLength");
                         var precision = opEl.GetPropertyOrDefaultInt("Precision");
                         var scale = opEl.GetPropertyOrDefaultInt("Scale");
-                        var resolved = typeResolver.Resolve(typeRef, maxLen, precision, scale);
+                        var resolved = typeResolver.Resolve(string.IsNullOrWhiteSpace(userTypeRef) ? typeRef : userTypeRef, maxLen, precision, scale);
                         var sqlType = resolved?.SqlType ?? opEl.GetPropertyOrDefault("SqlTypeName") ?? string.Empty;
                         var effectiveMaxLen = resolved?.MaxLength ?? maxLen;
                         var effectivePrecision = resolved?.Precision ?? precision;
                         var effectiveScale = resolved?.Scale ?? scale;
-                        var isNullable = opEl.GetPropertyOrDefaultBoolStrict("IsNullable");
+                        var isNullable = opEl.GetPropertyOrNullBool("IsNullable") ?? resolved?.IsNullable ?? false;
                         if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
                         var clr = MapSqlToClr(sqlType, isNullable);
                         var fd = new FieldDescriptor(clean, NamePolicy.Sanitize(clean), clr, isNullable, sqlType, effectiveMaxLen, NumericPrecision: effectivePrecision, NumericScale: effectiveScale);

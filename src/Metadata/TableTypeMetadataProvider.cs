@@ -1,4 +1,6 @@
 
+using Xtraq.Services;
+
 namespace Xtraq.Metadata;
 
 /// <summary>
@@ -190,36 +192,11 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                     {
                         foreach (var ip in inputsEl.EnumerateArray())
                         {
-                            var typeRef = ip.GetPropertyOrDefault("TypeRef");
-                            bool isTt = ip.GetPropertyOrDefaultBool("IsTableType");
-                            var ttCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
-                            var ttCatalog = string.IsNullOrWhiteSpace(ttCatalogRaw) ? null : ttCatalogRaw;
-                            var ttSchema = ip.GetPropertyOrDefault("TableTypeSchema");
-                            var ttName = ip.GetPropertyOrDefault("TableTypeName") ?? ip.GetPropertyOrDefault("Name")?.TrimStart('@') ?? string.Empty;
-
-                            if (!isTt && !string.IsNullOrWhiteSpace(ttName))
+                            if (!TryExtractTableType(ip, procSchema, out var ttCatalog, out var ttSchema, out var ttName))
                             {
-                                isTt = true;
+                                continue;
                             }
 
-                            if (!isTt && !string.IsNullOrWhiteSpace(typeRef))
-                            {
-                                var (catalogFromRef, schemaFromRef, nameFromRef) = SplitTypeRef(typeRef);
-                                if (!string.IsNullOrWhiteSpace(schemaFromRef) && !string.Equals(schemaFromRef, "sys", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(nameFromRef))
-                                {
-                                    isTt = true;
-                                    ttCatalog ??= catalogFromRef;
-                                    ttSchema ??= schemaFromRef;
-                                    if (string.IsNullOrWhiteSpace(ttName))
-                                    {
-                                        ttName = nameFromRef;
-                                    }
-                                }
-                            }
-
-                            if (!isTt) continue;
-                            ttSchema ??= procSchema;
-                            if (string.IsNullOrWhiteSpace(ttName)) continue;
                             var key = (ttCatalog is { Length: > 0 } ? ttCatalog + "." : string.Empty) + ttSchema + "." + ttName;
                             if (!inferred.ContainsKey(key))
                             {
@@ -315,36 +292,11 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                 {
                     foreach (var ip in inputsEl.EnumerateArray())
                     {
-                        var typeRef = ip.GetPropertyOrDefault("TypeRef");
-                        bool isTt = ip.GetPropertyOrDefaultBool("IsTableType");
-                        var ttCatalogRaw = ip.GetPropertyOrDefault("TableTypeCatalog") ?? ip.GetPropertyOrDefault("TableTypeDatabase");
-                        var ttCatalog = string.IsNullOrWhiteSpace(ttCatalogRaw) ? null : ttCatalogRaw;
-                        var ttSchema = ip.GetPropertyOrDefault("TableTypeSchema");
-                        var ttName = ip.GetPropertyOrDefault("TableTypeName") ?? ip.GetPropertyOrDefault("Name")?.TrimStart('@') ?? string.Empty;
-
-                        if (!isTt && !string.IsNullOrWhiteSpace(ttName))
+                        if (!TryExtractTableType(ip, procSchema, out var ttCatalog, out var ttSchema, out var ttName))
                         {
-                            isTt = true;
+                            continue;
                         }
 
-                        if (!isTt && !string.IsNullOrWhiteSpace(typeRef))
-                        {
-                            var (catalogFromRef, schemaFromRef, nameFromRef) = SplitTypeRef(typeRef);
-                            if (!string.IsNullOrWhiteSpace(schemaFromRef) && !string.Equals(schemaFromRef, "sys", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(nameFromRef))
-                            {
-                                isTt = true;
-                                ttCatalog ??= catalogFromRef;
-                                ttSchema ??= schemaFromRef;
-                                if (string.IsNullOrWhiteSpace(ttName))
-                                {
-                                    ttName = nameFromRef;
-                                }
-                            }
-                        }
-
-                        if (!isTt) continue;
-                        ttSchema ??= procSchema;
-                        if (string.IsNullOrWhiteSpace(ttName)) continue;
                         var key = (ttCatalog is { Length: > 0 } ? ttCatalog + "." : string.Empty) + ttSchema + "." + ttName;
                         if (!inferred.ContainsKey(key))
                         {
@@ -388,6 +340,68 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
             catalog = string.IsNullOrWhiteSpace(parts[^3]) ? null : parts[^3];
         }
         return (catalog, schema, name);
+    }
+
+    private static bool TryExtractTableType(JsonElement parameter, string procedureSchema, out string? catalog, out string schema, out string name)
+    {
+        catalog = null;
+        schema = string.Empty;
+        name = string.Empty;
+
+        var tableTypeRefRaw = parameter.GetPropertyOrDefault("TableTypeRef") ?? parameter.GetPropertyOrDefault("TypeRef");
+        var normalizedRef = TableTypeRefFormatter.Normalize(tableTypeRefRaw);
+        var (catalogFromRef, schemaFromRef, nameFromRef) = SplitTypeRef(normalizedRef);
+
+        var explicitCatalog = NormalizeEmpty(parameter.GetPropertyOrDefault("TableTypeCatalog") ?? parameter.GetPropertyOrDefault("TableTypeDatabase"));
+        var explicitSchema = NormalizeEmpty(parameter.GetPropertyOrDefault("TableTypeSchema"));
+        var explicitName = NormalizeEmpty(parameter.GetPropertyOrDefault("TableTypeName"));
+        var explicitFlag = parameter.GetPropertyOrDefaultBool("IsTableType");
+
+        var inferredName = explicitName ?? nameFromRef;
+        var inferredSchema = explicitSchema ?? schemaFromRef;
+        var inferredCatalog = explicitCatalog ?? catalogFromRef;
+
+        var hasSignal = explicitFlag
+                        || !string.IsNullOrWhiteSpace(normalizedRef)
+                        || !string.IsNullOrWhiteSpace(explicitName)
+                        || !string.IsNullOrWhiteSpace(explicitSchema)
+                        || !string.IsNullOrWhiteSpace(explicitCatalog);
+
+        if (!hasSignal)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(inferredName))
+        {
+            var rawName = parameter.GetPropertyOrDefault("Name");
+            inferredName = rawName?.TrimStart('@') ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(inferredSchema))
+        {
+            inferredSchema = schemaFromRef ?? procedureSchema;
+        }
+
+        if (string.IsNullOrWhiteSpace(inferredName) || string.IsNullOrWhiteSpace(inferredSchema))
+        {
+            return false;
+        }
+
+        if (string.Equals(inferredSchema, "sys", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        catalog = string.IsNullOrWhiteSpace(inferredCatalog) ? null : inferredCatalog;
+        schema = inferredSchema;
+        name = inferredName;
+        return true;
+    }
+
+    private static string? NormalizeEmpty(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }
 

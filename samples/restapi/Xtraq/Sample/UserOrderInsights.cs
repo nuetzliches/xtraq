@@ -130,7 +130,7 @@ internal static partial class UserOrderInsightsPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, false),
+            new("@UserId", System.Data.DbType.Int32, 4, false, false),
         };
 
 		var resultSets = new ResultSetMapping[]
