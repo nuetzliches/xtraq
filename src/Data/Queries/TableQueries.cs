@@ -280,8 +280,9 @@ internal static class TableQueries
     t.name AS system_type_name,
     IIF(t.name LIKE 'nvarchar%', c.max_length / 2, c.max_length) AS max_length,
     COLUMNPROPERTY(c.object_id, c.name, 'IsIdentity') AS is_identity,
-    t1.name AS user_type_name,
-    s1.name AS user_type_schema_name,
+    -- Computed columns inherit the UDT of their first operand; suppress UDT metadata so computed columns don't leak operand UDTs into snapshots (e.g., ISNULL(nullable_udt, not_null_udt))
+    CASE WHEN c.is_computed = 1 THEN NULL ELSE t1.name END AS user_type_name,
+    CASE WHEN c.is_computed = 1 THEN NULL ELSE s1.name END AS user_type_schema_name,
     t.name AS base_type_name,
     CAST(c.precision AS int) AS precision,
     CAST(c.scale AS int) AS scale,
