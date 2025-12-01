@@ -1,6 +1,6 @@
 {{ HEADER }}
 #nullable enable
-/// <summary>Generated minimal API endpoints for XtraqDbContext. (net10 variant)</summary>
+/// <summary>Generated ASP.NET Core endpoints for XtraqDbContext. (net10 variant)</summary>
 namespace {{ Namespace }};
 
 using Microsoft.AspNetCore.Builder;

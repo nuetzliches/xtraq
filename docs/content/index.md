@@ -103,11 +103,11 @@ Focus on SQL-first architecture while shipping .NET clients that stay in sync wi
 
   ::card
   ---
-  title: Minimal API ready
+  title: HTTP endpoint ready
   icon: i-lucide-sliders-horizontal
   to: /reference/api-integration
   ---
-  Attach generated route handlers and streaming endpoints without abandoning standard `MapGet`/`MapPost` flows.
+  Compose selector-based endpoints with `ConfigureProcedure` + `ExecuteAsync` while keeping your favourite `MapGet`/`MapPost` flows.
   ::
 
 :::

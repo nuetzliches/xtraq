@@ -49,9 +49,9 @@ public sealed record {{ TypeName }} : ITableType
 #pragma warning restore CS0612, CS0618
 }
 
-{{#if EmitMinimalApiContracts}}
+{{#if EmitRequestContracts}}
 /// <summary>
-/// Minimal API request row mirroring the SQL table type <c>{{ Schema }}.{{ Name }}</c> with DataAnnotations metadata.
+/// HTTP request row mirroring the SQL table type <c>{{ Schema }}.{{ Name }}</c> with DataAnnotations metadata.
 /// </summary>
 public sealed record {{ TypeName }}Request
 {

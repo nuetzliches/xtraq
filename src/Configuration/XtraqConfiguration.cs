@@ -31,7 +31,7 @@ public sealed class XtraqConfiguration
     /// </summary>
     public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
     /// <summary>
-    /// API integration mode. Minimal = emit Minimal API helpers; None = omit.
+    /// API integration mode. Minimal = emit HTTP endpoint contracts (request DTOs, table-type request rows, DI endpoints); None = omit.
     /// </summary>
     public ApiMode ApiMode { get; init; } = ApiMode.None;
     /// <summary>
@@ -415,6 +415,6 @@ public enum ApiMode
 {
     /// <summary>No API helpers are generated.</summary>
     None = 0,
-    /// <summary>Generate Minimal API helpers and enable related pipeline templates.</summary>
+    /// <summary>Generate HTTP endpoint helpers (request DTOs, request mappers, DbContext health endpoints).</summary>
     Minimal = 1
 }

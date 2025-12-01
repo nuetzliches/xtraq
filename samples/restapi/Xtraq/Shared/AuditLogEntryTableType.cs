@@ -75,7 +75,7 @@ public sealed record AuditLogEntryTableType : ITableType
 }
 
 /// <summary>
-/// Minimal API request row mirroring the SQL table type <c>Shared.AuditLogEntryTableType</c> with DataAnnotations metadata.
+/// HTTP request row mirroring the SQL table type <c>Shared.AuditLogEntryTableType</c> with DataAnnotations metadata.
 /// </summary>
 public sealed record AuditLogEntryTableTypeRequest
 {

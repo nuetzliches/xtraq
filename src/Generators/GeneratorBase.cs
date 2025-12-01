@@ -23,7 +23,7 @@ internal abstract class GeneratorBase
         return Configuration?.ResultSetJsonIncludeNullValues == true;
     }
 
-    protected bool ShouldEmitMinimalApiExtensions()
+    protected bool ShouldEmitApiIntegrations()
     {
         return Configuration?.ApiMode == ApiMode.Minimal;
     }

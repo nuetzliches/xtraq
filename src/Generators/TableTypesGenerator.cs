@@ -60,7 +60,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
 
         // Load optional shared header template
         var headerBlock = Templates.HeaderBlock;
-        var emitMinimalApiContracts = ShouldEmitMinimalApiExtensions();
+        var emitRequestContracts = ShouldEmitApiIntegrations();
 
         // Ensure interface exists (ITableType) and has correct namespace; rewrite if outdated
         var interfacePath = Path.Combine(rootOut, "ITableType.cs");
@@ -210,7 +210,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
                 model.ColumnsCount,
                 model.GeneratedAt,
                 HEADER = headerBlock,
-                EmitMinimalApiContracts = emitMinimalApiContracts
+                EmitRequestContracts = emitRequestContracts
             };
             var code = Templates.RenderRawTemplate(tableTypeTemplate, extendedModel);
             var fileName = typeName + ".cs";

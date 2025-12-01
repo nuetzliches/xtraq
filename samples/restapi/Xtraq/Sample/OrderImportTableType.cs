@@ -81,7 +81,7 @@ public sealed record OrderImportTableType : ITableType
 }
 
 /// <summary>
-/// Minimal API request row mirroring the SQL table type <c>Sample.OrderImportTableType</c> with DataAnnotations metadata.
+/// HTTP request row mirroring the SQL table type <c>Sample.OrderImportTableType</c> with DataAnnotations metadata.
 /// </summary>
 public sealed record OrderImportTableTypeRequest
 {

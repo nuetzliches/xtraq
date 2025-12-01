@@ -4,7 +4,7 @@ description: Central entry point for configuration, JSON handling, table types, 
 ---
 
 - [Configuration & Environment](/reference/configuration-schema)
-- [Minimal APIs & DTO Mapping](/reference/api-integration)
+- [Fluent Pipelines & DTO Mapping](/reference/api-integration)
 - [Parameter Binding](/reference/parameter-binding)
 - [Entity Framework Integration](/reference/entity-framework-integration)
 - [JSON Procedure Handling](/reference/json-procedures)

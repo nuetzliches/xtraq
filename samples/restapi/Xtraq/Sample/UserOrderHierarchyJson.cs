@@ -12,9 +12,6 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 
@@ -69,6 +66,53 @@ public sealed class UserOrderHierarchyJsonResult
 	/// Raw JSON payload captured for result set <c>Users</c>.
 	/// </summary>
 	public string? UsersRawJson { get; init; } = null;
+}
+
+internal static class UserOrderHierarchyJsonRequestMapper
+{
+    public static async ValueTask<UserOrderHierarchyJsonInput> ToInputAsync(UserOrderHierarchyJsonRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
+    {
+        request ??= new UserOrderHierarchyJsonRequest();
+
+        return new UserOrderHierarchyJsonInput(
+        );
+    }
+
+    public static ValueTask<UserOrderHierarchyJsonInput> ToInputAsync(UserOrderHierarchyJsonRequest? request, IXtraqDbContext dbContext, CancellationToken cancellationToken = default)
+    {
+        return ToInputAsync(request, dbContext as IXtraqParameterBindingProvider, cancellationToken);
+    }
+
+    private static bool HasValue<T>(T? value) => value is not null;
+
+    private static async ValueTask<T?> ResolveAsync<T>(IXtraqParameterBindingProvider? bindingProvider, string procedureFullName, string parameterName, bool isTableType, object? currentValue, CancellationToken cancellationToken)
+    {
+        var resolved = await ParameterBindingEngine.ResolveValueAsync(procedureFullName, parameterName, isTableType, currentValue, bindingProvider, cancellationToken).ConfigureAwait(false);
+        return ConvertValue<T>(resolved);
+    }
+
+    private static async ValueTask<IReadOnlyList<T>?> ResolveTableAsync<T>(IXtraqParameterBindingProvider? bindingProvider, string procedureFullName, string parameterName, object? currentValue, CancellationToken cancellationToken)
+    {
+        var resolved = await ParameterBindingEngine.ResolveValueAsync(procedureFullName, parameterName, true, currentValue, bindingProvider, cancellationToken).ConfigureAwait(false);
+        if (resolved is null) return null;
+        if (resolved is IReadOnlyList<T> roList) return roList;
+        if (resolved is IEnumerable<T> enumerable) return enumerable as IReadOnlyList<T> ?? enumerable.ToArray();
+        return null;
+    }
+
+    private static T? ConvertValue<T>(object? value)
+    {
+        if (value is null or DBNull) return default;
+        if (value is T typed) return typed;
+        try
+        {
+            return (T?)System.Convert.ChangeType(value, typeof(T), System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return default;
+        }
+    }
 }
 
 internal static partial class UserOrderHierarchyJsonPlan
@@ -162,22 +206,6 @@ public static class UserOrderHierarchyJsonExtensions
 		return await UserOrderHierarchyJsonProcedure.ExecuteAsync(db as IXtraqProcedureInterceptorProvider, db as IXtraqParameterBindingProvider, conn, cancellationToken).ConfigureAwait(false);
 	}
 
-}
-
-/// <summary>Minimal API extension for '[sample].[UserOrderHierarchyJson]'.</summary>
-public static class UserOrderHierarchyJsonRouteHandlerBuilderExtensions
-{
-    public static RouteHandlerBuilder WithUserOrderHierarchyJsonProcedure(this RouteHandlerBuilder builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.WithProcedure<object?, UserOrderHierarchyJsonResult>(
-            static pipeline => pipeline.WithExecutor(
-                static async ValueTask<UserOrderHierarchyJsonResult> (dbContext, _, cancellationToken) =>
-                {
-                    return await UserOrderHierarchyJsonExtensions.UserOrderHierarchyJsonAsync(dbContext, cancellationToken).ConfigureAwait(false);
-                }));
-    }
 }
 
 /// <summary>Low-level execution wrapper for a single stored procedure invocation.</summary>

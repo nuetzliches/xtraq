@@ -188,6 +188,15 @@ public sealed class CapturePolicy : IProcedureExecutionPolicy
     }
 }
 
+public static class ProcedureStubs
+{
+    public static ValueTask<int> DirectAsync(IXtraqDbContext db, int value, CancellationToken cancellationToken)
+        => new(value + 1);
+
+    public static ValueTask<int> SelectorAsync(int value, CancellationToken cancellationToken)
+        => new(value * 2);
+}
+
 public static class BuilderHarness
 {
     public static async Task<(int Total, string? Label, int PolicyInvocations, int PolicyBegins, int PolicyCommits, int PolicyRollbacks, int OrchestratorBegins, int OrchestratorCommits, int OrchestratorRollbacks)> RunCallPipelineAsync()
@@ -300,6 +309,21 @@ public static class BuilderHarness
         var aggregated = await execution.AggregateAsync((rows, output) => (rows.Count, output));
         return (buffered.Count, aggregated.Item1, aggregated.Item2);
     }
+
+    public static async Task<(int Direct, int Selected, int Begins, int Commits, int Rollbacks)> RunDirectExecuteAsync()
+    {
+        var ctx = new FakeContext();
+
+        var direct = await ctx.ConfigureProcedure(4)
+            .WithTransaction()
+            .ExecuteAsync<int>(ProcedureStubs.DirectAsync);
+
+        var selected = await ctx.ConfigureProcedure(3)
+            .ExecuteAsync<int>(static db => ProcedureStubs.SelectorAsync);
+
+        var orchestrator = ctx.Orchestrator;
+        return (direct, selected, orchestrator.BeginCount, orchestrator.CommitCount, orchestrator.RollbackCount);
+    }
 }
 ";
 
@@ -344,6 +368,9 @@ public static class BuilderHarness
 
         var aggregateResult = await InvokeAsync<(int BufferCount, int AggregatedCount, int Output)>(harnessType, "RunBufferAndAggregateAsync");
         Assert.Equal((3, 3, 11), aggregateResult);
+
+        var directResult = await InvokeAsync<(int Direct, int Selected, int Begins, int Commits, int Rollbacks)>(harnessType, "RunDirectExecuteAsync");
+        Assert.Equal((5, 6, 1, 1, 0), directResult);
     }
 
     private static IEnumerable<MetadataReference> GetMetadataReferences()

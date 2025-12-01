@@ -91,7 +91,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
         var emitJsonIncludeNullValues = ShouldEmitJsonIncludeNullValues();
         var emitEntityFrameworkIntegration = ShouldEmitEntityFrameworkIntegration();
-        var emitMinimalApiExtensions = ShouldEmitMinimalApiExtensions();
+        var emitApiIntegrations = ShouldEmitApiIntegrations();
 
         // Check for explicit procedure filter first
         var buildProceduresRaw = Environment.GetEnvironmentVariable("XTRAQ_BUILD_PROCEDURES");
@@ -342,7 +342,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures, EmitMinimalApi = emitMinimalApiExtensions };
+                var builderModel = new { Namespace = ns, HEADER = headerBlock, Procedures = builderProcedures, EmitMinimalApi = emitApiIntegrations };
                 var builderCode = Templates.RenderRawTemplate(builderTpl, builderModel);
                 File.WriteAllText(builderPath, builderCode);
             }
@@ -1524,7 +1524,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var emitProperty = ShouldExposeParameterOnRequest(enableParameterBinding, autoBindParameters, p.Name);
                     var propertyAttributes = BuildRequestPropertyAttributes(p, emitProperty);
                     var elementType = ResolveTableElementType(p.ClrType);
-                    var hasApiRequestProjection = emitProperty && emitMinimalApiExtensions && isTableType;
+                    var hasApiRequestProjection = emitProperty && emitApiIntegrations && isTableType;
                     var tableTypeRequestType = hasApiRequestProjection ? BuildTableTypeRequestType(elementType) : null;
                     var apiRequestClrType = hasApiRequestProjection ? BuildTableTypeRequestClrType(requestClrType, elementType) : null;
                     var propertyBlockLines = BuildRequestPropertyBlockLines(p.PropertyName, requestClrType, propertyAttributes, hasApiRequestProjection, apiRequestClrType);
@@ -1583,7 +1583,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     Namespace = finalNs,
                     UsingDirectives = usingBlock,
                     HEADER = headerBlock,
-                    EmitMinimalApi = emitMinimalApiExtensions,
+                    EmitMinimalApi = emitApiIntegrations,
                     HasParameters = proc.InputParameters.Count + proc.OutputFields.Count > 0,
                     HasInput = proc.InputParameters.Count > 0,
                     HasOutput = proc.OutputFields.Count > 0,
