@@ -29,11 +29,11 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserOrderInsightsRequest
 {
-    public int UserId { get; init; }
+    public int? UserId { get; init; }
 }
 
 public readonly record struct UserOrderInsightsInput(
-    int UserId
+    int? UserId
 );
 
 /// <summary>
@@ -81,7 +81,7 @@ internal static class UserOrderInsightsRequestMapper
         }
 
         return new UserOrderInsightsInput(
-            UserId ?? default
+            UserId
         );
     }
 
@@ -130,7 +130,7 @@ internal static partial class UserOrderInsightsPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, 4, false, false),
+            new("@UserId", System.Data.DbType.Int32, 4, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -156,7 +156,7 @@ internal static partial class UserOrderInsightsPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserOrderInsightsInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserOrderInsights]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

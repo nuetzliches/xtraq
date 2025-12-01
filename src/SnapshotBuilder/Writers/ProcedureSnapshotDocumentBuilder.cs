@@ -103,7 +103,11 @@ internal static class ProcedureSnapshotDocumentBuilder
                         effectivePrecision ??= resolvedUserType.Value.Precision;
                         effectiveScale ??= resolvedUserType.Value.Scale;
 
-                        if (resolvedUserType.Value.IsNullable == false)
+                        if (resolvedUserType.Value.IsNullable == true)
+                        {
+                            isNullable = true;
+                        }
+                        else if (!isNullable && resolvedUserType.Value.IsNullable == false)
                         {
                             isNullable = false;
                         }
@@ -113,16 +117,11 @@ internal static class ProcedureSnapshotDocumentBuilder
                     {
                         if (userTypeNullable.HasValue)
                         {
-                            isNullable = userTypeNullable.Value;
+                            isNullable = isNullable || userTypeNullable.Value;
                         }
                         else if (resolvedUserType.HasValue && resolvedUserType.Value.IsNullable.HasValue)
                         {
-                            isNullable = resolvedUserType.Value.IsNullable!.Value;
-                        }
-                        else
-                        {
-                            // Default to non-nullable for UDTs unless explicitly declared nullable.
-                            isNullable = false;
+                            isNullable = isNullable || resolvedUserType.Value.IsNullable!.Value;
                         }
                     }
                 }
@@ -177,6 +176,11 @@ internal static class ProcedureSnapshotDocumentBuilder
                 if (input.HasDefaultValue)
                 {
                     writer.WriteBoolean("HasDefaultValue", true);
+                    // Parameters with defaults can be omitted by callers; expose them as nullable in the snapshot even if SQL metadata says otherwise.
+                    if (!isTableType && !isNullable)
+                    {
+                        writer.WriteBoolean("IsNullable", true);
+                    }
                 }
 
                 writer.WriteEndObject();

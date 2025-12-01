@@ -29,12 +29,12 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserCompositeJsonSnapshotRequest
 {
-    public int RecentPaymentCount { get; init; }
+    public int? RecentPaymentCount { get; init; }
 }
 
 public readonly record struct UserCompositeJsonSnapshotInput(
-    int UserId,
-    int RecentPaymentCount
+    int? UserId,
+    int? RecentPaymentCount
 );
 
 /// <summary>
@@ -129,8 +129,8 @@ internal static class UserCompositeJsonSnapshotRequestMapper
         }
 
         return new UserCompositeJsonSnapshotInput(
-            UserId ?? default,
-            RecentPaymentCount ?? default
+            UserId,
+            RecentPaymentCount
         );
     }
 
@@ -179,8 +179,8 @@ internal static partial class UserCompositeJsonSnapshotPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, false),
-            new("@RecentPaymentCount", System.Data.DbType.Int32, null, false, false),
+            new("@UserId", System.Data.DbType.Int32, null, false, true),
+            new("@RecentPaymentCount", System.Data.DbType.Int32, null, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -286,8 +286,8 @@ internal static partial class UserCompositeJsonSnapshotPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserCompositeJsonSnapshotInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
-			cmd.Parameters["@RecentPaymentCount"].Value = input.RecentPaymentCount;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
+			cmd.Parameters["@RecentPaymentCount"].Value = (object?)input.RecentPaymentCount ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserCompositeJsonSnapshot]", parameters, resultSets, OutputFactory, AggregateFactory, Binder);

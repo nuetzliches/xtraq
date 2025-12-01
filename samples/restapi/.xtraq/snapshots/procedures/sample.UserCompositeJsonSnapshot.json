@@ -4,11 +4,13 @@
   "Parameters": [
     {
       "Name": "UserId",
-      "TypeRef": "sys.int"
+      "TypeRef": "sys.int",
+      "IsNullable": true
     },
     {
       "Name": "RecentPaymentCount",
-      "TypeRef": "sys.int"
+      "TypeRef": "sys.int",
+      "IsNullable": true
     }
   ],
   "ResultSets": [

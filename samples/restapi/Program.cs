@@ -148,14 +148,9 @@ app.MapGet("/api/users/snapshot", async (int? recentPaymentCount, IXtraqDbContex
 // Demo: TVP request DTO + mapper + validation
 app.MapPost("/api/audit-log", async (WriteAuditLogEntriesRequest request, IXtraqDbContext db, CancellationToken ct) =>
 {
-    if (request?.Entries is null || request.Entries.Count == 0)
-    {
-        return Results.BadRequest(new { error = "At least one audit entry is required." });
-    }
-
     var result = await db.WriteAuditLogEntriesAsync(request, ct).ConfigureAwait(false);
     return result.Success
-        ? Results.Ok(new { inserted = request.Entries.Count })
+        ? Results.Ok()
         : Results.Problem("Failed to write audit entries");
 })
 .WithName("AuditLogBulk");

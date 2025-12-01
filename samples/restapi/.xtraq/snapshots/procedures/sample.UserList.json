@@ -4,7 +4,8 @@
   "Parameters": [
     {
       "Name": "IncludeInactive",
-      "TypeRef": "sys.bit"
+      "TypeRef": "sys.bit",
+      "IsNullable": true
     }
   ],
   "ResultSets": [

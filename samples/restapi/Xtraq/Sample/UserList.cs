@@ -29,11 +29,11 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserListRequest
 {
-    public bool IncludeInactive { get; init; }
+    public bool? IncludeInactive { get; init; }
 }
 
 public readonly record struct UserListInput(
-    bool IncludeInactive
+    bool? IncludeInactive
 );
 
 /// <summary>
@@ -79,7 +79,7 @@ internal static class UserListRequestMapper
         }
 
         return new UserListInput(
-            IncludeInactive ?? default
+            IncludeInactive
         );
     }
 
@@ -128,7 +128,7 @@ internal static partial class UserListPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@IncludeInactive", System.Data.DbType.Boolean, null, false, false),
+            new("@IncludeInactive", System.Data.DbType.Boolean, null, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -154,7 +154,7 @@ internal static partial class UserListPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserListInput)state!;
-			cmd.Parameters["@IncludeInactive"].Value = input.IncludeInactive;
+			cmd.Parameters["@IncludeInactive"].Value = (object?)input.IncludeInactive ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserList]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

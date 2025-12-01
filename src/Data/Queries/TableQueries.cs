@@ -271,6 +271,8 @@ internal static class TableQueries
     {
         var whereSegment = string.IsNullOrWhiteSpace(whereClause) ? string.Empty : $"{Environment.NewLine}{whereClause}";
 
+        // Computed columns inherit the UDT of their first operand; suppress UDT metadata so computed columns don't leak operand UDTs into snapshots (e.g., ISNULL(nullable_udt, not_null_udt)).
+        // If we ever need UDTs for computed columns, the expression will have to be analyzed manually.
         return $@"SELECT 
     CASE WHEN @catalogName IS NULL OR LTRIM(RTRIM(@catalogName)) = '' THEN CAST(NULL AS sysname) ELSE @catalogName END AS catalog_name,
     s.name AS schema_name,
@@ -280,7 +282,6 @@ internal static class TableQueries
     t.name AS system_type_name,
     IIF(t.name LIKE 'nvarchar%', c.max_length / 2, c.max_length) AS max_length,
     COLUMNPROPERTY(c.object_id, c.name, 'IsIdentity') AS is_identity,
-    -- Computed columns inherit the UDT of their first operand; suppress UDT metadata so computed columns don't leak operand UDTs into snapshots (e.g., ISNULL(nullable_udt, not_null_udt))
     CASE WHEN c.is_computed = 1 THEN NULL ELSE t1.name END AS user_type_name,
     CASE WHEN c.is_computed = 1 THEN NULL ELSE s1.name END AS user_type_schema_name,
     t.name AS base_type_name,

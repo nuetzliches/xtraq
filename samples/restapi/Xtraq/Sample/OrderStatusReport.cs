@@ -29,13 +29,13 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class OrderStatusReportRequest
 {
-    public DateTime FromUtc { get; init; }
-    public DateTime ToUtc { get; init; }
+    public DateTime? FromUtc { get; init; }
+    public DateTime? ToUtc { get; init; }
 }
 
 public readonly record struct OrderStatusReportInput(
-    DateTime FromUtc,
-    DateTime ToUtc
+    DateTime? FromUtc,
+    DateTime? ToUtc
 );
 
 /// <summary>
@@ -82,8 +82,8 @@ internal static class OrderStatusReportRequestMapper
         }
 
         return new OrderStatusReportInput(
-            FromUtc ?? default,
-            ToUtc ?? default
+            FromUtc,
+            ToUtc
         );
     }
 
@@ -132,8 +132,8 @@ internal static partial class OrderStatusReportPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@FromUtc", System.Data.DbType.DateTime2, null, false, false),
-            new("@ToUtc", System.Data.DbType.DateTime2, null, false, false),
+            new("@FromUtc", System.Data.DbType.DateTime2, null, false, true),
+            new("@ToUtc", System.Data.DbType.DateTime2, null, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -159,8 +159,8 @@ internal static partial class OrderStatusReportPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderStatusReportInput)state!;
-			cmd.Parameters["@FromUtc"].Value = input.FromUtc;
-			cmd.Parameters["@ToUtc"].Value = input.ToUtc;
+			cmd.Parameters["@FromUtc"].Value = (object?)input.FromUtc ?? DBNull.Value;
+			cmd.Parameters["@ToUtc"].Value = (object?)input.ToUtc ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderStatusReport]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

@@ -29,13 +29,13 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserPreferredContactApplyRequest
 {
-    public int UserId { get; init; }
-    public bool OnlyPreferred { get; init; }
+    public int? UserId { get; init; }
+    public bool? OnlyPreferred { get; init; }
 }
 
 public readonly record struct UserPreferredContactApplyInput(
-    int UserId,
-    bool OnlyPreferred
+    int? UserId,
+    bool? OnlyPreferred
 );
 
 /// <summary>
@@ -109,8 +109,8 @@ internal static class UserPreferredContactApplyRequestMapper
         }
 
         return new UserPreferredContactApplyInput(
-            UserId ?? default,
-            OnlyPreferred ?? default
+            UserId,
+            OnlyPreferred
         );
     }
 
@@ -159,8 +159,8 @@ internal static partial class UserPreferredContactApplyPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, 4, false, false),
-            new("@OnlyPreferred", System.Data.DbType.Boolean, null, false, false),
+            new("@UserId", System.Data.DbType.Int32, 4, false, true),
+            new("@OnlyPreferred", System.Data.DbType.Boolean, null, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -220,8 +220,8 @@ internal static partial class UserPreferredContactApplyPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserPreferredContactApplyInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
-			cmd.Parameters["@OnlyPreferred"].Value = input.OnlyPreferred;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
+			cmd.Parameters["@OnlyPreferred"].Value = (object?)input.OnlyPreferred ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserPreferredContactApply]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

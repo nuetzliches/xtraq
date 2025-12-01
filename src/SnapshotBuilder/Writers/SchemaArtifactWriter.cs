@@ -1419,7 +1419,8 @@ internal sealed class SchemaArtifactWriter
                         }
                     }
 
-                    if (SnapshotWriterUtilities.ShouldEmitIsNullable(parameter.is_nullable == 1, typeRef))
+                    // Treat defaulted parameters as nullable in the snapshot so generated inputs can omit them and let SQL defaults apply.
+                    if (parameter.is_nullable == 1 || parameter.has_default_value == 1)
                     {
                         writer.WriteBoolean("IsNullable", true);
                     }

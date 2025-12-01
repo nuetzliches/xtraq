@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "Fingerprint": "FBD1BFA2CD73D62D",
+  "Fingerprint": "63C38DEDBB6A0E25",
   "Parser": {
     "ToolVersion": "net9.0",
     "ResultSetParserVersion": 8
@@ -59,7 +59,7 @@
       "Schema": "sample",
       "Name": "OrderListAsJson",
       "File": "sample.OrderListAsJson.json",
-      "Hash": "21E61588112260EF",
+      "Hash": "BBD4EFC011AEC217",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -98,7 +98,7 @@
       "Schema": "sample",
       "Name": "OrderListByUserAsJson",
       "File": "sample.OrderListByUserAsJson.json",
-      "Hash": "06083B731AD25D31",
+      "Hash": "FAC8794AABC473EF",
       "ResultSets": [
         {
           "ReturnsJson": true,
@@ -402,7 +402,7 @@
       "Schema": "sample",
       "Name": "OrderStatusReport",
       "File": "sample.OrderStatusReport.json",
-      "Hash": "4560D944239D6601",
+      "Hash": "27B50EFE677E2D39",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -783,7 +783,7 @@
       "Schema": "sample",
       "Name": "UpdateUserBio",
       "File": "sample.UpdateUserBio.json",
-      "Hash": "C3FC5953F722EC5C",
+      "Hash": "EF7CCFD9498BD89B",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -888,7 +888,7 @@
       "Schema": "sample",
       "Name": "UserCompositeJsonSnapshot",
       "File": "sample.UserCompositeJsonSnapshot.json",
-      "Hash": "B7A40FB10E9D5C53",
+      "Hash": "1E67CC86A291D4F5",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1254,7 +1254,7 @@
       "Schema": "sample",
       "Name": "UserDetailsWithOrders",
       "File": "sample.UserDetailsWithOrders.json",
-      "Hash": "FE58F05F48712153",
+      "Hash": "64C62790066ADAC4",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1654,7 +1654,7 @@
       "Schema": "sample",
       "Name": "UserFind",
       "File": "sample.UserFind.json",
-      "Hash": "E3F0876553AFD45E",
+      "Hash": "0D1A5E8A7C380A25",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -1891,7 +1891,7 @@
       "Schema": "sample",
       "Name": "UserList",
       "File": "sample.UserList.json",
-      "Hash": "FE937C2A29DDD8C7",
+      "Hash": "F28ABB9B93E3428B",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -2477,7 +2477,7 @@
       "Schema": "sample",
       "Name": "UserOrderInsights",
       "File": "sample.UserOrderInsights.json",
-      "Hash": "9956904D79E8E73B",
+      "Hash": "2E3861765895C4EE",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -2736,7 +2736,7 @@
       "Schema": "sample",
       "Name": "UserOrderJoinDiagnostics",
       "File": "sample.UserOrderJoinDiagnostics.json",
-      "Hash": "B4F6EB6A6C9DEDEA",
+      "Hash": "F1C699DA6E397C23",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -2960,7 +2960,7 @@
       "Schema": "sample",
       "Name": "UserOrderSubselectDiagnostics",
       "File": "sample.UserOrderSubselectDiagnostics.json",
-      "Hash": "F98B9CECDEF65FC5",
+      "Hash": "5A51931AA91BA2C1",
       "ResultSets": [
         {
           "ReturnsJson": false,
@@ -3087,7 +3087,7 @@
       "Schema": "sample",
       "Name": "UserPreferredContactApply",
       "File": "sample.UserPreferredContactApply.json",
-      "Hash": "381F1120AC88F7D9",
+      "Hash": "5E942DC6AA4D022A",
       "ResultSets": [
         {
           "ReturnsJson": false,

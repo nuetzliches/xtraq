@@ -29,11 +29,11 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class UserOrderJoinDiagnosticsRequest
 {
-    public int UserId { get; init; }
+    public int? UserId { get; init; }
 }
 
 public readonly record struct UserOrderJoinDiagnosticsInput(
-    int UserId
+    int? UserId
 );
 
 /// <summary>
@@ -89,7 +89,7 @@ internal static class UserOrderJoinDiagnosticsRequestMapper
         }
 
         return new UserOrderJoinDiagnosticsInput(
-            UserId ?? default
+            UserId
         );
     }
 
@@ -138,7 +138,7 @@ internal static partial class UserOrderJoinDiagnosticsPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, 4, false, false),
+            new("@UserId", System.Data.DbType.Int32, 4, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -171,7 +171,7 @@ internal static partial class UserOrderJoinDiagnosticsPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (UserOrderJoinDiagnosticsInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[UserOrderJoinDiagnostics]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

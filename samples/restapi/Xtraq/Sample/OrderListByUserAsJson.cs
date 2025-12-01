@@ -29,11 +29,11 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 /// </summary>
 public sealed record class OrderListByUserAsJsonRequest
 {
-    public int UserId { get; init; }
+    public int? UserId { get; init; }
 }
 
 public readonly record struct OrderListByUserAsJsonInput(
-    int UserId
+    int? UserId
 );
 
 /// <summary>
@@ -89,7 +89,7 @@ internal static class OrderListByUserAsJsonRequestMapper
         }
 
         return new OrderListByUserAsJsonInput(
-            UserId ?? default
+            UserId
         );
     }
 
@@ -138,7 +138,7 @@ internal static partial class OrderListByUserAsJsonPlan
 	{
 		var parameters = new ProcedureParameter[]
 		{
-            new("@UserId", System.Data.DbType.Int32, null, false, false),
+            new("@UserId", System.Data.DbType.Int32, null, false, true),
         };
 
 		var resultSets = new ResultSetMapping[]
@@ -191,7 +191,7 @@ internal static partial class OrderListByUserAsJsonPlan
 		void Binder(DbCommand cmd, object? state)
 		{
 			var input = (OrderListByUserAsJsonInput)state!;
-			cmd.Parameters["@UserId"].Value = input.UserId;
+			cmd.Parameters["@UserId"].Value = (object?)input.UserId ?? DBNull.Value;
 		}
 		return new ProcedureExecutionPlan(
 			"[sample].[OrderListByUserAsJson]", parameters, resultSets, OutputFactory, AggregateFactory, Binder, enableParameterBinding: false);

@@ -162,4 +162,67 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
         Xunit.Assert.True(persistedChild.GetProperty("ForcedNullable").GetBoolean());
         Xunit.Assert.False(persistedChild.TryGetProperty("IsNullable", out _));
     }
+
+    [Xunit.Fact]
+    public void BuildProcedureJson_MarksDefaultedScalarParameterAsNullable()
+    {
+        var descriptor = new ProcedureDescriptor { Schema = "sample", Name = "DefaultsProbe" };
+        var parameters = new[]
+        {
+            new StoredProcedureInput
+            {
+                Name = "@RecentPaymentCount",
+                SystemTypeName = "int",
+                IsNullable = false,
+                HasDefaultValue = true
+            }
+        };
+
+        var payload = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
+            descriptor,
+            parameters,
+            procedure: null,
+            requiredTypeRefs: null,
+            requiredTableTypeRefs: null,
+            requiredTableRefs: null,
+            jsonEnhancementService: null);
+
+        using var document = JsonDocument.Parse(payload);
+        var param = document.RootElement.GetProperty("Parameters")[0];
+
+        Xunit.Assert.True(param.GetProperty("IsNullable").GetBoolean());
+        Xunit.Assert.True(param.GetProperty("HasDefaultValue").GetBoolean());
+    }
+
+    [Xunit.Fact]
+    public void BuildProcedureJson_PreservesNullableMetadataEvenWithNonNullableUserType()
+    {
+        var descriptor = new ProcedureDescriptor { Schema = "sample", Name = "NullableProbe" };
+        var parameters = new[]
+        {
+            new StoredProcedureInput
+            {
+                Name = "@RecentPaymentCount",
+                SystemTypeName = "int",
+                IsNullable = true,
+                UserTypeName = "_id",
+                UserTypeSchemaName = "core",
+                UserTypeIsNullable = null // SQL metadata says nullable, but UDT default might be non-nullable
+            }
+        };
+
+        var payload = ProcedureSnapshotDocumentBuilder.BuildProcedureJson(
+            descriptor,
+            parameters,
+            procedure: null,
+            requiredTypeRefs: null,
+            requiredTableTypeRefs: null,
+            requiredTableRefs: null,
+            jsonEnhancementService: null);
+
+        using var document = JsonDocument.Parse(payload);
+        var param = document.RootElement.GetProperty("Parameters")[0];
+
+        Xunit.Assert.True(param.GetProperty("IsNullable").GetBoolean());
+    }
 }

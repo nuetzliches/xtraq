@@ -5,7 +5,8 @@
     {
       "Name": "UserId",
       "TypeRef": "sys.int",
-      "UserTypeRef": "shared.pkInt"
+      "UserTypeRef": "shared.pkInt",
+      "IsNullable": true
     }
   ],
   "ResultSets": [

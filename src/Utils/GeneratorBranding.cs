@@ -47,7 +47,7 @@ public static class GeneratorBranding
             // Swallow and fallback to default label; version retrieval should not block generation.
         }
 
-        return "1.0.0";
+        return "1.0.1";
     }
 
     private static string? Normalize(string? version)

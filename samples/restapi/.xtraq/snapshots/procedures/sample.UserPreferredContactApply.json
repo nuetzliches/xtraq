@@ -5,11 +5,13 @@
     {
       "Name": "UserId",
       "TypeRef": "sys.int",
-      "UserTypeRef": "shared.pkInt"
+      "UserTypeRef": "shared.pkInt",
+      "IsNullable": true
     },
     {
       "Name": "OnlyPreferred",
-      "TypeRef": "sys.bit"
+      "TypeRef": "sys.bit",
+      "IsNullable": true
     }
   ],
   "ResultSets": [
