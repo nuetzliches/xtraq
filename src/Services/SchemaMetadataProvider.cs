@@ -586,7 +586,7 @@ namespace Xtraq.Metadata
                         var jsonElementClrType = columnElement.GetPropertyOrDefault("JsonElementClrType");
                         var jsonElementSqlType = columnElement.GetPropertyOrDefault("JsonElementSqlType");
 
-                        var typeRef = columnElement.GetPropertyOrDefault("TypeRef");
+                        var typeRef = columnElement.GetPropertyOrDefault("TypeRef") ?? columnElement.GetPropertyOrDefault("UserTypeRef");
                         var maxLen = columnElement.GetPropertyOrDefaultInt("MaxLength");
                         var precision = columnElement.GetPropertyOrDefaultInt("Precision");
                         var scale = columnElement.GetPropertyOrDefaultInt("Scale");

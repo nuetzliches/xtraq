@@ -218,6 +218,7 @@ internal static class ParameterBindingEngine
         if (provider == null) return;
         var options = provider.ParameterBindings;
         if (options == null || options.Bindings.Count == 0) return;
+        if (provider.Services is null) return;
 
         if (cmd is null) return;
         var parameters = cmd.Parameters;
@@ -229,6 +230,7 @@ internal static class ParameterBindingEngine
             var parameter = FindParameter(parameters, binding.Name);
             if (parameter == null) continue;
             if (HasValue(parameter.Value)) continue;
+            if (provider.Services is null) continue;
             if (binding.InputType is not null && (input is null || !binding.InputType.IsInstanceOfType(input))) continue;
             if (binding.AppliesTo != null && !binding.AppliesTo(procedureName)) continue;
 
@@ -321,6 +323,7 @@ internal static class ParameterBindingEngine
         var options = provider.ParameterBindings;
         if (options == null || options.Bindings.Count == 0) return currentValue;
         if (HasValue(currentValue)) return currentValue;
+        if (provider.Services is null) return currentValue;
 
         var normalizedProcedure = NormalizeProcedureName(procedureName);
         var normalizedParameter = NormalizeParameterName(parameterName);
@@ -329,6 +332,7 @@ internal static class ParameterBindingEngine
         {
             if (!ParameterNameEquals(binding.Name, normalizedParameter)) continue;
             if (binding.AppliesTo != null && !binding.AppliesTo(normalizedProcedure)) continue;
+            if (provider.Services is null) continue;
 
             try
             {
