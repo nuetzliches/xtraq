@@ -2,9 +2,9 @@ name: Code Style Check
 
 on:
   pull_request:
-    branches: [master, develop]
+    branches: [master]
   push:
-    branches: [master, develop]
+    branches: [master]
 
 jobs:
   format-check:
@@ -44,3 +44,4 @@ jobs:
 
       - name: Analyze code style
         run: dotnet build src/Xtraq.csproj --configuration Release --verbosity normal
+

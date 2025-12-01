@@ -2,9 +2,9 @@ name: SQL Sample Container
 
 on:
   pull_request:
-    branches: [master, develop]
+    branches: [master]
   push:
-    branches: [master, develop]
+    branches: [master]
 
 jobs:
   sql-sample:
@@ -48,3 +48,4 @@ jobs:
       - name: Tear down SQL Server container
         if: always()
         run: docker compose -f samples/mssql/docker-compose.yml down -v
+
