@@ -172,7 +172,7 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
             new StoredProcedureInput
             {
                 Name = "@RecentPaymentCount",
-                SystemTypeName = "int",
+                SqlTypeName = "int",
                 IsNullable = false,
                 HasDefaultValue = true
             }
@@ -203,7 +203,7 @@ public sealed class ProcedureSnapshotDocumentBuilderTests
             new StoredProcedureInput
             {
                 Name = "@RecentPaymentCount",
-                SystemTypeName = "int",
+                SqlTypeName = "int",
                 IsNullable = true,
                 UserTypeName = "_id",
                 UserTypeSchemaName = "core",

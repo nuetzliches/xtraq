@@ -15,10 +15,10 @@ public class StoredProcedureQueriesSqlTests
         {
             new StoredProcedureInput
             {
-                name = "@RecentPaymentCount",
-                is_nullable = 0,
-                has_default_value = 1,
-                system_type_name = "int"
+                Name = "@RecentPaymentCount",
+                IsNullable = false,
+                HasDefaultValue = true,
+                SqlTypeName = "int"
             }
         };
 
