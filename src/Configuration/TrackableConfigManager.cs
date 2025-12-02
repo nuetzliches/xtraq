@@ -461,7 +461,6 @@ internal static class TrackableConfigManager
             ?? (existing is null ? null : string.Join(',', existing.BuildSchemas));
         var buildSchemas = ParseSchemas(buildSchemasRaw);
 
-        var apiModeRaw = ResolveValue(envValues, "XTRAQ_API_MODE") ?? existing?.Api?.Mode;
         var apiRequestsAutoBindRaw = ResolveValue(envValues, "XTRAQ_API_AUTOBIND")
             ?? (existing?.Api?.Requests is null ? null : string.Join(',', existing.Api.Requests.AutoBind));
         var apiRequestsAutoBind = ParseSchemas(apiRequestsAutoBindRaw);
@@ -471,21 +470,26 @@ internal static class TrackableConfigManager
 
         var entityFrameworkEnabled = existing?.EntityFramework?.Enabled;
 
+        var hasApiSection = existing?.Api is not null
+            || (apiRequestsAutoBind is { Count: > 0 })
+            || (apiRequestsAutoBindProcedures is { Count: > 0 });
+
         var payload = new TrackableConfigPayload
         {
             Namespace = ns,
             OutputDir = outputDir,
             TargetFramework = targetFramework,
             BuildSchemas = buildSchemas,
-            Api = new ApiPayload
-            {
-                Mode = apiModeRaw,
-                Requests = new ApiRequestPayload
+            Api = hasApiSection
+                ? new ApiPayload
                 {
-                    AutoBind = apiRequestsAutoBind,
-                    AutoBindProcedures = apiRequestsAutoBindProcedures
+                    Requests = new ApiRequestPayload
+                    {
+                        AutoBind = apiRequestsAutoBind,
+                        AutoBindProcedures = apiRequestsAutoBindProcedures
+                    }
                 }
-            },
+                : null,
             EntityFramework = new EntityFrameworkPayload { Enabled = entityFrameworkEnabled },
             ResultSet = new ResultSetPayload { Json = new JsonPayload { IncludeNullValues = includeNullValues } }
         };
@@ -576,18 +580,13 @@ internal static class TrackableConfigManager
         }
 
         var apiMap = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        if (!string.IsNullOrWhiteSpace(api.Mode) && !api.Mode.Trim().Equals("None", StringComparison.OrdinalIgnoreCase))
-        {
-            apiMap["Mode"] = api.Mode.Trim();
-        }
-
         var requests = NormalizeApiRequests(api.Requests);
         if (requests is not null)
         {
             apiMap["Requests"] = requests;
         }
 
-        return apiMap.Count == 0 ? null : apiMap;
+        return apiMap;
     }
 
     private static Dictionary<string, object?>? NormalizeApiRequests(ApiRequestPayload? requests)
@@ -748,7 +747,6 @@ internal static class TrackableConfigManager
         var outputDirValue = SelectString(overrides.OutputDir, baseline.OutputDir);
         var targetFrameworkValue = SelectString(overrides.TargetFramework, baseline.TargetFramework);
         var jsonIncludeNullValues = overrides.ResultSet?.Json?.IncludeNullValues ?? baseline.ResultSet?.Json?.IncludeNullValues;
-        var apiMode = SelectString(overrides.Api?.Mode, baseline.Api?.Mode);
         var apiAutoBind = overrides.Api?.Requests?.AutoBind.Count > 0
             ? overrides.Api!.Requests!.AutoBind
             : baseline.Api?.Requests?.AutoBind ?? Array.Empty<string>();
@@ -759,6 +757,7 @@ internal static class TrackableConfigManager
         var schemas = overrides.BuildSchemas.Count > 0
             ? overrides.BuildSchemas
             : baseline.BuildSchemas;
+        var hasApi = overrides.Api is not null || baseline.Api is not null;
 
         return new TrackableConfigPayload
         {
@@ -766,15 +765,16 @@ internal static class TrackableConfigManager
             OutputDir = outputDirValue,
             TargetFramework = targetFrameworkValue,
             BuildSchemas = schemas.Count > 0 ? schemas.ToArray() : Array.Empty<string>(),
-            Api = new ApiPayload
-            {
-                Mode = apiMode,
-                Requests = new ApiRequestPayload
+            Api = hasApi
+                ? new ApiPayload
                 {
-                    AutoBind = apiAutoBind.Count > 0 ? apiAutoBind.ToArray() : Array.Empty<string>(),
-                    AutoBindProcedures = apiAutoBindProcedures.Count > 0 ? apiAutoBindProcedures.ToArray() : Array.Empty<string>()
+                    Requests = new ApiRequestPayload
+                    {
+                        AutoBind = apiAutoBind.Count > 0 ? apiAutoBind.ToArray() : Array.Empty<string>(),
+                        AutoBindProcedures = apiAutoBindProcedures.Count > 0 ? apiAutoBindProcedures.ToArray() : Array.Empty<string>()
+                    }
                 }
-            },
+                : null,
             EntityFramework = new EntityFrameworkPayload { Enabled = entityFramework },
             ResultSet = new ResultSetPayload { Json = new JsonPayload { IncludeNullValues = jsonIncludeNullValues } }
         };
@@ -802,7 +802,6 @@ internal static class TrackableConfigManager
                 ? null
                 : new ApiPayload
                 {
-                    Mode = source.Api.Mode,
                     Requests = source.Api.Requests is null
                         ? null
                         : new ApiRequestPayload
@@ -823,7 +822,6 @@ internal static class TrackableConfigManager
             return null;
         }
 
-        var mode = TryReadTrimmedString(apiElement, "Mode");
         ApiRequestPayload? requests = null;
         if (apiElement.TryGetProperty("Requests", out var requestsElement) && requestsElement.ValueKind == JsonValueKind.Object)
         {
@@ -834,7 +832,7 @@ internal static class TrackableConfigManager
             };
         }
 
-        return new ApiPayload { Mode = mode, Requests = requests };
+        return new ApiPayload { Requests = requests };
     }
 
     private static EntityFrameworkPayload? ReadEntityFrameworkSettings(JsonElement root)
@@ -1068,6 +1066,7 @@ internal static class TrackableConfigManager
         static IReadOnlyList<string> SnapshotList(IReadOnlyList<string> source)
             => source.Count > 0 ? source.ToArray() : Array.Empty<string>();
 
+        var apiEnabled = payload.Api is not null;
         var apiAutoBind = payload.Api?.Requests?.AutoBind is { Count: > 0 }
             ? payload.Api.Requests.AutoBind.ToArray()
             : Array.Empty<string>();
@@ -1080,7 +1079,7 @@ internal static class TrackableConfigManager
             OutputDir: string.IsNullOrWhiteSpace(payload.OutputDir) ? null : payload.OutputDir!.Trim(),
             TargetFramework: string.IsNullOrWhiteSpace(payload.TargetFramework) ? null : payload.TargetFramework!.Trim(),
             BuildSchemas: SnapshotList(payload.BuildSchemas),
-            ApiMode: string.IsNullOrWhiteSpace(payload.Api?.Mode) ? null : payload.Api!.Mode!.Trim(),
+            ApiEnabled: apiEnabled,
             ApiAutoBind: apiAutoBind,
             ApiAutoBindProcedures: apiAutoBindProcedures,
             EntityFrameworkEnabled: payload.EntityFramework?.Enabled,
@@ -1136,7 +1135,6 @@ internal static class TrackableConfigManager
 
     private sealed record ApiPayload
     {
-        public string? Mode { get; init; }
         public ApiRequestPayload? Requests { get; init; }
     }
 
@@ -1170,7 +1168,7 @@ public sealed record TrackableConfigSnapshot(
     string? OutputDir,
     string? TargetFramework,
     IReadOnlyList<string> BuildSchemas,
-    string? ApiMode,
+    bool ApiEnabled,
     IReadOnlyList<string> ApiAutoBind,
     IReadOnlyList<string> ApiAutoBindProcedures,
     bool? EntityFrameworkEnabled,

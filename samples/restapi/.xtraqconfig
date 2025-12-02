@@ -2,7 +2,6 @@
     "$schema": "../../docs/public/xtraqconfig.schema.json",
     "Namespace": "Xtraq.Samples.RestApi",
     "Api": {
-        "Mode": "Minimal",
         "Requests": {
             "AutoBind": [
                 "@UserId INT",

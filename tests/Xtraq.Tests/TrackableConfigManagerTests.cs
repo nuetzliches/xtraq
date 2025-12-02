@@ -48,7 +48,6 @@ public sealed class TrackableConfigManagerTests
                 ["XTRAQ_OUTPUT_DIR"] = "Artifacts",
                 ["XTRAQ_BUILD_SCHEMAS"] = "core, identity; audit",
                 ["XTRAQ_TARGET_FRAMEWORK"] = "net10.0",
-                ["XTRAQ_API_MODE"] = "Minimal",
                 ["XTRAQ_API_AUTOBIND"] = "@UserId INT",
                 ["XTRAQ_API_AUTOBIND_PROCEDURES"] = "sample.UserCompositeJsonSnapshot"
             };
@@ -71,7 +70,6 @@ public sealed class TrackableConfigManagerTests
                 .ToArray();
             Xunit.Assert.Equal(new[] { "core", "identity", "audit" }, schemas);
             var apiElement = root.GetProperty("Api");
-            Xunit.Assert.Equal("Minimal", apiElement.GetProperty("Mode").GetString());
             var requests = apiElement.GetProperty("Requests");
             Xunit.Assert.Equal("@UserId INT", requests.GetProperty("AutoBind").EnumerateArray().First().GetString());
             Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", requests.GetProperty("AutoBindProcedures").EnumerateArray().First().GetString());
@@ -212,12 +210,12 @@ public sealed class TrackableConfigManagerTests
         try
         {
             var configPath = Path.Combine(directory.FullName, ".xtraqconfig");
-            File.WriteAllText(configPath, "{\n  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
+            File.WriteAllText(configPath, "{\n  \"Api\": { \"Requests\": { \"AutoBind\": [\"@UserId INT\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\"] } },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
 
             var snapshot = Xtraq.Configuration.TrackableConfigManager.ReadMergedConfiguration(directory.FullName);
 
             Xunit.Assert.NotNull(snapshot);
-            Xunit.Assert.Equal("Minimal", snapshot!.ApiMode);
+            Xunit.Assert.True(snapshot!.ApiEnabled);
             Xunit.Assert.Collection(snapshot.ApiAutoBind, item => Xunit.Assert.Equal("@UserId INT", item));
             Xunit.Assert.Collection(snapshot.ApiAutoBindProcedures, item => Xunit.Assert.Equal("sample.UserCompositeJsonSnapshot", item));
             Xunit.Assert.True(snapshot.EntityFrameworkEnabled);

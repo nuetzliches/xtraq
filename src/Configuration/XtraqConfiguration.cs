@@ -31,9 +31,9 @@ public sealed class XtraqConfiguration
     /// </summary>
     public IReadOnlyList<string> BuildSchemas { get; init; } = Array.Empty<string>();
     /// <summary>
-    /// API integration mode. Minimal = emit HTTP endpoint contracts (request DTOs, table-type request rows, DI endpoints); None = omit.
+    /// Gets a value indicating whether API integrations (request DTOs, table-type request rows, DI endpoints) are enabled.
     /// </summary>
-    public ApiMode ApiMode { get; init; } = ApiMode.None;
+    public bool ApiEnabled { get; init; }
     /// <summary>
     /// Optional global parameter auto-binding list applied to API endpoints (schema-qualified filters are configured separately).
     /// </summary>
@@ -165,10 +165,7 @@ public sealed class XtraqConfiguration
         // to avoid per-machine overrides leaking in via environment variables.
         var namespaceValue = NullIfEmpty(Get("XTRAQ_NAMESPACE", allowProcessEnvironment: false, allowEnvFile: false))?.Trim();
         var outputDirResolved = NullIfEmpty(Get("XTRAQ_OUTPUT_DIR", allowProcessEnvironment: false, allowEnvFile: false)) ?? "Xtraq";
-        var apiModeRaw = NullIfEmpty(Get("XTRAQ_API_MODE", allowProcessEnvironment: false, allowEnvFile: false));
-        var apiMode = string.IsNullOrWhiteSpace(apiModeRaw)
-            ? ApiMode.None
-            : apiModeRaw!.Equals("minimal", StringComparison.OrdinalIgnoreCase) ? ApiMode.Minimal : ApiMode.None;
+        var apiEnabled = trackedSnapshot?.ApiEnabled ?? false;
         var autoBindParameters = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND", allowProcessEnvironment: false, allowEnvFile: false)));
         var autoBindProcedures = ParseList(NullIfEmpty(Get("XTRAQ_API_AUTOBIND_PROCEDURES", allowProcessEnvironment: false, allowEnvFile: false)));
         var enableEntityFramework = trackedSnapshot?.EntityFrameworkEnabled ?? false;
@@ -182,7 +179,7 @@ public sealed class XtraqConfiguration
             ConfigPath = File.Exists(effectiveConfigPath) ? effectiveConfigPath : null,
             BuildSchemas = buildSchemasList,
             ProjectRoot = projectRoot,
-            ApiMode = apiMode,
+            ApiEnabled = apiEnabled,
             ApiAutoBindParameters = autoBindParameters,
             ApiAutoBindProcedures = autoBindProcedures,
             EntityFrameworkEnabled = enableEntityFramework,
@@ -388,8 +385,6 @@ public sealed class XtraqConfiguration
             map["XTRAQ_BUILD_SCHEMAS"] = string.Join(',', snapshot.BuildSchemas);
         }
 
-        Set(map, "XTRAQ_API_MODE", snapshot.ApiMode);
-
         if (snapshot.ApiAutoBind.Count > 0)
         {
             map["XTRAQ_API_AUTOBIND"] = string.Join(',', snapshot.ApiAutoBind);
@@ -408,13 +403,4 @@ public sealed class XtraqConfiguration
         return map;
     }
 
-}
-
-/// <summary>API integration mode emitted by the generator.</summary>
-public enum ApiMode
-{
-    /// <summary>No API helpers are generated.</summary>
-    None = 0,
-    /// <summary>Generate HTTP endpoint helpers (request DTOs, request mappers, DbContext health endpoints).</summary>
-    Minimal = 1
 }

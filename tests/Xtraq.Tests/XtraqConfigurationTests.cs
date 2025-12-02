@@ -53,7 +53,7 @@ public sealed class XtraqConfigurationTests
             Xunit.Assert.Equal(expectedNamespace, configuration.NamespaceRoot);
             Xunit.Assert.Equal("Server=(local);Database=App;", configuration.GeneratorConnectionString);
             Xunit.Assert.Equal(expectedRoot, Environment.GetEnvironmentVariable("XTRAQ_PROJECT_PATH"));
-            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.None, configuration.ApiMode);
+            Xunit.Assert.False(configuration.ApiEnabled);
             Xunit.Assert.False(configuration.EntityFrameworkEnabled);
         }
         finally
@@ -98,17 +98,17 @@ public sealed class XtraqConfigurationTests
                 "XTRAQ_GENERATOR_DB=Server=(local);Database=App;TrustServerCertificate=True;\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
-                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"Api\": { \"Mode\": \"None\" },\n  \"EntityFramework\": { \"Enabled\": false }\n}\n");
+                "{\n  \"Namespace\": \"Tracked.Namespace\",\n  \"OutputDir\": \"TrackedOutput\",\n  \"EntityFramework\": { \"Enabled\": false }\n}\n");
 
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig.local"),
-                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"Api\": { \"Mode\": \"Minimal\" },\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
+                "{\n  \"Namespace\": \"Local.Namespace\",\n  \"OutputDir\": \"LocalOutput\",\n  \"BuildSchemas\": [\"LocalOne\", \"LocalTwo\"],\n  \"Api\": {},\n  \"EntityFramework\": { \"Enabled\": true }\n}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
             Xunit.Assert.Equal("Local.Namespace", configuration.NamespaceRoot);
             Xunit.Assert.Equal("LocalOutput", configuration.OutputDir);
             Xunit.Assert.Equal(new[] { "LocalOne", "LocalTwo" }, configuration.BuildSchemas);
-            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.Minimal, configuration.ApiMode);
+            Xunit.Assert.True(configuration.ApiEnabled);
             Xunit.Assert.True(configuration.EntityFrameworkEnabled);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig.local"), configuration.ConfigPath);
         }
@@ -256,7 +256,6 @@ public sealed class XtraqConfigurationTests
             "XTRAQ_PROJECT_PATH",
             "XTRAQ_NAMESPACE",
             "XTRAQ_GENERATOR_DB",
-            "XTRAQ_API_MODE",
             "XTRAQ_API_AUTOBIND",
             "XTRAQ_API_AUTOBIND_PROCEDURES"
         };
@@ -278,12 +277,12 @@ public sealed class XtraqConfigurationTests
             File.WriteAllText(Path.Combine(projectRoot, ".xtraqconfig"),
                 "{\n" +
                 "  \"Namespace\": \"AutoBind.Namespace\",\n" +
-                "  \"Api\": { \"Mode\": \"Minimal\", \"Requests\": { \"AutoBind\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] } }\n" +
+                "  \"Api\": { \"Requests\": { \"AutoBind\": [\"@UserId INT\", \"@Entries shared.AuditLogEntryTableType READONLY\"], \"AutoBindProcedures\": [\"sample.UserCompositeJsonSnapshot\", \"sample.WriteAuditLogEntries\"] } }\n" +
                 "}\n");
 
             var configuration = Xtraq.Configuration.XtraqConfiguration.Load(projectRoot);
 
-            Xunit.Assert.Equal(Xtraq.Configuration.ApiMode.Minimal, configuration.ApiMode);
+            Xunit.Assert.True(configuration.ApiEnabled);
             Xunit.Assert.Equal(new[] { "@UserId INT", "@Entries shared.AuditLogEntryTableType READONLY" }, configuration.ApiAutoBindParameters);
             Xunit.Assert.Equal(new[] { "sample.UserCompositeJsonSnapshot", "sample.WriteAuditLogEntries" }, configuration.ApiAutoBindProcedures);
             Xunit.Assert.Equal(Path.Combine(projectRoot, ".xtraqconfig"), configuration.ConfigPath);

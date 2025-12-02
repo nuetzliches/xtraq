@@ -45,14 +45,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "Mode": {
-          "type": "string",
-          "enum": [
-            "Minimal",
-            "None"
-          ],
-          "description": "API helper generation mode."
-        },
         "Requests": {
           "type": "object",
           "additionalProperties": false,

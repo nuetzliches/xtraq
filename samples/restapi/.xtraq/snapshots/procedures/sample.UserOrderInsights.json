@@ -63,7 +63,6 @@
           "Alias": "LatestOrderMetadata",
           "SourceColumn": "Metadata",
           "UserTypeRef": "sample.JsonDocument",
-          "SqlTypeName": "nvarchar",
           "IsNullable": true,
           "ForcedNullable": true
         },

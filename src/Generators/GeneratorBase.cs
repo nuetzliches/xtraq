@@ -25,7 +25,7 @@ internal abstract class GeneratorBase
 
     protected bool ShouldEmitApiIntegrations()
     {
-        return Configuration?.ApiMode == ApiMode.Minimal;
+        return Configuration?.ApiEnabled == true;
     }
 
     protected bool ShouldEmitEntityFrameworkIntegration()
