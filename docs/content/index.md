@@ -119,11 +119,11 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
 
   ::card
   ---
-  title: Understand the workflow
+  title: What is Xtraq?
   icon: i-lucide-circle-question-mark
   to: /getting-started/what-is-xtraq
   ---
-  Learn how snapshots, configuration, and generation combine to keep your client code deterministic.
+  Quick overview of why Xtraq exists and which problems it solves.
   ::
 
   ::card
@@ -132,7 +132,16 @@ Follow the guided flow to scaffold your generator project, warm the metadata cac
   icon: i-lucide-rocket
   to: /getting-started/quickstart
   ---
-  Scaffold a project, capture metadata, and generate artefacts ready to drop into your solution.
+  Install, run `xtraq`, register services, and bring your first endpoint live.
+  ::
+
+  ::card
+  ---
+  title: Deep dive: Generator
+  icon: i-lucide-layers
+  to: /reference/generator-workflow
+  ---
+  Snapshot/build flow, artefact layout, and CI guidance at a glance.
   ::
 
   ::card

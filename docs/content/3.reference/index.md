@@ -10,4 +10,4 @@ description: Central entry point for configuration, JSON handling, table types, 
 - [JSON Procedure Handling](/reference/json-procedures)
 - [Table Types (UDTT) Generation](/reference/table-types)
 - [Result-set Naming Conventions](/reference/result-set-naming)
-
+- [Generator Workflow (snapshot + build)](/reference/generator-workflow)
