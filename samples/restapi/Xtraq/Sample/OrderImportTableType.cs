@@ -87,14 +87,14 @@ public sealed record OrderImportTableTypeRequest
 {
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(120)]
-    public string UserAlias { get; init; }
+    public string UserAlias { get; init; } = string.Empty;
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(40)]
-    public string OrderNumber { get; init; }
+    public string OrderNumber { get; init; } = string.Empty;
     public decimal TotalAmount { get; init; }
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(3)]
-    public string Currency { get; init; }
+    public string Currency { get; init; } = string.Empty;
     public DateTime PlacedAtUtc { get; init; }
     public string? Metadata { get; init; }
 

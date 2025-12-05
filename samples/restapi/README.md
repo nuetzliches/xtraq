@@ -29,6 +29,9 @@ This folder contains a lightweight ASP.NET Core minimal API that exercises the c
  curl -X POST http://localhost:5143/api/users/1/orders ^
       -H "Content-Type: application/json" ^
       -d "{\"orderNumber\":\"WEB-1001\",\"totalAmount\":49.99,\"currency\":\"USD\"}"
+
+:: Run Xtraq code generation
+ dotnet run --project src\Xtraq.csproj --framework net10.0 -- -p samples\restapi
 ```
 
 ## Nullability contract

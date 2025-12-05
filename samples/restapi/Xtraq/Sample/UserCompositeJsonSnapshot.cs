@@ -100,7 +100,6 @@ public sealed class UserCompositeJsonSnapshotResult
 	/// </summary>
 	public string? Result2RawJson { get; init; } = null;
 }
-
 internal static class UserCompositeJsonSnapshotRequestMapper
 {
     public static async ValueTask<UserCompositeJsonSnapshotInput> ToInputAsync(UserCompositeJsonSnapshotRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

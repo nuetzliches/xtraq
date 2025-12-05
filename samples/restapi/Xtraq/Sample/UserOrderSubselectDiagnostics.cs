@@ -59,7 +59,6 @@ public sealed class UserOrderSubselectDiagnosticsResult
 	/// </summary>
 	public IReadOnlyList<UserOrderSubselectDiagnosticsResultSet1Result> Result { get; init; } = Array.Empty<UserOrderSubselectDiagnosticsResultSet1Result>();
 }
-
 internal static class UserOrderSubselectDiagnosticsRequestMapper
 {
     public static async ValueTask<UserOrderSubselectDiagnosticsInput> ToInputAsync(UserOrderSubselectDiagnosticsRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

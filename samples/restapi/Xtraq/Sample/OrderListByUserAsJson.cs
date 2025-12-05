@@ -73,7 +73,6 @@ public sealed class OrderListByUserAsJsonResult
 	/// </summary>
 	public string? ResultRawJson { get; init; } = null;
 }
-
 internal static class OrderListByUserAsJsonRequestMapper
 {
     public static async ValueTask<OrderListByUserAsJsonInput> ToInputAsync(OrderListByUserAsJsonRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

@@ -55,7 +55,6 @@ public sealed class OrderListAsJsonResult
 	/// </summary>
 	public IReadOnlyList<OrderListAsJsonResultSet1Result> Result { get; init; } = Array.Empty<OrderListAsJsonResultSet1Result>();
 }
-
 internal static class OrderListAsJsonRequestMapper
 {
     public static async ValueTask<OrderListAsJsonInput> ToInputAsync(OrderListAsJsonRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

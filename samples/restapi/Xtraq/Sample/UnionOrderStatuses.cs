@@ -49,53 +49,6 @@ public sealed class UnionOrderStatusesResult
 	public string? ResultRawJson { get; init; } = null;
 }
 
-internal static class UnionOrderStatusesRequestMapper
-{
-    public static async ValueTask<UnionOrderStatusesInput> ToInputAsync(UnionOrderStatusesRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
-    {
-        request ??= new UnionOrderStatusesRequest();
-
-        return new UnionOrderStatusesInput(
-        );
-    }
-
-    public static ValueTask<UnionOrderStatusesInput> ToInputAsync(UnionOrderStatusesRequest? request, IXtraqDbContext dbContext, CancellationToken cancellationToken = default)
-    {
-        return ToInputAsync(request, dbContext as IXtraqParameterBindingProvider, cancellationToken);
-    }
-
-    private static bool HasValue<T>(T? value) => value is not null;
-
-    private static async ValueTask<T?> ResolveAsync<T>(IXtraqParameterBindingProvider? bindingProvider, string procedureFullName, string parameterName, bool isTableType, object? currentValue, CancellationToken cancellationToken)
-    {
-        var resolved = await ParameterBindingEngine.ResolveValueAsync(procedureFullName, parameterName, isTableType, currentValue, bindingProvider, cancellationToken).ConfigureAwait(false);
-        return ConvertValue<T>(resolved);
-    }
-
-    private static async ValueTask<IReadOnlyList<T>?> ResolveTableAsync<T>(IXtraqParameterBindingProvider? bindingProvider, string procedureFullName, string parameterName, object? currentValue, CancellationToken cancellationToken)
-    {
-        var resolved = await ParameterBindingEngine.ResolveValueAsync(procedureFullName, parameterName, true, currentValue, bindingProvider, cancellationToken).ConfigureAwait(false);
-        if (resolved is null) return null;
-        if (resolved is IReadOnlyList<T> roList) return roList;
-        if (resolved is IEnumerable<T> enumerable) return enumerable as IReadOnlyList<T> ?? enumerable.ToArray();
-        return null;
-    }
-
-    private static T? ConvertValue<T>(object? value)
-    {
-        if (value is null or DBNull) return default;
-        if (value is T typed) return typed;
-        try
-        {
-            return (T?)System.Convert.ChangeType(value, typeof(T), System.Globalization.CultureInfo.InvariantCulture);
-        }
-        catch
-        {
-            return default;
-        }
-    }
-}
-
 internal static partial class UnionOrderStatusesPlan
 {
 	private static ProcedureExecutionPlan? _cached;

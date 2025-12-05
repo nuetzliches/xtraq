@@ -65,7 +65,6 @@ public sealed class UserOrderInsightsResult
 	/// </summary>
 	public IReadOnlyList<UserOrderInsightsResultSet1Result> Result { get; init; } = Array.Empty<UserOrderInsightsResultSet1Result>();
 }
-
 internal static class UserOrderInsightsRequestMapper
 {
     public static async ValueTask<UserOrderInsightsInput> ToInputAsync(UserOrderInsightsRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

@@ -61,7 +61,6 @@ public sealed class OrderStatusReportResult
 	/// </summary>
 	public IReadOnlyList<OrderStatusReportResultSet1Result> Result { get; init; } = Array.Empty<OrderStatusReportResultSet1Result>();
 }
-
 internal static class OrderStatusReportRequestMapper
 {
     public static async ValueTask<OrderStatusReportInput> ToInputAsync(OrderStatusReportRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

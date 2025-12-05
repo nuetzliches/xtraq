@@ -64,7 +64,6 @@ public sealed class UserFindResult
 	/// </summary>
 	public IReadOnlyList<UserFindResultSet1Result> Result { get; init; } = Array.Empty<UserFindResultSet1Result>();
 }
-
 internal static class UserFindRequestMapper
 {
     public static async ValueTask<UserFindInput> ToInputAsync(UserFindRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

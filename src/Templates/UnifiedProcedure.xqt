@@ -78,7 +78,7 @@ public sealed class {{ UnifiedResultTypeName }}
 {{/each}}
 {{/if}}
 }
-
+{{#if HasInput}}
 internal static class {{ ProcedureTypeName }}RequestMapper
 {
     public static async ValueTask<{{ InputTypeName }}> ToInputAsync({{ RequestTypeName }}? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)
@@ -149,6 +149,7 @@ internal static class {{ ProcedureTypeName }}RequestMapper
         }
     }
 }
+{{/if}}
 
 internal static partial class {{ PlanTypeName }}
 {

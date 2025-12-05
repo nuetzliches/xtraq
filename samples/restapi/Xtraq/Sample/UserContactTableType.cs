@@ -88,10 +88,10 @@ public sealed record UserContactTableTypeRequest
     public int UserId { get; init; }
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(320)]
-    public string Email { get; init; }
+    public string Email { get; init; } = string.Empty;
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(200)]
-    public string DisplayName { get; init; }
+    public string DisplayName { get; init; } = string.Empty;
     [System.ComponentModel.DataAnnotations.StringLength(50)]
     public string? Source { get; init; }
     public bool? Preferred { get; init; }

@@ -27,7 +27,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 public sealed record class ImportOrdersRequest
 {
     [System.ComponentModel.DataAnnotations.Required]
-    public IReadOnlyList<OrderImportTableTypeRequest> Orders { get; init; }
+    public IReadOnlyList<OrderImportTableTypeRequest> Orders { get; init; } = default!;
 }
 
 public readonly record struct ImportOrdersInput(
@@ -56,7 +56,6 @@ public sealed class ImportOrdersResult
 	/// </summary>
 	public IReadOnlyList<ImportOrdersResultSet1Result> Result { get; init; } = Array.Empty<ImportOrdersResultSet1Result>();
 }
-
 internal static class ImportOrdersRequestMapper
 {
     public static async ValueTask<ImportOrdersInput> ToInputAsync(ImportOrdersRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

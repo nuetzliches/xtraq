@@ -44,7 +44,6 @@ public sealed class WriteAuditLogEntriesResult
 	/// </summary>
 	public string? Error { get; init; }
 }
-
 internal static class WriteAuditLogEntriesRequestMapper
 {
     public static async ValueTask<WriteAuditLogEntriesInput> ToInputAsync(WriteAuditLogEntriesRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

@@ -27,7 +27,7 @@ namespace Xtraq.Samples.RestApi.Xtraq.Sample;
 public sealed record class SyncUserContactsRequest
 {
     [System.ComponentModel.DataAnnotations.Required]
-    public IReadOnlyList<UserContactTableTypeRequest> Contacts { get; init; }
+    public IReadOnlyList<UserContactTableTypeRequest> Contacts { get; init; } = default!;
 }
 
 public readonly record struct SyncUserContactsInput(
@@ -63,7 +63,6 @@ public sealed class SyncUserContactsResult
 	/// </summary>
 	public IReadOnlyList<SyncUserContactsResultSet1Result> Result { get; init; } = Array.Empty<SyncUserContactsResultSet1Result>();
 }
-
 internal static class SyncUserContactsRequestMapper
 {
     public static async ValueTask<SyncUserContactsInput> ToInputAsync(SyncUserContactsRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

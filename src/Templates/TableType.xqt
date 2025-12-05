@@ -56,7 +56,7 @@ public sealed record {{ TypeName }} : ITableType
 public sealed record {{ TypeName }}Request
 {
 {{#each Columns as column}}{{#each column.RequestAttributes}}    {{ this }}
-{{/each}}    public {{ column.ClrType }} {{ column.PropertyName }} { get; init; }
+{{/each}}    public {{ column.ClrType }} {{ column.PropertyName }} { get; init; }{{ column.PropertyInitializer }}
 {{/each}}
 
 	internal {{ TypeName }} ToTableType()

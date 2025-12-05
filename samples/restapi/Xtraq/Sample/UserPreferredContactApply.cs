@@ -88,7 +88,6 @@ public sealed class UserPreferredContactApplyResult
 	/// </summary>
 	public string? Result1RawJson { get; init; } = null;
 }
-
 internal static class UserPreferredContactApplyRequestMapper
 {
     public static async ValueTask<UserPreferredContactApplyInput> ToInputAsync(UserPreferredContactApplyRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

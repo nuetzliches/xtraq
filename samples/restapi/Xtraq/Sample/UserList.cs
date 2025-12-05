@@ -63,7 +63,6 @@ public sealed class UserListResult
 	/// </summary>
 	public IReadOnlyList<UserListResultSet1Result> Result { get; init; } = Array.Empty<UserListResultSet1Result>();
 }
-
 internal static class UserListRequestMapper
 {
     public static async ValueTask<UserListInput> ToInputAsync(UserListRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

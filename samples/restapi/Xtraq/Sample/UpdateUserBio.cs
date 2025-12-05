@@ -61,7 +61,6 @@ public sealed class UpdateUserBioResult
 	/// </summary>
 	public IReadOnlyList<UpdateUserBioResultSet1Result> Result { get; init; } = Array.Empty<UpdateUserBioResultSet1Result>();
 }
-
 internal static class UpdateUserBioRequestMapper
 {
     public static async ValueTask<UpdateUserBioInput> ToInputAsync(UpdateUserBioRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

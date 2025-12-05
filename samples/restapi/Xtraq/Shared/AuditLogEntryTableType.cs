@@ -81,10 +81,10 @@ public sealed record AuditLogEntryTableTypeRequest
 {
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(120)]
-    public string Source { get; init; }
+    public string Source { get; init; } = string.Empty;
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(4000)]
-    public string Message { get; init; }
+    public string Message { get; init; } = string.Empty;
     public byte Severity { get; init; }
     public Guid? CorrelationId { get; init; }
     public string? Details { get; init; }

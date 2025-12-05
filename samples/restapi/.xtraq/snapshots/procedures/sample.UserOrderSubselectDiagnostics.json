@@ -27,16 +27,14 @@
           "Name": "PrimaryTagWithNoteSummary",
           "Alias": "PrimaryTagWithNoteSummary",
           "TypeRef": "sys.nvarchar",
-          "IsNullable": true,
-          "ForcedNullable": true
+          "IsNullable": true
         },
         {
           "Name": "PrimaryTagNoteIsPublic",
           "Alias": "PrimaryTagNoteIsPublic",
           "SourceColumn": "IsPublic",
           "TypeRef": "sys.bit",
-          "IsNullable": true,
-          "ForcedNullable": true
+          "IsNullable": true
         },
         {
           "Name": "LatestPublicNote",
@@ -44,7 +42,6 @@
           "SourceColumn": "NoteText",
           "TypeRef": "sys.nvarchar",
           "IsNullable": true,
-          "ForcedNullable": true,
           "MaxLength": 400
         }
       ]

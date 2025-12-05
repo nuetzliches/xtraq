@@ -73,7 +73,6 @@ public sealed class UserOrderJoinDiagnosticsResult
 	/// </summary>
 	public IReadOnlyList<UserOrderJoinDiagnosticsResultSet2Result> Result1 { get; init; } = Array.Empty<UserOrderJoinDiagnosticsResultSet2Result>();
 }
-
 internal static class UserOrderJoinDiagnosticsRequestMapper
 {
     public static async ValueTask<UserOrderJoinDiagnosticsInput> ToInputAsync(UserOrderJoinDiagnosticsRequest? request, IXtraqParameterBindingProvider? bindingProvider, CancellationToken cancellationToken = default)

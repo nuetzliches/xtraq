@@ -1527,7 +1527,11 @@ internal sealed class ProceduresGenerator : GeneratorBase
                     var hasApiRequestProjection = emitProperty && emitApiIntegrations && isTableType;
                     var tableTypeRequestType = hasApiRequestProjection ? BuildTableTypeRequestType(elementType) : null;
                     var apiRequestClrType = hasApiRequestProjection ? BuildTableTypeRequestClrType(requestClrType, elementType) : null;
-                    var propertyBlockLines = BuildRequestPropertyBlockLines(p.PropertyName, requestClrType, propertyAttributes, hasApiRequestProjection, apiRequestClrType);
+                    var propertyClrType = hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiRequestClrType)
+                        ? apiRequestClrType
+                        : requestClrType;
+                    var propertyInitializer = BuildRequestPropertyInitializer(propertyClrType);
+                    var propertyBlockLines = BuildRequestPropertyBlockLines(p.PropertyName, propertyClrType, propertyAttributes, propertyInitializer);
                     var defaultInitializer = emitProperty ? $"request.{p.PropertyName}" : "default";
                     var apiInitializer = hasApiRequestProjection && !string.IsNullOrWhiteSpace(tableTypeRequestType)
                         ? $"{tableTypeRequestType}.ToTableTypes(request.{p.PropertyName})"
@@ -2371,16 +2375,33 @@ internal sealed class ProceduresGenerator : GeneratorBase
         return attributes.Count == 0 ? Array.Empty<string>() : attributes;
     }
 
-    private static IReadOnlyList<string> BuildRequestPropertyBlockLines(string propertyName, string requestClrType, IReadOnlyList<string> attributes, bool hasApiRequestProjection, string? apiRequestClrType)
+    internal static string BuildRequestPropertyInitializer(string propertyClrType)
+    {
+        if (string.IsNullOrWhiteSpace(propertyClrType))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = propertyClrType.Trim();
+        if (trimmed.EndsWith("?", StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        if (LooksLikeValueType(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return " = default!;";
+    }
+
+    private static IReadOnlyList<string> BuildRequestPropertyBlockLines(string propertyName, string propertyClrType, IReadOnlyList<string> attributes, string propertyInitializer)
     {
         var lines = new List<string>();
         AppendAttributeLines(lines, attributes);
 
-        var propertyClrType = hasApiRequestProjection && !string.IsNullOrWhiteSpace(apiRequestClrType)
-            ? apiRequestClrType
-            : requestClrType;
-
-        lines.Add($"    public {propertyClrType} {propertyName} {{ get; init; }}");
+        lines.Add($"    public {propertyClrType} {propertyName} {{ get; init; }}{propertyInitializer}");
         return lines;
     }
 
