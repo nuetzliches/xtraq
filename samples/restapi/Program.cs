@@ -16,6 +16,16 @@ builder.Services.AddXtraqDbContext(options =>
     options.ConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Configure the 'DefaultConnection' connection string in appsettings.json");
     options.CommandTimeout = 30;
+    options.SessionSettings
+        .Clear()
+        .WithQuotedIdentifierOn()
+        .WithAnsiNullsOn()
+        .WithAnsiPaddingOn()
+        .WithAnsiWarningsOn()
+        .WithConcatNullYieldsNull()
+        .WithArithAbortOn()
+        .WithNoCountOn()
+        .WithNumericRoundAbortOff();
     options.ParameterBindings
         .BindScalar<int>("@UserId", (services, _) =>
         {

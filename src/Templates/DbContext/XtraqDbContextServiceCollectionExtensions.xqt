@@ -4,6 +4,8 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 {{#if EntityFrameworkEnabled}}
 using Microsoft.EntityFrameworkCore;
@@ -292,6 +294,7 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
         }
 
         connection.Open();
+        ApplySessionSettings(connection);
         OnConnectionOpened(connection);
     }
 
@@ -300,6 +303,7 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
         if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await ApplySessionSettingsAsync(connection, cancellationToken).ConfigureAwait(false);
             OnConnectionOpened(connection);
         }
 
@@ -308,5 +312,20 @@ internal sealed partial class EntityFrameworkXtraqContext<TDbContext> : IXtraqDb
 
     partial void OnAmbientConnectionResolved(DbConnection connection);
     partial void OnConnectionOpened(DbConnection connection);
+
+    private void ApplySessionSettings(DbConnection connection)
+    {
+        if (_options.SessionSettings.HasSettings)
+        {
+            _options.SessionSettings.Apply(connection);
+        }
+    }
+
+    private Task ApplySessionSettingsAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        return _options.SessionSettings.HasSettings
+            ? _options.SessionSettings.ApplyAsync(connection, cancellationToken)
+            : Task.CompletedTask;
+    }
 }
 {{/if}}

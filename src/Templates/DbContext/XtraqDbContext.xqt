@@ -36,6 +36,7 @@ public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionO
     {
         var conn = new SqlConnection(_options.ConnectionString);
         conn.Open();
+        _options.SessionSettings.Apply(conn);
         return conn;
     }
 
@@ -44,6 +45,7 @@ public sealed partial class XtraqDbContext : IXtraqDbContext, IXtraqTransactionO
     {
         var conn = new SqlConnection(_options.ConnectionString);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await _options.SessionSettings.ApplyAsync(conn, cancellationToken).ConfigureAwait(false);
         return conn;
     }
 
