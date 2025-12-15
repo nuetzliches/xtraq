@@ -62,10 +62,10 @@ internal static class ImportOrdersRequestMapper
     {
         request ??= new ImportOrdersRequest();
         IReadOnlyList<OrderImportTableType>? Orders = OrderImportTableTypeRequest.ToTableTypes(request.Orders);
-        if (!HasValue(Orders))
-        {
-            throw new InvalidOperationException("Parameter @Orders must be supplied by the request or a configured binding.");
-        }
+		if (!HasValue(Orders))
+		{
+			throw new InvalidOperationException("Parameter @Orders must be supplied by the request or a configured binding.");
+		}
 
         return new ImportOrdersInput(
             Orders!

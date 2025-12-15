@@ -732,7 +732,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                     f.ReturnsUnknownJson,
                                     JsonElementClrType: f.JsonElementClrType,
                                     JsonElementSqlType: f.JsonElementSqlType,
-                                    JsonIncludeNullValues: f.JsonIncludeNullValues));
+                                    JsonIncludeNullValues: f.JsonIncludeNullValues,
+                                    JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed));
                                 jsonTypeCorrections.Add($"{proc.OperationName}:{rs.Name}.{f.PropertyName} {f.ClrType}->{mapped}");
                             }
                             else
@@ -818,7 +819,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                         ReturnsUnknownJson: null,
                                         JsonElementClrType: null,
                                         JsonElementSqlType: null,
-                                        JsonIncludeNullValues: jsonDescriptor.IncludeNullValues ? true : dc.JsonIncludeNullValues
+                                        JsonIncludeNullValues: jsonDescriptor.IncludeNullValues ? true : dc.JsonIncludeNullValues,
+                                        JsonSingleRowGuaranteed: dc.JsonSingleRowGuaranteed
                                     ));
                                     changed = true;
                                     continue;
@@ -1004,6 +1006,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         var groupOrder = new List<string>();
                         var groups = new Dictionary<string, List<FieldDescriptor>>(StringComparer.OrdinalIgnoreCase);
                         var groupNullability = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                        var guaranteedContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                         foreach (var kv in deferredContainerNullability)
                         {
@@ -1041,6 +1044,28 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             SeedJsonNullability(jsonNodes);
                         }
 
+                        void RegisterGuaranteedContainer(FieldDescriptor field)
+                        {
+                            if (field?.JsonSingleRowGuaranteed == true && !string.IsNullOrWhiteSpace(field.Name))
+                            {
+                                var parts = field.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);
+                                if (parts.Length < 2)
+                                {
+                                    return;
+                                }
+
+                                string? prefix = null;
+                                for (int i = 0; i < parts.Length - 1; i++)
+                                {
+                                    prefix = string.IsNullOrEmpty(prefix) ? parts[i] : string.Concat(prefix, ".", parts[i]);
+                                    if (!string.IsNullOrWhiteSpace(prefix))
+                                    {
+                                        guaranteedContainers.Add(prefix);
+                                    }
+                                }
+                            }
+                        }
+
                         void TrackGroupNullability(FieldDescriptor field)
                         {
                             var parts = field.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);
@@ -1054,6 +1079,11 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             for (int i = 0; i < parts.Length - 1; i++)
                             {
                                 path = string.IsNullOrEmpty(path) ? parts[i] : string.Concat(path, ".", parts[i]);
+                                if (guaranteedContainers.Contains(path))
+                                {
+                                    groupNullability[path] = false;
+                                    continue;
+                                }
                                 if (!groupNullability.TryGetValue(path, out var existing))
                                 {
                                     groupNullability[path] = fieldNullable;
@@ -1067,6 +1097,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
 
                         foreach (var f in effectiveFields)
                         {
+                            RegisterGuaranteedContainer(f);
                             if (!f.Name.Contains('.'))
                             {
                                 // No '.' means it remains a leaf (underscores are not parsed as hierarchy)
@@ -1121,6 +1152,21 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             return TryResolveNode(rs.JsonStructure, path!)?.IsArray == true;
                         }
 
+                        bool GroupPathIsNullable(string? path)
+                        {
+                            if (string.IsNullOrWhiteSpace(path))
+                            {
+                                return false;
+                            }
+
+                            if (guaranteedContainers.Contains(path!))
+                            {
+                                return false;
+                            }
+
+                            return groupNullability.TryGetValue(path!, out var flag) && flag;
+                        }
+
                         static JsonFieldNode? TryResolveNode(IReadOnlyList<JsonFieldNode> nodes, string path)
                         {
                             foreach (var node in nodes)
@@ -1159,21 +1205,21 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             {
                                 if (!f.Name.Contains('.'))
                                 {
-                                    leaves.Add(new FieldDescriptor(f.Name, AliasToIdentifier(f.Name), f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues));
+                                    leaves.Add(new FieldDescriptor(f.Name, AliasToIdentifier(f.Name), f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed));
                                     continue;
                                 }
                                 var parts = f.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);
                                 if (parts.Length == 2)
                                 {
                                     var leafName = parts[1];
-                                    leaves.Add(new FieldDescriptor(leafName, AliasToIdentifier(leafName), f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues));
+                                    leaves.Add(new FieldDescriptor(leafName, AliasToIdentifier(leafName), f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed));
                                 }
                                 else if (parts.Length > 2)
                                 {
                                     var sub = parts[1];
                                     var remainder = string.Join('.', parts.Skip(1));
                                     var remainderProperty = AliasToIdentifier(remainder.Replace('.', '_'));
-                                    var f2 = new FieldDescriptor(remainder, remainderProperty, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues);
+                                    var f2 = new FieldDescriptor(remainder, remainderProperty, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed);
                                     if (!subGroups.ContainsKey(sub)) subGroups[sub] = new List<FieldDescriptor>();
                                     subGroups[sub].Add(f2);
                                 }
@@ -1197,7 +1243,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                 bool nestedIsArray = IsArrayGroupPath(nestedPath);
                                 var nestedPropertyType = nestedIsArray
                                     ? $"System.Collections.Generic.List<{nestedTypeName}>"
-                                    : ApplyNullability(nestedTypeName, groupNullability.TryGetValue(nestedPath, out var nestedNullable) && nestedNullable);
+                                    : ApplyNullability(nestedTypeName, GroupPathIsNullable(nestedPath));
                                 var nestedPropName = AliasToIdentifier(sg.Key);
                                 var line = $"    {nestedPropertyType} {nestedPropName}{(sgIndex == subGroups.Count - 1 ? string.Empty : ",")}";
                                 paramLines.Add(line);
@@ -1241,7 +1287,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             }
                             else
                             {
-                                var groupNullable = groupNullability.TryGetValue(gPath, out var gNull) && gNull;
+                                var groupNullable = GroupPathIsNullable(gPath);
                                 groupPropertyType = ApplyNullability(nestedTypeName, groupNullable);
                             }
                             rootParams.Add($"    {groupPropertyType} {gEsc}{comma}");
@@ -1319,7 +1365,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             if (!groups.ContainsKey(key)) { groups[key] = new List<FieldDescriptor>(); groupOrder.Add(key); }
                             // Rebuild the remainder (without the first segment) as a dotted name for later resolution
                             var remainder = string.Join('.', parts.Skip(1));
-                            groups[key].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable));
+                            groups[key].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable, JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed));
                         }
                         string Pascal(string raw)
                         {
@@ -1360,7 +1406,7 @@ internal sealed class ProceduresGenerator : GeneratorBase
                                 var sub = parts[0];
                                 var remainder = string.Join('.', parts.Skip(1));
                                 if (!subGroups.ContainsKey(sub)) subGroups[sub] = new List<FieldDescriptor>();
-                                subGroups[sub].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable));
+                                subGroups[sub].Add(new FieldDescriptor(remainder, remainder, f.ClrType, f.IsNullable, f.SqlTypeName, f.MaxLength, f.Documentation, f.Attributes, f.FunctionRef, f.DeferredJsonExpansion, f.ReturnsJson, f.ReturnsJsonArray, f.JsonRootProperty, f.ReturnsUnknownJson, JsonElementClrType: f.JsonElementClrType, JsonElementSqlType: f.JsonElementSqlType, JsonIncludeNullValues: f.JsonIncludeNullValues, ForcedNullable: f.ForcedNullable, JsonSingleRowGuaranteed: f.JsonSingleRowGuaranteed));
                             }
                             var typeNameNested = BuildNestedTypeName(rootTypeName, groupName);
                             var paramLines = new List<string>();
@@ -1568,6 +1614,8 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         ? $"{tableTypeRequestType}.ToTableTypes(request.{p.PropertyName})"
                         : null;
                     var initializationLines = BuildRequestInitializationLines(resolverClrType, p.PropertyName, defaultInitializer, apiInitializer, hasApiRequestProjection);
+                    var hasDefaultValue = p.HasDefaultValue ?? false;
+                    var allowsNull = p.IsNullable || hasDefaultValue;
 
                     return new
                     {
@@ -1576,7 +1624,9 @@ internal sealed class ProceduresGenerator : GeneratorBase
                         RequestClrType = requestClrType,
                         InputClrType = p.ClrType,
                         IsNullable = p.IsNullable,
-                        HasDefaultValue = p.HasDefaultValue ?? false,
+                        HasDefaultValue = hasDefaultValue,
+                        AllowsNull = allowsNull,
+                        RequiresValue = !allowsNull,
                         IsTableType = isTableType,
                         ElementType = elementType,
                         IsValueType = LooksLikeValueType(p.ClrType),

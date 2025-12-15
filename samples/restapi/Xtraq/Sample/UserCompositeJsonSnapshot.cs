@@ -110,18 +110,10 @@ internal static class UserCompositeJsonSnapshotRequestMapper
         {
 	    UserId = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@UserId", false, UserId, cancellationToken).ConfigureAwait(false);
         }
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
         int? RecentPaymentCount = request.RecentPaymentCount;
         if (!HasValue(RecentPaymentCount))
         {
 	    RecentPaymentCount = await ResolveAsync<int?>(bindingProvider, "[sample].[UserCompositeJsonSnapshot]", "@RecentPaymentCount", false, RecentPaymentCount, cancellationToken).ConfigureAwait(false);
-        }
-        if (!HasValue(RecentPaymentCount))
-        {
-            throw new InvalidOperationException("Parameter @RecentPaymentCount must be supplied by the request or a configured binding.");
         }
 
         return new UserCompositeJsonSnapshotInput(

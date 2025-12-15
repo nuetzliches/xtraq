@@ -61,10 +61,6 @@ internal static class OrderListAsJsonRequestMapper
     {
         request ??= new OrderListAsJsonRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
 
         return new OrderListAsJsonInput(
             UserId

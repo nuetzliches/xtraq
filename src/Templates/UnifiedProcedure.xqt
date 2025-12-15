@@ -100,12 +100,12 @@ internal static class {{ ProcedureTypeName }}RequestMapper
         }
 {{/if}}
 {{/if}}
-{{#unless parameter.IsNullable}}
-        if (!HasValue({{ parameter.PropertyName }}))
-        {
-            throw new InvalidOperationException("Parameter @{{ parameter.Name }} must be supplied by the request or a configured binding.");
-        }
-{{/unless}}
+{{#if parameter.RequiresValue}}
+		if (!HasValue({{ parameter.PropertyName }}))
+		{
+			throw new InvalidOperationException("Parameter @{{ parameter.Name }} must be supplied by the request or a configured binding.");
+		}
+{{/if}}
 {{/each}}
 
         return new {{ InputTypeName }}(

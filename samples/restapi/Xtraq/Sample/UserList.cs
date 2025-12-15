@@ -69,10 +69,6 @@ internal static class UserListRequestMapper
     {
         request ??= new UserListRequest();
         bool? IncludeInactive = request.IncludeInactive;
-        if (!HasValue(IncludeInactive))
-        {
-            throw new InvalidOperationException("Parameter @IncludeInactive must be supplied by the request or a configured binding.");
-        }
 
         return new UserListInput(
             IncludeInactive

@@ -69,10 +69,10 @@ internal static class SyncUserContactsRequestMapper
     {
         request ??= new SyncUserContactsRequest();
         IReadOnlyList<UserContactTableType>? Contacts = UserContactTableTypeRequest.ToTableTypes(request.Contacts);
-        if (!HasValue(Contacts))
-        {
-            throw new InvalidOperationException("Parameter @Contacts must be supplied by the request or a configured binding.");
-        }
+		if (!HasValue(Contacts))
+		{
+			throw new InvalidOperationException("Parameter @Contacts must be supplied by the request or a configured binding.");
+		}
 
         return new SyncUserContactsInput(
             Contacts!

@@ -67,15 +67,7 @@ internal static class OrderStatusReportRequestMapper
     {
         request ??= new OrderStatusReportRequest();
         DateTime? FromUtc = request.FromUtc;
-        if (!HasValue(FromUtc))
-        {
-            throw new InvalidOperationException("Parameter @FromUtc must be supplied by the request or a configured binding.");
-        }
         DateTime? ToUtc = request.ToUtc;
-        if (!HasValue(ToUtc))
-        {
-            throw new InvalidOperationException("Parameter @ToUtc must be supplied by the request or a configured binding.");
-        }
 
         return new OrderStatusReportInput(
             FromUtc,

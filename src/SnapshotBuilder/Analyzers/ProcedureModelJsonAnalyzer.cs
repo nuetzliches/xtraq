@@ -67,7 +67,10 @@ internal static class ProcedureModelJsonAnalyzer
 
                 if (info.WithoutArrayWrapper)
                 {
-                    resultSet.JsonSingleRowGuaranteed = info.SingleRowGuaranteed;
+                    if (info.SingleRowGuaranteed.HasValue && !resultSet.JsonSingleRowGuaranteed.HasValue)
+                    {
+                        resultSet.JsonSingleRowGuaranteed = info.SingleRowGuaranteed;
+                    }
                 }
             }
         }
@@ -91,7 +94,7 @@ internal static class ProcedureModelJsonAnalyzer
                 {
                     resultSet.JsonIncludeNullValues = true;
                 }
-                if (combined.WithoutArrayWrapper && combined.SingleRowGuaranteed.HasValue)
+                if (combined.WithoutArrayWrapper && combined.SingleRowGuaranteed.HasValue && !resultSet.JsonSingleRowGuaranteed.HasValue)
                 {
                     resultSet.JsonSingleRowGuaranteed = combined.SingleRowGuaranteed;
                 }
@@ -166,7 +169,10 @@ internal static class ProcedureModelJsonAnalyzer
 
                     if (info.WithoutArrayWrapper)
                     {
-                        column.JsonSingleRowGuaranteed = info.SingleRowGuaranteed;
+                        if (info.SingleRowGuaranteed.HasValue && !column.JsonSingleRowGuaranteed.HasValue)
+                        {
+                            column.JsonSingleRowGuaranteed = info.SingleRowGuaranteed;
+                        }
                     }
                 }
             }

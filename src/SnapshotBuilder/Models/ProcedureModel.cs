@@ -234,6 +234,11 @@ internal sealed class ProcedureResultColumn
     public bool? ReturnsUnknownJson { get; set; }
 
     /// <summary>
+    /// Indicates whether the source column is defined as an IDENTITY column in the database metadata.
+    /// </summary>
+    public bool? IsIdentity { get; set; }
+
+    /// <summary>
     /// Nested columns when this column contains structured data (e.g., user-defined table types).
     /// </summary>
     public List<ProcedureResultColumn> Columns { get; } = new();

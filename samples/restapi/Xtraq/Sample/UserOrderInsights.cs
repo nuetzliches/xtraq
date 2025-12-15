@@ -71,10 +71,6 @@ internal static class UserOrderInsightsRequestMapper
     {
         request ??= new UserOrderInsightsRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
 
         return new UserOrderInsightsInput(
             UserId

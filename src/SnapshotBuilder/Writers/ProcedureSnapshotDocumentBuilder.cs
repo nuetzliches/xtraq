@@ -358,6 +358,11 @@ internal static class ProcedureSnapshotDocumentBuilder
             writer.WriteBoolean("JsonIncludeNullValues", true);
         }
 
+        if (column.JsonSingleRowGuaranteed.HasValue)
+        {
+            writer.WriteBoolean("JsonSingleRowGuaranteed", column.JsonSingleRowGuaranteed.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(column.JsonElementClrType))
         {
             writer.WriteString("JsonElementClrType", column.JsonElementClrType);

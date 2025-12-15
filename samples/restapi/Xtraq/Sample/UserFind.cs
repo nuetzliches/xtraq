@@ -70,10 +70,6 @@ internal static class UserFindRequestMapper
     {
         request ??= new UserFindRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
 
         return new UserFindInput(
             UserId

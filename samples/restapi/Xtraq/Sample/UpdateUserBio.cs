@@ -67,15 +67,7 @@ internal static class UpdateUserBioRequestMapper
     {
         request ??= new UpdateUserBioRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
         string? Bio = request.Bio;
-        if (!HasValue(Bio))
-        {
-            throw new InvalidOperationException("Parameter @Bio must be supplied by the request or a configured binding.");
-        }
 
         return new UpdateUserBioInput(
             UserId,

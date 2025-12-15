@@ -488,11 +488,13 @@ namespace Xtraq.Metadata
                         var returnsJsonArrayExplicit = TryGetOptionalBoolean(rse, "ReturnsJsonArray");
                         var returnsJsonArrayFlag = returnsJsonArrayExplicit ?? (returnsJsonFlag ? true : false);
                         JsonStructureBuilder? jsonStructureBuilder = (returnsJsonFlag || returnsJsonArrayExplicit.HasValue) ? new JsonStructureBuilder() : null;
+                        var overrideResultSetName = rse.GetPropertyOrDefault("Name") ?? string.Empty;
+                        overrideResultSetName = string.IsNullOrWhiteSpace(overrideResultSetName) ? string.Empty : NamePolicy.Sanitize(overrideResultSetName);
                         if (rse.TryGetProperty("Columns", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
                         {
                             foreach (var c in colsEl.EnumerateArray())
                             {
-                                AppendResultColumn(columns, c, null, jsonStructureBuilder);
+                                AppendResultColumn(columns, c, null, jsonStructureBuilder, overrideResultSetName);
                             }
                         }
                         var rsName = ResultSetNaming.DeriveName(idx, columns, usedNames);
@@ -573,7 +575,7 @@ namespace Xtraq.Metadata
                         idx++;
                     }
 
-                    void AppendResultColumn(List<FieldDescriptor> collector, JsonElement columnElement, string? prefix, JsonStructureBuilder? jsonBuilder)
+                    void AppendResultColumn(List<FieldDescriptor> collector, JsonElement columnElement, string? prefix, JsonStructureBuilder? jsonBuilder, string resultSetName, bool? inheritedSingleRowGuaranteed = null)
                     {
                         var rawName = columnElement.GetPropertyOrDefault("Name") ?? string.Empty;
                         var fullName = CombineColumnNames(prefix, rawName);
@@ -581,10 +583,12 @@ namespace Xtraq.Metadata
                         var hasNested = columnElement.TryGetProperty("Columns", out var nestedEl) && nestedEl.ValueKind == JsonValueKind.Array && nestedEl.GetArrayLength() > 0;
                         var returnsJson = TryGetOptionalBoolean(columnElement, "ReturnsJson");
                         var returnsJsonArray = TryGetOptionalBoolean(columnElement, "ReturnsJsonArray");
+                        var jsonSingleRowGuaranteed = TryGetOptionalBoolean(columnElement, "JsonSingleRowGuaranteed");
                         var includeNullValues = TryGetOptionalBoolean(columnElement, "JsonIncludeNullValues");
                         var jsonRootProperty = columnElement.GetPropertyOrDefault("JsonRootProperty");
                         var jsonElementClrType = columnElement.GetPropertyOrDefault("JsonElementClrType");
                         var jsonElementSqlType = columnElement.GetPropertyOrDefault("JsonElementSqlType");
+                        var descriptorSingleRowGuaranteed = jsonSingleRowGuaranteed ?? inheritedSingleRowGuaranteed;
 
                         var typeRef = columnElement.GetPropertyOrDefault("TypeRef") ?? columnElement.GetPropertyOrDefault("UserTypeRef");
                         var maxLen = columnElement.GetPropertyOrDefaultInt("MaxLength");
@@ -609,6 +613,10 @@ namespace Xtraq.Metadata
                         if (forcedNullable && !isNullable)
                         {
                             isNullable = true;
+                        }
+                        if (jsonSingleRowGuaranteed == true)
+                        {
+                            isNullable = false;
                         }
                         if (string.IsNullOrWhiteSpace(sqlType) && !string.IsNullOrWhiteSpace(typeRef)) sqlType = typeRef;
                         var clr = MapSqlToClr(sqlType, isNullable);
@@ -744,7 +752,7 @@ namespace Xtraq.Metadata
                             }
 
                             var arrayClr = ComposeArrayClrType(elementClrType!, isNullable);
-                            collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), arrayClr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: elementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(elementSqlType) ? null : elementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
+                            collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), arrayClr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: elementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(elementSqlType) ? null : elementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable, JsonSingleRowGuaranteed: descriptorSingleRowGuaranteed));
                             jsonBuilder?.RegisterLeaf(fullName, true, isNullable);
                             return true;
                         }
@@ -763,7 +771,7 @@ namespace Xtraq.Metadata
 
                             foreach (var child in nestedEl.EnumerateArray())
                             {
-                                AppendResultColumn(collector, child, fullName, jsonBuilder);
+                                AppendResultColumn(collector, child, fullName, jsonBuilder, resultSetName, descriptorSingleRowGuaranteed);
                             }
                             return;
                         }
@@ -775,7 +783,7 @@ namespace Xtraq.Metadata
 
                         jsonBuilder?.RegisterLeaf(fullName, returnsJsonArray == true, isNullable);
 
-                        collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), clr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: string.IsNullOrWhiteSpace(jsonElementClrType) ? null : jsonElementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(jsonElementSqlType) ? null : jsonElementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
+                        collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), clr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: string.IsNullOrWhiteSpace(jsonElementClrType) ? null : jsonElementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(jsonElementSqlType) ? null : jsonElementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable, JsonSingleRowGuaranteed: descriptorSingleRowGuaranteed));
                     }
 
                     static string CombineColumnNames(string? prefix, string? name)

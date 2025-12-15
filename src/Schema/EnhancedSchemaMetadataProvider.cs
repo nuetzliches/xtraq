@@ -61,6 +61,7 @@ internal sealed class ColumnMetadata
     public bool IsHidden { get; init; }
     public bool IsColumnSet { get; init; }
     public string? GeneratedAlwaysType { get; init; }
+    public bool? IsIdentity { get; init; }
 }
 
 /// <summary>
@@ -401,7 +402,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             IsSparse = column.IsSparse == true,
             IsHidden = column.IsHidden == true,
             IsColumnSet = column.IsColumnSet == true,
-            GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType)
+            GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType),
+            IsIdentity = column.IsIdentity == true
         };
     }
 
@@ -436,6 +438,7 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         var maxLength = NormalizeMaxLength(column.MaxLength);
         var precision = NormalizeNumeric(column.Precision);
         var scale = NormalizeNumeric(column.Scale);
+        bool? isIdentity = column.IsIdentityRaw.HasValue ? column.IsIdentityRaw.Value != 0 : null;
 
         return new ColumnMetadata
         {
@@ -459,7 +462,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             IsSparse = column.IsSparse,
             IsHidden = column.IsHidden,
             IsColumnSet = column.IsColumnSet,
-            GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType)
+            GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType),
+            IsIdentity = isIdentity
         };
     }
 
@@ -480,7 +484,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             Scale = column.Scale,
             UserTypeSchema = userTypeSchema,
             UserTypeName = userTypeName,
-            IsFromSnapshot = true
+            IsFromSnapshot = true,
+            IsIdentity = column.IsIdentity
         };
     }
 

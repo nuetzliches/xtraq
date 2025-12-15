@@ -79,10 +79,6 @@ internal static class UserOrderJoinDiagnosticsRequestMapper
     {
         request ??= new UserOrderJoinDiagnosticsRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
 
         return new UserOrderJoinDiagnosticsInput(
             UserId

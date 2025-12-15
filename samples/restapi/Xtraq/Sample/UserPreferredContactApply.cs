@@ -62,7 +62,7 @@ public readonly record struct UserPreferredContactApplyResultSet2PreferredContac
 );
 public readonly record struct UserPreferredContactApplyResultSet2Result(
     int UserId,
-    UserPreferredContactApplyResultSet2PreferredContactJsonResult? PreferredContactJson
+    UserPreferredContactApplyResultSet2PreferredContactJsonResult PreferredContactJson
 );
 
 public sealed class UserPreferredContactApplyResult
@@ -94,15 +94,7 @@ internal static class UserPreferredContactApplyRequestMapper
     {
         request ??= new UserPreferredContactApplyRequest();
         int? UserId = request.UserId;
-        if (!HasValue(UserId))
-        {
-            throw new InvalidOperationException("Parameter @UserId must be supplied by the request or a configured binding.");
-        }
         bool? OnlyPreferred = request.OnlyPreferred;
-        if (!HasValue(OnlyPreferred))
-        {
-            throw new InvalidOperationException("Parameter @OnlyPreferred must be supplied by the request or a configured binding.");
-        }
 
         return new UserPreferredContactApplyInput(
             UserId,

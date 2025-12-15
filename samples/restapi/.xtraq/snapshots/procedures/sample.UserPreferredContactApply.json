@@ -101,6 +101,7 @@
           "Alias": "PreferredContactJson",
           "ReturnsJson": true,
           "ReturnsJsonArray": false,
+          "JsonSingleRowGuaranteed": true,
           "IsNullable": true,
           "Columns": [
             {

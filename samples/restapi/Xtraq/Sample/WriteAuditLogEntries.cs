@@ -54,10 +54,10 @@ internal static class WriteAuditLogEntriesRequestMapper
         {
             Entries = await ResolveTableAsync<AuditLogEntryTableType>(bindingProvider, "[sample].[WriteAuditLogEntries]", "@Entries", Entries, cancellationToken).ConfigureAwait(false);
         }
-        if (!HasValue(Entries))
-        {
-            throw new InvalidOperationException("Parameter @Entries must be supplied by the request or a configured binding.");
-        }
+		if (!HasValue(Entries))
+		{
+			throw new InvalidOperationException("Parameter @Entries must be supplied by the request or a configured binding.");
+		}
 
         return new WriteAuditLogEntriesInput(
             Entries!

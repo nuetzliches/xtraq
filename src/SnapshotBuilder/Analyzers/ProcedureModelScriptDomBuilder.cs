@@ -71,6 +71,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             public int? CastTargetLength { get; init; }
             public int? CastTargetPrecision { get; init; }
             public int? CastTargetScale { get; init; }
+            public bool? IsIdentity { get; init; }
+            public string? Alias { get; init; }
         }
 
         private sealed class ColumnSourceCandidate
@@ -91,6 +93,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             public bool IsCte { get; set; }
             public bool ForceNullableColumns { get; set; }
             public bool IsFunction { get; set; }
+            public HashSet<string> Keys { get; } = new(StringComparer.OrdinalIgnoreCase);
         }
 
         private sealed class UnionContext
@@ -121,6 +124,18 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             public int? Precision { get; init; }
             public int? Scale { get; init; }
             public bool? IsNullable { get; init; }
+        }
+
+        private sealed class CorrelatedPredicate
+        {
+            public CorrelatedPredicate(ColumnSourceInfo localColumn, ColumnSourceInfo correlatedColumn)
+            {
+                LocalColumn = localColumn ?? throw new ArgumentNullException(nameof(localColumn));
+                CorrelatedColumn = correlatedColumn ?? throw new ArgumentNullException(nameof(correlatedColumn));
+            }
+
+            public ColumnSourceInfo LocalColumn { get; }
+            public ColumnSourceInfo CorrelatedColumn { get; }
         }
 
         private readonly string? _defaultSchema;
@@ -1183,6 +1198,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 column.IsNestedJson ??= columnInfo.IsNestedJson;
             }
 
+            if (columnInfo.IsIdentity.HasValue)
+            {
+                column.IsIdentity ??= columnInfo.IsIdentity;
+            }
+
             ApplyTypeMetadata(column, columnInfo);
 
             if (aliasInfo.ForceNullableColumns)
@@ -1487,6 +1507,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             var nestedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var aliasHints = new Dictionary<string, TableAliasInfo>(StringComparer.OrdinalIgnoreCase);
             var jsonBindings = new Dictionary<string, JsonPathBinding>(StringComparer.OrdinalIgnoreCase);
+            bool? correlatedSingleRowGuarantee = null;
 
             try
             {
@@ -1524,6 +1545,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                     EnsureUniqueColumnName(nestedColumn, nestedNames);
                     column.Columns.Add(nestedColumn);
                 }
+
+                correlatedSingleRowGuarantee = DetermineJsonSingleRowGuarantee(column, query, scope);
             }
             finally
             {
@@ -1592,7 +1615,17 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 column.Columns.Clear();
             }
 
+            if (correlatedSingleRowGuarantee == true)
+            {
+                column.JsonSingleRowGuaranteed ??= true;
+            }
+
             ApplyScalarSubqueryNullability(column, query, flattenedProbe);
+
+            if (column.JsonSingleRowGuaranteed == true)
+            {
+                column.IsNullable = false;
+            }
         }
 
         private static bool ShouldFlattenScalarSubquery(ProcedureResultColumn container, ProcedureResultColumn probe)
@@ -1635,6 +1668,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             QuerySpecification query,
             ProcedureResultColumn? flattenedProbe)
         {
+            if (column.JsonSingleRowGuaranteed == true)
+            {
+                return;
+            }
+
             if (!ScalarSubqueryCanBeRowless(query))
             {
                 return;
@@ -1647,6 +1685,369 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
 
             column.IsNullable = true;
             MarkColumnForcedNullable(column);
+        }
+
+        private bool? DetermineJsonSingleRowGuarantee(
+            ProcedureResultColumn column,
+            QuerySpecification query,
+            Dictionary<string, TableAliasInfo>? localScope)
+        {
+            if (column == null || query == null)
+            {
+                return null;
+            }
+
+            if (column.ReturnsJson != true || column.ReturnsJsonArray != false)
+            {
+                return null;
+            }
+
+            if (!HasFromClauseEntries(query))
+            {
+                if (column.Columns == null || column.Columns.Count == 0)
+                {
+                    LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} has no FROM clause");
+                    return true;
+                }
+
+                var nestedSingleRow = column.Columns.All(nested => nested?.JsonSingleRowGuaranteed == true);
+                if (nestedSingleRow)
+                {
+                    LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} has no FROM clause and nested guarantees satisfied");
+                    return true;
+                }
+
+                LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} lacks nested guarantees despite missing FROM clause");
+                return null;
+            }
+
+            var searchCondition = query.WhereClause?.SearchCondition;
+            if (searchCondition == null)
+            {
+                LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} missing WHERE clause");
+                return null;
+            }
+
+            var correlatedPredicates = new List<CorrelatedPredicate>();
+            if (!TryCollectCorrelatedPredicates(searchCondition, localScope, correlatedPredicates))
+            {
+                LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} predicate collection failed");
+                return null;
+            }
+
+            if (correlatedPredicates.Count == 0)
+            {
+                LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} contains no correlated predicates");
+                return null;
+            }
+
+            if (!ScopeContainsOnlyCorrelatedAliases(localScope, correlatedPredicates))
+            {
+                LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} introduces uncorrelated aliases");
+                return null;
+            }
+
+            foreach (var predicate in correlatedPredicates)
+            {
+                LogVerbose($"[json-guarantee] predicate localIdentity={predicate.LocalColumn?.IsIdentity} correlatedNullable={predicate.CorrelatedColumn?.IsNullable}");
+                if (predicate.LocalColumn?.IsIdentity == true && predicate.CorrelatedColumn?.IsNullable == false)
+                {
+                    continue;
+                }
+
+                LogVerbose("[json-guarantee] predicate requirements not satisfied");
+                return null;
+            }
+
+            LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} single-row guarantee satisfied");
+            return true;
+        }
+
+        private static bool HasFromClauseEntries(QuerySpecification query)
+        {
+            var references = query?.FromClause?.TableReferences;
+            if (references == null || references.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var reference in references)
+            {
+                if (reference != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ScopeContainsOnlyCorrelatedAliases(
+            Dictionary<string, TableAliasInfo>? scope,
+            List<CorrelatedPredicate> correlatedPredicates)
+        {
+            if (scope == null || scope.Count == 0)
+            {
+                return false;
+            }
+
+            if (correlatedPredicates == null || correlatedPredicates.Count == 0)
+            {
+                return false;
+            }
+
+            var distinctEntries = new HashSet<TableAliasInfo>();
+            foreach (var entry in scope.Values)
+            {
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                distinctEntries.Add(entry);
+            }
+
+            if (distinctEntries.Count == 0)
+            {
+                return false;
+            }
+
+            var coveredEntries = new HashSet<TableAliasInfo>();
+            foreach (var predicate in correlatedPredicates)
+            {
+                if (predicate?.LocalColumn == null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(predicate.LocalColumn.Alias)
+                    && scope.TryGetValue(predicate.LocalColumn.Alias!, out var aliasEntry)
+                    && aliasEntry != null)
+                {
+                    coveredEntries.Add(aliasEntry);
+                    continue;
+                }
+
+                var tableKey = BuildTableKey(predicate.LocalColumn.Catalog, predicate.LocalColumn.Schema, predicate.LocalColumn.Table);
+                if (string.IsNullOrWhiteSpace(tableKey))
+                {
+                    continue;
+                }
+
+                foreach (var entry in distinctEntries)
+                {
+                    var entryKey = BuildTableKey(entry.Catalog, entry.Schema, entry.Name);
+                    if (!string.IsNullOrWhiteSpace(entryKey)
+                        && string.Equals(entryKey, tableKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        coveredEntries.Add(entry);
+                    }
+                }
+            }
+
+            return coveredEntries.Count == distinctEntries.Count;
+        }
+
+        private static string? BuildTableKey(string? catalog, string? schema, string? table)
+        {
+            if (string.IsNullOrWhiteSpace(table))
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                return string.Concat(schema, ".", table);
+            }
+
+            if (!string.IsNullOrWhiteSpace(catalog))
+            {
+                return string.Concat(catalog, ".", table);
+            }
+
+            return table;
+        }
+
+        private bool TryCollectCorrelatedPredicates(
+            BooleanExpression? expression,
+            Dictionary<string, TableAliasInfo>? localScope,
+            List<CorrelatedPredicate> correlatedPredicates)
+        {
+            if (expression == null)
+            {
+                return false;
+            }
+
+            switch (expression)
+            {
+                case BooleanBinaryExpression binary when binary.BinaryExpressionType == BooleanBinaryExpressionType.And:
+                    var leftOk = TryCollectCorrelatedPredicates(binary.FirstExpression, localScope, correlatedPredicates);
+                    if (!leftOk)
+                    {
+                        return false;
+                    }
+
+                    return TryCollectCorrelatedPredicates(binary.SecondExpression, localScope, correlatedPredicates);
+                case BooleanBinaryExpression:
+                    return false;
+                case BooleanParenthesisExpression parenthesis:
+                    return parenthesis.Expression != null && TryCollectCorrelatedPredicates(parenthesis.Expression, localScope, correlatedPredicates);
+                case BooleanComparisonExpression comparison:
+                    return AnalyzeBooleanComparison(comparison, localScope, correlatedPredicates);
+                default:
+                    return false;
+            }
+        }
+
+        private bool AnalyzeBooleanComparison(
+            BooleanComparisonExpression comparison,
+            Dictionary<string, TableAliasInfo>? localScope,
+            List<CorrelatedPredicate> correlatedPredicates)
+        {
+            if (comparison == null || comparison.ComparisonType != BooleanComparisonType.Equals)
+            {
+                return false;
+            }
+
+            if (!TryResolveColumnOperand(comparison.FirstExpression, localScope, out var leftMetadata, out var leftIsLocal))
+            {
+                return false;
+            }
+
+            if (!TryResolveColumnOperand(comparison.SecondExpression, localScope, out var rightMetadata, out var rightIsLocal))
+            {
+                return false;
+            }
+
+            if (leftMetadata == null || rightMetadata == null)
+            {
+                return false;
+            }
+
+            if (leftIsLocal && rightIsLocal)
+            {
+                return true;
+            }
+
+            if (leftIsLocal && !rightIsLocal)
+            {
+                correlatedPredicates.Add(new CorrelatedPredicate(leftMetadata, rightMetadata));
+                return true;
+            }
+
+            if (!leftIsLocal && rightIsLocal)
+            {
+                correlatedPredicates.Add(new CorrelatedPredicate(rightMetadata, leftMetadata));
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryResolveColumnOperand(
+            ScalarExpression? expression,
+            Dictionary<string, TableAliasInfo>? localScope,
+            out ColumnSourceInfo? metadata,
+            out bool isLocal)
+        {
+            metadata = null;
+            isLocal = false;
+
+            var normalized = UnwrapScalarExpression(expression);
+            if (normalized is not ColumnReferenceExpression columnRef)
+            {
+                return false;
+            }
+
+            var probe = new ProcedureResultColumn();
+            PopulateColumnReference(probe, columnRef);
+
+            metadata = CreateMetadataFromProbe(probe);
+            if (metadata == null)
+            {
+                return false;
+            }
+
+            isLocal = IsReferenceFromScope(probe, localScope);
+            return true;
+        }
+
+        private static ScalarExpression? UnwrapScalarExpression(ScalarExpression? expression)
+        {
+            return expression switch
+            {
+                ParenthesisExpression parenthesis when parenthesis.Expression != null => UnwrapScalarExpression(parenthesis.Expression),
+                _ => expression
+            };
+        }
+
+        private static bool IsReferenceFromScope(ProcedureResultColumn probe, Dictionary<string, TableAliasInfo>? scope)
+        {
+            if (probe == null)
+            {
+                return false;
+            }
+
+            if (IsAliasInScope(probe.SourceAlias, scope))
+            {
+                return true;
+            }
+
+            if (IsAliasInScope(probe.SourceTable, scope))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsAliasInScope(string? identifier, Dictionary<string, TableAliasInfo>? scope)
+        {
+            if (scope == null || string.IsNullOrWhiteSpace(identifier))
+            {
+                return false;
+            }
+
+            if (scope.ContainsKey(identifier))
+            {
+                return true;
+            }
+
+            foreach (var entry in scope.Values)
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.Name))
+                {
+                    continue;
+                }
+
+                if (string.Equals(entry.Name, identifier, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.Schema))
+                {
+                    var schemaQualified = string.Concat(entry.Schema, ".", entry.Name);
+                    if (string.Equals(schemaQualified, identifier, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.Catalog))
+                {
+                    var catalogQualified = string.IsNullOrWhiteSpace(entry.Schema)
+                        ? string.Concat(entry.Catalog, ".", entry.Name)
+                        : string.Concat(entry.Catalog, ".", entry.Schema, ".", entry.Name);
+
+                    if (string.Equals(catalogQualified, identifier, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static bool ScalarSubqueryCanBeRowless(QuerySpecification query)
@@ -2002,7 +2403,9 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetType = probe.CastTargetType,
                 CastTargetLength = probe.CastTargetLength,
                 CastTargetPrecision = probe.CastTargetPrecision,
-                CastTargetScale = probe.CastTargetScale
+                CastTargetScale = probe.CastTargetScale,
+                IsIdentity = probe.IsIdentity,
+                Alias = probe.SourceAlias
             };
         }
 
@@ -3571,6 +3974,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                                 jsonMetadataUpdated = true;
                             }
 
+                            if (sourceInfo.IsIdentity.HasValue)
+                            {
+                                column.IsIdentity ??= sourceInfo.IsIdentity;
+                            }
+
                             if (!string.IsNullOrWhiteSpace(sourceInfo.SqlTypeName))
                             {
                                 var before = column.SqlTypeName;
@@ -5120,6 +5528,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             }
 
             scope[key] = info;
+            info.Keys.Add(key);
 
             if (IsAliasDebugEnabled())
             {
@@ -5551,7 +5960,9 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetType = source.CastTargetType,
                 CastTargetLength = source.CastTargetLength,
                 CastTargetPrecision = source.CastTargetPrecision,
-                CastTargetScale = source.CastTargetScale
+                CastTargetScale = source.CastTargetScale,
+                IsIdentity = source.IsIdentity,
+                Alias = source.Alias
             };
         }
 
@@ -5607,7 +6018,9 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetType = primary.CastTargetType ?? secondary.CastTargetType,
                 CastTargetLength = primary.CastTargetLength ?? secondary.CastTargetLength,
                 CastTargetPrecision = primary.CastTargetPrecision ?? secondary.CastTargetPrecision,
-                CastTargetScale = primary.CastTargetScale ?? secondary.CastTargetScale
+                CastTargetScale = primary.CastTargetScale ?? secondary.CastTargetScale,
+                IsIdentity = primary.IsIdentity ?? secondary.IsIdentity,
+                Alias = primary.Alias ?? secondary.Alias
             };
         }
 
@@ -6645,7 +7058,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                     Scale = column.Scale,
                     IsNullable = column.IsNullable,
                     UserTypeSchema = userTypeSchema,
-                    UserTypeName = userTypeName
+                    UserTypeName = userTypeName,
+                    IsIdentity = column.IsIdentity
                 };
             }
 
@@ -6681,7 +7095,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                     Scale = column.Scale,
                     IsNullable = column.IsNullable,
                     UserTypeSchema = column.UserTypeSchema,
-                    UserTypeName = column.UserTypeName
+                    UserTypeName = column.UserTypeName,
+                    IsIdentity = column.IsIdentity
                 };
             }
 
