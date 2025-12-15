@@ -1010,6 +1010,37 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             groupNullability[kv.Key] = kv.Value;
                         }
 
+                        void SeedJsonNullability(IEnumerable<JsonFieldNode> nodes)
+                        {
+                            foreach (var node in nodes)
+                            {
+                                if (!string.IsNullOrWhiteSpace(node.Path) && node.IsNullable)
+                                {
+                                    if (groupNullability.TryGetValue(node.Path, out var existing))
+                                    {
+                                        if (!existing)
+                                        {
+                                            groupNullability[node.Path] = true;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        groupNullability[node.Path] = true;
+                                    }
+                                }
+
+                                if (node.Children.Count > 0)
+                                {
+                                    SeedJsonNullability(node.Children);
+                                }
+                            }
+                        }
+
+                        if (rs.JsonStructure is { Count: > 0 } jsonNodes)
+                        {
+                            SeedJsonNullability(jsonNodes);
+                        }
+
                         void TrackGroupNullability(FieldDescriptor field)
                         {
                             var parts = field.Name.Split('.', StringSplitOptions.RemoveEmptyEntries);

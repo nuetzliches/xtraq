@@ -745,7 +745,7 @@ namespace Xtraq.Metadata
 
                             var arrayClr = ComposeArrayClrType(elementClrType!, isNullable);
                             collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), arrayClr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: elementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(elementSqlType) ? null : elementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
-                            jsonBuilder?.RegisterLeaf(fullName, true);
+                            jsonBuilder?.RegisterLeaf(fullName, true, isNullable);
                             return true;
                         }
 
@@ -758,7 +758,7 @@ namespace Xtraq.Metadata
 
                             if (!string.IsNullOrWhiteSpace(fullName))
                             {
-                                jsonBuilder?.RegisterContainer(fullName, returnsJsonArray == true);
+                                jsonBuilder?.RegisterContainer(fullName, returnsJsonArray == true, isNullable);
                             }
 
                             foreach (var child in nestedEl.EnumerateArray())
@@ -773,7 +773,7 @@ namespace Xtraq.Metadata
                             return;
                         }
 
-                        jsonBuilder?.RegisterLeaf(fullName, returnsJsonArray == true);
+                        jsonBuilder?.RegisterLeaf(fullName, returnsJsonArray == true, isNullable);
 
                         collector.Add(new FieldDescriptor(fullName, NamePolicy.Sanitize(fullName), clr, isNullable, sqlType, effectiveMaxLen, FunctionRef: NormalizeSchemaObjectRef(functionRef), DeferredJsonExpansion: deferred, ReturnsJson: returnsJson, ReturnsJsonArray: returnsJsonArray, JsonRootProperty: string.IsNullOrWhiteSpace(jsonRootProperty) ? null : jsonRootProperty, ReturnsUnknownJson: returnsUnknownJson, JsonElementClrType: string.IsNullOrWhiteSpace(jsonElementClrType) ? null : jsonElementClrType, JsonElementSqlType: string.IsNullOrWhiteSpace(jsonElementSqlType) ? null : jsonElementSqlType, JsonIncludeNullValues: includeNullValues, ForcedNullable: forcedNullable));
                     }
@@ -1566,13 +1566,13 @@ namespace Xtraq.Metadata
             private readonly JsonFieldNodeBuilder _root = new(string.Empty, string.Empty);
             private bool _hasNodes;
 
-            public void RegisterContainer(string path, bool isArray)
-                => RegisterPath(path, isArray);
+            public void RegisterContainer(string path, bool isArray, bool isNullable)
+                => RegisterPath(path, isArray, isNullable);
 
-            public void RegisterLeaf(string path, bool isArray)
-                => RegisterPath(path, isArray);
+            public void RegisterLeaf(string path, bool isArray, bool isNullable)
+                => RegisterPath(path, isArray, isNullable);
 
-            private void RegisterPath(string path, bool isArray)
+            private void RegisterPath(string path, bool isArray, bool isNullable)
             {
                 if (string.IsNullOrWhiteSpace(path))
                 {
@@ -1592,9 +1592,16 @@ namespace Xtraq.Metadata
                     var segment = segments[i];
                     currentPath = CombinePath(currentPath, segment);
                     current = current.GetOrAdd(segment, currentPath);
-                    if (i == segments.Length - 1 && isArray)
+                    if (i == segments.Length - 1)
                     {
-                        current.IsArray = true;
+                        if (isArray)
+                        {
+                            current.IsArray = true;
+                        }
+                        if (isNullable)
+                        {
+                            current.IsNullable = true;
+                        }
                     }
                 }
 
@@ -1602,7 +1609,10 @@ namespace Xtraq.Metadata
                 {
                     current.IsArray = true;
                 }
-
+                if (isNullable)
+                {
+                    current.IsNullable = true;
+                }
                 current.HasValue = true;
                 _hasNodes = true;
             }
@@ -1627,7 +1637,7 @@ namespace Xtraq.Metadata
                     .Select(Convert)
                     .ToList();
 
-                return new JsonFieldNode(builder.Name, builder.Path, builder.IsArray, children);
+                return new JsonFieldNode(builder.Name, builder.Path, builder.IsArray, builder.IsNullable, children);
             }
 
             private sealed class JsonFieldNodeBuilder
@@ -1642,6 +1652,7 @@ namespace Xtraq.Metadata
                 public string Path { get; }
                 public bool IsArray { get; set; }
                 public bool HasValue { get; set; }
+                public bool IsNullable { get; set; }
                 public Dictionary<string, JsonFieldNodeBuilder> Children { get; } = new(StringComparer.OrdinalIgnoreCase);
 
                 public JsonFieldNodeBuilder GetOrAdd(string name, string path)

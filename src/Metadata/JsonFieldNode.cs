@@ -9,5 +9,6 @@ public sealed record JsonFieldNode(
     string Name,
     string Path,
     bool IsArray,
+    bool IsNullable,
     IReadOnlyList<JsonFieldNode> Children
 );
