@@ -102,26 +102,26 @@ internal static class ProcedureSnapshotDocumentBuilder
                         effectiveMaxLen ??= resolvedUserType.Value.MaxLength;
                         effectivePrecision ??= resolvedUserType.Value.Precision;
                         effectiveScale ??= resolvedUserType.Value.Scale;
-
-                        if (resolvedUserType.Value.IsNullable == true)
-                        {
-                            isNullable = true;
-                        }
-                        else if (!isNullable && resolvedUserType.Value.IsNullable == false)
-                        {
-                            isNullable = false;
-                        }
                     }
 
                     if (!string.IsNullOrWhiteSpace(userTypeRef))
                     {
+                        bool? effectiveTypeNullability = null;
                         if (userTypeNullable.HasValue)
                         {
-                            isNullable = isNullable || userTypeNullable.Value;
+                            effectiveTypeNullability = userTypeNullable.Value;
                         }
                         else if (resolvedUserType.HasValue && resolvedUserType.Value.IsNullable.HasValue)
                         {
-                            isNullable = isNullable || resolvedUserType.Value.IsNullable!.Value;
+                            effectiveTypeNullability = resolvedUserType.Value.IsNullable!.Value;
+                        }
+
+                        // If sys.parameters reports the parameter as nullable but the underlying alias type is NOT NULL,
+                        // align to the type's nullability. If the parameter is already NOT NULL, keep it NOT NULL
+                        // even if the underlying type allows NULL.
+                        if (effectiveTypeNullability.HasValue && isNullable)
+                        {
+                            isNullable = effectiveTypeNullability.Value;
                         }
                     }
                 }
@@ -180,6 +180,11 @@ internal static class ProcedureSnapshotDocumentBuilder
                     if (!isTableType && !isNullable)
                     {
                         writer.WriteBoolean("IsNullable", true);
+                    }
+
+                    if (input.DefaultValue != null && input.DefaultValue != DBNull.Value)
+                    {
+                        WriteDefaultValue(writer, input.DefaultValue);
                     }
                 }
 
@@ -769,6 +774,71 @@ internal static class ProcedureSnapshotDocumentBuilder
         }
 
         return null;
+    }
+
+    private static void WriteDefaultValue(Utf8JsonWriter writer, object value)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(value);
+
+        switch (value)
+        {
+            case bool boolValue:
+                writer.WriteBoolean("DefaultValue", boolValue);
+                return;
+            case byte byteValue:
+                writer.WriteNumber("DefaultValue", byteValue);
+                return;
+            case sbyte sbyteValue:
+                writer.WriteNumber("DefaultValue", sbyteValue);
+                return;
+            case short shortValue:
+                writer.WriteNumber("DefaultValue", shortValue);
+                return;
+            case ushort ushortValue:
+                writer.WriteNumber("DefaultValue", ushortValue);
+                return;
+            case int intValue:
+                writer.WriteNumber("DefaultValue", intValue);
+                return;
+            case uint uintValue:
+                writer.WriteNumber("DefaultValue", uintValue);
+                return;
+            case long longValue:
+                writer.WriteNumber("DefaultValue", longValue);
+                return;
+            case ulong ulongValue:
+                // Utf8JsonWriter has no ulong overload; emit as decimal when it fits.
+                writer.WriteNumber("DefaultValue", (decimal)ulongValue);
+                return;
+            case float floatValue:
+                writer.WriteNumber("DefaultValue", floatValue);
+                return;
+            case double doubleValue:
+                writer.WriteNumber("DefaultValue", doubleValue);
+                return;
+            case decimal decimalValue:
+                writer.WriteNumber("DefaultValue", decimalValue);
+                return;
+            case string stringValue:
+                writer.WriteString("DefaultValue", stringValue);
+                return;
+            case Guid guidValue:
+                writer.WriteString("DefaultValue", guidValue.ToString("D"));
+                return;
+            case DateTime dateTimeValue:
+                writer.WriteString("DefaultValue", dateTimeValue.ToString("O"));
+                return;
+            case DateTimeOffset dateTimeOffsetValue:
+                writer.WriteString("DefaultValue", dateTimeOffsetValue.ToString("O"));
+                return;
+            case byte[] bytes:
+                writer.WriteString("DefaultValue", Convert.ToBase64String(bytes));
+                return;
+        }
+
+        // Fallback: persist as string (keeps snapshot stable even for uncommon sql_variant mappings).
+        writer.WriteString("DefaultValue", value.ToString());
     }
 
     private static bool LooksLikeBooleanCase(string rawExpression)

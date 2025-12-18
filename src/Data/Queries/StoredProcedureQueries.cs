@@ -110,6 +110,7 @@ internal static class StoredProcedureQueries
     CAST(p.precision AS int) AS precision,
     CAST(p.scale AS int) AS scale,
     CAST(p.has_default_value AS bit) AS has_default_value,
+    p.default_value AS default_value,
     p.parameter_id
 FROM sys.parameters AS p
 INNER JOIN sys.objects AS o ON o.object_id = p.object_id
@@ -194,7 +195,8 @@ LEFT OUTER JOIN sys.schemas AS t1s ON t1s.schema_id = t1.schema_id
                                     CAST(t1.is_nullable AS bit) AS user_type_is_nullable,
                                     CAST(p.precision AS int) AS precision,
                                     CAST(p.scale AS int) AS scale,
-                                    CAST(p.has_default_value AS bit) AS has_default_value
+                                    CAST(p.has_default_value AS bit) AS has_default_value,
+                                    p.default_value AS default_value
                                 FROM sys.parameters AS p
                                 LEFT OUTER JOIN sys.types t ON t.system_type_id = p.system_type_id AND t.user_type_id = p.system_type_id
                                 LEFT OUTER JOIN sys.types AS t1 ON t1.system_type_id = p.system_type_id AND t1.user_type_id = p.user_type_id

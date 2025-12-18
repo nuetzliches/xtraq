@@ -38,4 +38,19 @@ internal sealed class StoredProcedureInputBulk
     public int? UserTypeId { get; set; }
     [SqlFieldName("user_type_schema_name")]
     public string? UserTypeSchemaName { get; set; }
+
+    [SqlFieldName("user_type_is_nullable")]
+    public bool? UserTypeIsNullable { get; set; }
+
+    [SqlFieldName("precision")]
+    public int? Precision { get; set; }
+
+    [SqlFieldName("scale")]
+    public int? Scale { get; set; }
+
+    [SqlFieldName("has_default_value")]
+    public bool HasDefaultValue { get; set; }
+
+    [SqlFieldName("default_value")]
+    public object? DefaultValue { get; set; }
 }

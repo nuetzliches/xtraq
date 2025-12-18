@@ -27,6 +27,9 @@ internal sealed class StoredProcedureInput : Column
     [SqlFieldName("has_default_value")]
     public new bool HasDefaultValue { get; set; }
 
+    [SqlFieldName("default_value")]
+    public object? DefaultValue { get; set; }
+
     [SqlFieldName("base_type_name")]
     public new string? BaseSqlTypeName { get; set; }
 

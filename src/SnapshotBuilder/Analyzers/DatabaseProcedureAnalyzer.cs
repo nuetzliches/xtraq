@@ -121,6 +121,14 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
             return BuildAnalysisResult(descriptor, null, parameters, item.CachedDependencies, item.LastModifiedUtc, snapshotFile, reusedFromCache: false);
         }
 
+        // T-SQL parameter defaults are not reliably exposed via sys.parameters.default_value/has_default_value.
+        // Extract them from the procedure definition instead.
+        var parameterDefaultsFragment = ProcedureModelScriptDomParser.Parse(definition);
+        if (parameterDefaultsFragment != null)
+        {
+            ProcedureModelParameterDefaultAnalyzer.Apply(parameterDefaultsFragment, parameters);
+        }
+
         var procedure = BuildProcedureModel(descriptor, descriptorLabel, definition, options?.Verbose ?? false);
         if (procedure == null)
         {
@@ -671,7 +679,12 @@ internal sealed class DatabaseProcedureAnalyzer : IProcedureAnalyzer
                         IsTableType = parameter.IsTableType,
                         UserTypeName = parameter.UserTypeName,
                         UserTypeId = parameter.UserTypeId,
-                        UserTypeSchemaName = parameter.UserTypeSchemaName
+                        UserTypeSchemaName = parameter.UserTypeSchemaName,
+                        UserTypeIsNullable = parameter.UserTypeIsNullable,
+                        Precision = parameter.Precision,
+                        Scale = parameter.Scale,
+                        HasDefaultValue = parameter.HasDefaultValue,
+                        DefaultValue = parameter.DefaultValue
                     });
                 }
             }

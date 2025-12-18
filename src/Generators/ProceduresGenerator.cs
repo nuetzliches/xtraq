@@ -1975,7 +1975,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
         var nullable = f.IsNullable && !f.ClrType.EndsWith("?") ? true : f.ClrType.EndsWith("?");
         if (nullable)
             return $"r.IsDBNull(r.GetOrdinal(\"{f.Name}\")) ? null : ({f.ClrType})r.{accessor}(r.GetOrdinal(\"{f.Name}\"))";
-        return $"r.{accessor}(r.GetOrdinal(\"{f.Name}\"))";
+
+        // Defensive: SQL metadata can be wrong (e.g., outer joins/APPLY). Avoid throwing on DBNull.
+        // Non-nullable CLR value types fall back to default(T) when DBNull is encountered.
+        return $"r.IsDBNull(r.GetOrdinal(\"{f.Name}\")) ? default({f.ClrType}) : r.{accessor}(r.GetOrdinal(\"{f.Name}\"))";
     }
 
     private static string CastOutputValue(FieldDescriptor f)
@@ -2039,7 +2042,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
         var nullable = f.IsNullable && !f.ClrType.EndsWith("?") ? true : f.ClrType.EndsWith("?");
         if (nullable)
             return $"o{ordinalIndex} < 0 ? {defaultExpr} : (r.IsDBNull(o{ordinalIndex}) ? null : ({f.ClrType})r.{accessor}(o{ordinalIndex}))";
-        return $"o{ordinalIndex} < 0 ? {defaultExpr} : r.{accessor}(o{ordinalIndex})";
+
+        // Defensive: SQL metadata can be wrong (e.g., outer joins/APPLY). Avoid throwing on DBNull.
+        // Non-nullable CLR value types fall back to default(T) when DBNull is encountered.
+        return $"o{ordinalIndex} < 0 ? {defaultExpr} : (r.IsDBNull(o{ordinalIndex}) ? {defaultExpr} : r.{accessor}(o{ordinalIndex}))";
     }
 
     private static string ConvertReaderVariable(string raw)
