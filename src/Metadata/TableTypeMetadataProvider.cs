@@ -68,6 +68,9 @@ public sealed class ColumnInfo
     /// <summary>
     /// Gets or sets a value indicating whether the column is an identity column.</summary>
     public bool IsIdentity { get; init; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the column is uniquely keyed.</summary>
+    public bool IsUniqueKey { get; init; }
 }
 
 /// <summary>
@@ -159,7 +162,8 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                                     MaxLength = resolved?.MaxLength ?? maxLen,
                                     Precision = resolved?.Precision ?? prec,
                                     Scale = resolved?.Scale ?? scale,
-                                    IsIdentity = c.GetPropertyOrDefaultBool("IsIdentity")
+                                    IsIdentity = c.GetPropertyOrDefaultBool("IsIdentity"),
+                                    IsUniqueKey = c.GetPropertyOrDefaultBool("IsUniqueKey")
                                 });
                             }
                         }
@@ -243,7 +247,8 @@ internal sealed class TableTypeMetadataProvider : ITableTypeMetadataProvider
                         MaxLength = resolved?.MaxLength ?? maxLen,
                         Precision = resolved?.Precision ?? prec,
                         Scale = resolved?.Scale ?? scale,
-                        IsIdentity = c.GetPropertyOrDefaultBool("IsIdentity")
+                        IsIdentity = c.GetPropertyOrDefaultBool("IsIdentity"),
+                        IsUniqueKey = c.GetPropertyOrDefaultBool("IsUniqueKey")
                     });
                 }
             }

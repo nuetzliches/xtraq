@@ -282,6 +282,19 @@ internal static class TableQueries
     t.name AS system_type_name,
     IIF(t.name LIKE 'nvarchar%', c.max_length / 2, c.max_length) AS max_length,
     COLUMNPROPERTY(c.object_id, c.name, 'IsIdentity') AS is_identity,
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM {sysCatalogPrefix}.indexes AS ix
+        INNER JOIN {sysCatalogPrefix}.index_columns AS ic ON ic.object_id = ix.object_id AND ic.index_id = ix.index_id
+        WHERE ix.object_id = c.object_id
+          AND ix.is_unique = 1
+          AND ix.is_hypothetical = 0
+          AND ix.is_disabled = 0
+          AND ic.column_id = c.column_id
+          AND ic.key_ordinal > 0
+        GROUP BY ix.index_id
+        HAVING COUNT(*) = 1
+    ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS is_unique_key,
     CASE WHEN c.is_computed = 1 THEN NULL ELSE t1.name END AS user_type_name,
     CASE WHEN c.is_computed = 1 THEN NULL ELSE s1.name END AS user_type_schema_name,
     t.name AS base_type_name,

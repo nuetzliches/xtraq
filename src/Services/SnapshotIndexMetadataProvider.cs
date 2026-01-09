@@ -298,6 +298,16 @@ internal sealed class SnapshotIndexMetadataProvider : ISnapshotIndexMetadataProv
             return true;
         }
 
+        if (!existing.IsIdentity && candidate.IsIdentity)
+        {
+            return true;
+        }
+
+        if (!existing.IsUniqueKey && candidate.IsUniqueKey)
+        {
+            return true;
+        }
+
         return false;
     }
 }

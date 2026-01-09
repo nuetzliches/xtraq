@@ -72,6 +72,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             public int? CastTargetPrecision { get; init; }
             public int? CastTargetScale { get; init; }
             public bool? IsIdentity { get; init; }
+            public bool? IsUniqueKey { get; init; }
             public string? Alias { get; init; }
         }
 
@@ -1203,6 +1204,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 column.IsIdentity ??= columnInfo.IsIdentity;
             }
 
+            if (columnInfo.IsUniqueKey.HasValue)
+            {
+                column.IsUniqueKey ??= columnInfo.IsUniqueKey;
+            }
+
             ApplyTypeMetadata(column, columnInfo);
 
             if (aliasInfo.ForceNullableColumns)
@@ -1749,8 +1755,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
 
             foreach (var predicate in correlatedPredicates)
             {
-                LogVerbose($"[json-guarantee] predicate localIdentity={predicate.LocalColumn?.IsIdentity} correlatedNullable={predicate.CorrelatedColumn?.IsNullable}");
-                if (predicate.LocalColumn?.IsIdentity == true && predicate.CorrelatedColumn?.IsNullable == false)
+                LogVerbose($"[json-guarantee] predicate localIdentity={predicate.LocalColumn?.IsIdentity} localUnique={predicate.LocalColumn?.IsUniqueKey} correlatedNullable={predicate.CorrelatedColumn?.IsNullable}");
+                if (IsSingleRowKeyPredicate(predicate))
                 {
                     continue;
                 }
@@ -1761,6 +1767,17 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
 
             LogVerbose($"[json-guarantee] column={column.Name ?? "<unnamed>"} single-row guarantee satisfied");
             return true;
+        }
+
+        private static bool IsSingleRowKeyPredicate(CorrelatedPredicate predicate)
+        {
+            if (predicate?.CorrelatedColumn?.IsNullable != false)
+            {
+                return false;
+            }
+
+            return predicate.LocalColumn?.IsIdentity == true
+                || predicate.LocalColumn?.IsUniqueKey == true;
         }
 
         private static bool HasFromClauseEntries(QuerySpecification query)
@@ -2405,6 +2422,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetPrecision = probe.CastTargetPrecision,
                 CastTargetScale = probe.CastTargetScale,
                 IsIdentity = probe.IsIdentity,
+                IsUniqueKey = probe.IsUniqueKey,
                 Alias = probe.SourceAlias
             };
         }
@@ -2698,6 +2716,16 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             if (metadata.IsNullable.HasValue)
             {
                 column.IsNullable ??= metadata.IsNullable;
+            }
+
+            if (metadata.IsIdentity.HasValue)
+            {
+                column.IsIdentity ??= metadata.IsIdentity;
+            }
+
+            if (metadata.IsUniqueKey.HasValue)
+            {
+                column.IsUniqueKey ??= metadata.IsUniqueKey;
             }
 
             if (!string.IsNullOrWhiteSpace(metadata.UserTypeSchema))
@@ -3979,6 +4007,11 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                                 column.IsIdentity ??= sourceInfo.IsIdentity;
                             }
 
+                            if (sourceInfo.IsUniqueKey.HasValue)
+                            {
+                                column.IsUniqueKey ??= sourceInfo.IsUniqueKey;
+                            }
+
                             if (!string.IsNullOrWhiteSpace(sourceInfo.SqlTypeName))
                             {
                                 var before = column.SqlTypeName;
@@ -4567,6 +4600,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetScale = source.CastTargetScale,
                 MaxLength = source.MaxLength,
                 IsNullable = source.IsNullable,
+                IsIdentity = source.IsIdentity,
+                IsUniqueKey = source.IsUniqueKey,
                 UserTypeCatalogName = source.UserTypeCatalogName,
                 UserTypeSchemaName = source.UserTypeSchemaName,
                 UserTypeName = source.UserTypeName,
@@ -4866,6 +4901,16 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
             if (probe.IsNullable.HasValue)
             {
                 column.IsNullable ??= probe.IsNullable;
+            }
+
+            if (probe.IsIdentity.HasValue)
+            {
+                column.IsIdentity ??= probe.IsIdentity;
+            }
+
+            if (probe.IsUniqueKey.HasValue)
+            {
+                column.IsUniqueKey ??= probe.IsUniqueKey;
             }
 
             if (!string.IsNullOrWhiteSpace(probe.UserTypeSchemaName))
@@ -5962,6 +6007,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetPrecision = source.CastTargetPrecision,
                 CastTargetScale = source.CastTargetScale,
                 IsIdentity = source.IsIdentity,
+                IsUniqueKey = source.IsUniqueKey,
                 Alias = source.Alias
             };
         }
@@ -6020,6 +6066,7 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetPrecision = primary.CastTargetPrecision ?? secondary.CastTargetPrecision,
                 CastTargetScale = primary.CastTargetScale ?? secondary.CastTargetScale,
                 IsIdentity = primary.IsIdentity ?? secondary.IsIdentity,
+                IsUniqueKey = primary.IsUniqueKey ?? secondary.IsUniqueKey,
                 Alias = primary.Alias ?? secondary.Alias
             };
         }
@@ -6527,7 +6574,9 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                 CastTargetType = column.CastTargetType,
                 CastTargetLength = column.CastTargetLength,
                 CastTargetPrecision = column.CastTargetPrecision,
-                CastTargetScale = column.CastTargetScale
+                CastTargetScale = column.CastTargetScale,
+                IsIdentity = column.IsIdentity,
+                IsUniqueKey = column.IsUniqueKey
             };
         }
         private static void ApplyTypeMetadata(ProcedureResultColumn column, ColumnSourceInfo sourceInfo)
@@ -7059,7 +7108,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                     IsNullable = column.IsNullable,
                     UserTypeSchema = userTypeSchema,
                     UserTypeName = userTypeName,
-                    IsIdentity = column.IsIdentity
+                    IsIdentity = column.IsIdentity,
+                    IsUniqueKey = column.IsUniqueKey
                 };
             }
 
@@ -7096,7 +7146,8 @@ internal sealed class ProcedureModelScriptDomBuilder : IProcedureAstBuilder
                     IsNullable = column.IsNullable,
                     UserTypeSchema = column.UserTypeSchema,
                     UserTypeName = column.UserTypeName,
-                    IsIdentity = column.IsIdentity
+                    IsIdentity = column.IsIdentity,
+                    IsUniqueKey = column.IsUniqueKey
                 };
             }
 

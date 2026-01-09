@@ -291,17 +291,39 @@ internal static class ParameterBindingEngine
         }
         else if (value is IEnumerable<SqlDataRecord> records)
         {
-            parameter.Value = records;
+            parameter.Value = NormalizeRecords(records);
         }
         else
         {
-            parameter.Value = TvpHelper.BuildRecords(value) ?? Array.Empty<SqlDataRecord>();
+            parameter.Value = TvpHelper.BuildRecords(value);
         }
 
         if (sqlParam is not null)
         {
             sqlParam.SqlDbType = SqlDbType.Structured;
         }
+    }
+
+    private static IEnumerable<SqlDataRecord>? NormalizeRecords(IEnumerable<SqlDataRecord> records)
+    {
+        if (records is ICollection<SqlDataRecord> collection)
+        {
+            return collection.Count == 0 ? null : records;
+        }
+
+        using var enumerator = records.GetEnumerator();
+        if (!enumerator.MoveNext())
+        {
+            return null;
+        }
+
+        var list = new List<SqlDataRecord> { enumerator.Current };
+        while (enumerator.MoveNext())
+        {
+            list.Add(enumerator.Current);
+        }
+
+        return list;
     }
 
     private static string NormalizeProcedureName(string? name)
@@ -619,7 +641,8 @@ internal static class ProcedureExecutor
             var duration = DateTime.UtcNow - start;
             try
             {
-                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, ex.Message, duration, null, ct).ConfigureAwait(false);
+                var message = TryBuildSqlParameterNotSuppliedHint(plan.Name, cmd, ex) ?? ex.Message;
+                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, message, duration, null, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -723,7 +746,8 @@ internal static class ProcedureExecutor
             var duration = DateTime.UtcNow - start;
             try
             {
-                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, ex.Message, duration, null, ct).ConfigureAwait(false);
+                var message = TryBuildSqlParameterNotSuppliedHint(plan.Name, cmd, ex) ?? ex.Message;
+                await NotifyAfterAsync(interceptors, plan.Name, cmd, false, message, duration, null, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -732,6 +756,85 @@ internal static class ProcedureExecutor
 
             throw;
         }
+    }
+
+    private static string? TryBuildSqlParameterNotSuppliedHint(string procedureName, DbCommand command, Exception exception)
+    {
+        if (exception is not SqlException sqlEx)
+        {
+            return null;
+        }
+
+        // 201: "Procedure or function 'X' expects parameter '@Y', which was not supplied."
+        if (sqlEx.Number != 201)
+        {
+            return null;
+        }
+
+        var raw = sqlEx.Message;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var atIndex = raw.IndexOf("parameter '@", StringComparison.OrdinalIgnoreCase);
+        if (atIndex < 0)
+        {
+            return null;
+        }
+
+        var start = atIndex + "parameter '@".Length;
+        if (start >= raw.Length)
+        {
+            return null;
+        }
+
+        var end = raw.IndexOf("'", start, StringComparison.Ordinal);
+        if (end <= start)
+        {
+            return null;
+        }
+
+        var expected = raw.Substring(start, end - start);
+        if (string.IsNullOrWhiteSpace(expected))
+        {
+            return null;
+        }
+
+        bool contains = false;
+        var suppliedNames = new List<string>();
+        try
+        {
+            foreach (DbParameter p in command.Parameters)
+            {
+                var name = p.ParameterName ?? string.Empty;
+                var normalized = name.TrimStart('@');
+                if (normalized.Equals(expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    contains = true;
+                }
+
+                if (p.Value is not null && p.Value != DBNull.Value)
+                {
+                    suppliedNames.Add(name);
+                }
+            }
+        }
+        catch
+        {
+            // If anything goes wrong, don't interfere with the original exception.
+            return null;
+        }
+
+        if (contains)
+        {
+            // If the parameter exists on the command, the SQL error is unexpected.
+            // This can happen when a different procedure is invoked (e.g., dynamic SQL / different schema).
+            return raw + " (Hinweis: Der Parameter ist im DbCommand vorhanden. Prüfe, ob tatsächlich die erwartete Prozedur ausgeführt wird bzw. ob dynamisches SQL eine andere Signatur verwendet.)";
+        }
+
+        var supplied = suppliedNames.Count == 0 ? "(keine)" : string.Join(", ", suppliedNames);
+        return raw + $" (Hinweis: '@{expected}' wurde nicht an den DbCommand gebunden. Das deutet meist auf veraltete generierte Artefakte/Snapshots hin oder darauf, dass der Parameter in der generierten Plan-Definition fehlt. Gebundene Parameter: {supplied}.)";
     }
 
     private static async Task<List<(IXtraqProcedureInterceptor Interceptor, object? State)>?> InvokeBeforeAsync(
@@ -833,7 +936,7 @@ internal static class TvpHelper
     // Converts a single record or enumerable of records into SqlDataRecord collection for TVP binding.
     public static IEnumerable<SqlDataRecord>? BuildRecords(object? value)
     {
-        if (value == null) return Array.Empty<SqlDataRecord>();
+        if (value == null) return null;
         var list = value as System.Collections.IEnumerable;
         if (list == null)
         {
@@ -851,7 +954,7 @@ internal static class TvpHelper
                 break;
             }
         }
-        if (first == null) return Array.Empty<SqlDataRecord>(); // empty -> no rows
+        if (first == null) return null; // empty -> no rows
         var rowType = first.GetType();
         var properties = rowType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var meta = new List<SqlMetaData>();

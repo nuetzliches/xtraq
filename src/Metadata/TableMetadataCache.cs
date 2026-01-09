@@ -203,7 +203,8 @@ internal sealed class TableMetadataCache : ITableMetadataCache
                     MaxLength = resolved?.MaxLength ?? maxLen,
                     Precision = resolved?.Precision ?? precision,
                     Scale = resolved?.Scale ?? scale,
-                    IsIdentity = column.GetPropertyOrDefaultBool("IsIdentity")
+                    IsIdentity = column.GetPropertyOrDefaultBool("IsIdentity"),
+                    IsUniqueKey = column.GetPropertyOrDefaultBool("IsUniqueKey")
                 });
             }
         }

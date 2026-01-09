@@ -2027,6 +2027,11 @@ internal sealed class SchemaArtifactWriter
                     writer.WriteBoolean("IsIdentity", true);
                 }
 
+                if (column.IsUniqueKey)
+                {
+                    writer.WriteBoolean("IsUniqueKey", true);
+                }
+
                 if (column.HasDefaultValue)
                 {
                     writer.WriteBoolean("HasDefaultValue", true);

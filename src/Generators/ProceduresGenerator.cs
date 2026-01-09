@@ -1700,10 +1700,10 @@ internal sealed class ProceduresGenerator : GeneratorBase
                             var typeNameLiteral = (ip.SqlTypeName ?? ip.Name).Replace("\"", "\\\"", StringComparison.Ordinal);
                             if (ip.IsNullable)
                             {
-                                return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; if (source != null) {{ var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; }} else {{ prm.Value = DBNull.Value; }} if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
+                                return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; if (source != null) {{ var tvp = TvpHelper.BuildRecords(source); prm.Value = tvp; }} else {{ prm.Value = null; }} if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
                             }
 
-                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; var tvp = TvpHelper.BuildRecords(source) ?? Array.Empty<Microsoft.Data.SqlClient.Server.SqlDataRecord>(); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
+                            return $"{{ var prm = cmd.Parameters[\"@{ip.Name}\"]; var source = input.{ip.PropertyName}; var tvp = TvpHelper.BuildRecords(source); prm.Value = tvp; if (prm is Microsoft.Data.SqlClient.SqlParameter sp) {{ sp.SqlDbType = System.Data.SqlDbType.Structured; sp.TypeName ??= \"{typeNameLiteral}\"; }} }}";
                         }
                         var valueExpr = ip.IsNullable ? $"(object?)input.{ip.PropertyName} ?? DBNull.Value" : $"input.{ip.PropertyName}";
                         return $"cmd.Parameters[\"@{ip.Name}\"].Value = {valueExpr};";

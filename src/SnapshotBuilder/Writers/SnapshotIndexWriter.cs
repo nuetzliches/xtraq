@@ -334,6 +334,7 @@ internal sealed class SnapshotIndexWriter
                 IsNullable = column.IsNullable ?? false,
                 ForcedNullable = column.ForcedNullable == true,
                 IsIdentity = column.IsIdentity == true,
+                IsUniqueKey = column.IsUniqueKey == true,
                 MaxLength = column.MaxLength ?? column.CastTargetLength,
                 Precision = column.CastTargetPrecision,
                 Scale = column.CastTargetScale,

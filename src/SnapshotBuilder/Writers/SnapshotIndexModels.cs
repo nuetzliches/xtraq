@@ -100,6 +100,7 @@ internal sealed class IndexColumnEntry
     public bool IsNullable { get; set; }
     public bool ForcedNullable { get; set; }
     public bool IsIdentity { get; set; }
+    public bool IsUniqueKey { get; set; }
     public int? MaxLength { get; set; }
     public int? Precision { get; set; }
     public int? Scale { get; set; }

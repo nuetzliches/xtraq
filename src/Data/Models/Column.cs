@@ -28,6 +28,9 @@ internal class Column
     [SqlFieldName("is_identity")]
     public int? IsIdentityRaw { get; set; }
 
+    [SqlFieldName("is_unique_key")]
+    public bool IsUniqueKey { get; set; }
+
     [SqlFieldName("user_type_name")]
     public string? UserTypeName { get; set; }
 

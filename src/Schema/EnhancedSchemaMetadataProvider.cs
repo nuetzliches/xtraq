@@ -62,6 +62,7 @@ internal sealed class ColumnMetadata
     public bool IsColumnSet { get; init; }
     public string? GeneratedAlwaysType { get; init; }
     public bool? IsIdentity { get; init; }
+    public bool? IsUniqueKey { get; init; }
 }
 
 /// <summary>
@@ -139,7 +140,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             if (indexColumn != null)
             {
                 _console.Verbose($"[enhanced-schema] Resolved {schema}.{tableName}.{columnName} from snapshot index");
-                return MapIndexColumn(indexColumn, columnName);
+                var mapped = MapIndexColumn(indexColumn, columnName);
+                return await EnrichIndexColumnWithLiveAsync(mapped, schema, tableName, columnName, catalog, cancellationToken).ConfigureAwait(false);
             }
 
             var indexColumns = await _snapshotIndexProvider.GetTableColumnsMetadataAsync(schema, tableName, cancellationToken).ConfigureAwait(false);
@@ -152,7 +154,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             if (fallback != null)
             {
                 _console.Verbose($"[enhanced-schema] Resolved {schema}.{tableName}.{columnName} from snapshot index (table scan)");
-                return MapIndexColumn(fallback, columnName);
+                var mapped = MapIndexColumn(fallback, columnName);
+                return await EnrichIndexColumnWithLiveAsync(mapped, schema, tableName, columnName, catalog, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -197,7 +200,7 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         var indexColumns = await LoadColumnsFromSnapshotIndexAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
         if (indexColumns.Count > 0)
         {
-            return indexColumns;
+            return await EnrichIndexColumnsWithLiveAsync(indexColumns, schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
         }
 
         return await LoadColumnsFromLiveFallbacksAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
@@ -242,6 +245,129 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
         }
 
         return Array.Empty<ColumnMetadata>();
+    }
+
+    private async Task<ColumnMetadata> EnrichIndexColumnWithLiveAsync(
+        ColumnMetadata indexColumn,
+        string schema,
+        string tableName,
+        string columnName,
+        string? catalog,
+        CancellationToken cancellationToken)
+    {
+        if (_dbContext == null)
+        {
+            return indexColumn;
+        }
+
+        var liveColumn = await ResolveFromDatabaseAsync(schema, tableName, columnName, catalog, cancellationToken).ConfigureAwait(false);
+        if (liveColumn == null)
+        {
+            return indexColumn;
+        }
+
+        return MergeIndexAndLive(indexColumn, liveColumn);
+    }
+
+    private async Task<IReadOnlyList<ColumnMetadata>> EnrichIndexColumnsWithLiveAsync(
+        IReadOnlyList<ColumnMetadata> indexColumns,
+        string schema,
+        string tableName,
+        string? catalog,
+        CancellationToken cancellationToken)
+    {
+        if (_dbContext == null)
+        {
+            return indexColumns;
+        }
+
+        var liveColumns = await GetTableColumnsFromLiveSourcesAsync(schema, tableName, catalog, cancellationToken).ConfigureAwait(false);
+        if (liveColumns.Count == 0)
+        {
+            return indexColumns;
+        }
+
+        var liveMap = new Dictionary<string, ColumnMetadata>(StringComparer.OrdinalIgnoreCase);
+        foreach (var live in liveColumns)
+        {
+            if (live != null && !string.IsNullOrWhiteSpace(live.Name))
+            {
+                liveMap[live.Name] = live;
+            }
+        }
+
+        var merged = new List<ColumnMetadata>(Math.Max(indexColumns.Count, liveMap.Count));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var indexColumn in indexColumns)
+        {
+            if (indexColumn == null || string.IsNullOrWhiteSpace(indexColumn.Name))
+            {
+                continue;
+            }
+
+            if (liveMap.TryGetValue(indexColumn.Name, out var live))
+            {
+                merged.Add(MergeIndexAndLive(indexColumn, live));
+            }
+            else
+            {
+                merged.Add(indexColumn);
+            }
+
+            seen.Add(indexColumn.Name);
+        }
+
+        foreach (var live in liveMap.Values)
+        {
+            if (live == null || string.IsNullOrWhiteSpace(live.Name) || seen.Contains(live.Name))
+            {
+                continue;
+            }
+
+            merged.Add(live);
+        }
+
+        _console.Verbose($"[enhanced-schema] Merged {indexColumns.Count} snapshot index column(s) with {liveMap.Count} live column(s) for {schema}.{tableName}");
+        return merged;
+    }
+
+    private static ColumnMetadata MergeIndexAndLive(ColumnMetadata indexColumn, ColumnMetadata liveColumn)
+    {
+        var name = !string.IsNullOrWhiteSpace(indexColumn.Name) ? indexColumn.Name : liveColumn.Name;
+        var sqlTypeName = !string.IsNullOrWhiteSpace(indexColumn.SqlTypeName) ? indexColumn.SqlTypeName : liveColumn.SqlTypeName;
+        var maxLength = indexColumn.MaxLength ?? liveColumn.MaxLength;
+        var precision = indexColumn.Precision ?? liveColumn.Precision;
+        var scale = indexColumn.Scale ?? liveColumn.Scale;
+        var userTypeSchema = indexColumn.UserTypeSchema ?? liveColumn.UserTypeSchema;
+        var userTypeName = indexColumn.UserTypeName ?? liveColumn.UserTypeName;
+
+        return new ColumnMetadata
+        {
+            Name = name ?? string.Empty,
+            Catalog = liveColumn.Catalog ?? indexColumn.Catalog,
+            SqlTypeName = sqlTypeName ?? string.Empty,
+            IsNullable = liveColumn.IsNullable,
+            MaxLength = maxLength,
+            Precision = precision,
+            Scale = scale,
+            UserTypeSchema = userTypeSchema,
+            UserTypeName = userTypeName,
+            IsFromSnapshot = false,
+            HasDefaultValue = liveColumn.HasDefaultValue,
+            DefaultDefinition = liveColumn.DefaultDefinition,
+            DefaultConstraintName = liveColumn.DefaultConstraintName,
+            IsComputed = liveColumn.IsComputed,
+            ComputedDefinition = liveColumn.ComputedDefinition,
+            IsComputedPersisted = liveColumn.IsComputedPersisted,
+            IsRowGuid = liveColumn.IsRowGuid,
+            IsSparse = liveColumn.IsSparse,
+            IsHidden = liveColumn.IsHidden,
+            IsColumnSet = liveColumn.IsColumnSet,
+            GeneratedAlwaysType = liveColumn.GeneratedAlwaysType,
+            IsIdentity = liveColumn.IsIdentity ?? indexColumn.IsIdentity,
+            IsUniqueKey = liveColumn.IsUniqueKey ?? indexColumn.IsUniqueKey
+        };
     }
 
     private async Task<IReadOnlyList<ColumnMetadata>> LoadColumnsFromLiveFallbacksAsync(string schema, string tableName, string? catalog, CancellationToken cancellationToken)
@@ -403,7 +529,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             IsHidden = column.IsHidden == true,
             IsColumnSet = column.IsColumnSet == true,
             GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType),
-            IsIdentity = column.IsIdentity == true
+            IsIdentity = column.IsIdentity == true,
+            IsUniqueKey = column.IsUniqueKey == true
         };
     }
 
@@ -463,7 +590,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             IsHidden = column.IsHidden,
             IsColumnSet = column.IsColumnSet,
             GeneratedAlwaysType = NormalizeGeneratedAlwaysType(column.GeneratedAlwaysType),
-            IsIdentity = isIdentity
+            IsIdentity = isIdentity,
+            IsUniqueKey = column.IsUniqueKey
         };
     }
 
@@ -485,7 +613,8 @@ internal sealed class EnhancedSchemaMetadataProvider : IEnhancedSchemaMetadataPr
             UserTypeSchema = userTypeSchema,
             UserTypeName = userTypeName,
             IsFromSnapshot = true,
-            IsIdentity = column.IsIdentity
+            IsIdentity = column.IsIdentity,
+            IsUniqueKey = column.IsUniqueKey
         };
     }
 

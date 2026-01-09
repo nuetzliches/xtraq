@@ -407,6 +407,7 @@ internal sealed class SchemaSnapshotService : ISchemaSnapshotService
                 FormatNumeric(column.Precision),
                 FormatNumeric(column.Scale),
                 FormatBool(column.IsIdentity),
+                FormatBool(column.IsUniqueKey),
                 FormatBool(column.HasDefaultValue),
                 NormalizeExpression(column.DefaultDefinition),
                 NormalizeDescriptor(column.DefaultConstraintName),
@@ -722,6 +723,7 @@ internal sealed class SnapshotTableColumn
     public bool? IsNullable { get; set; } // false values are pruned during persistence to match other models (writer implementation pending)
     public int? MaxLength { get; set; } // null when the length is zero or not applicable
     public bool? IsIdentity { get; set; } // persist true only
+    public bool? IsUniqueKey { get; set; } // persist true only
     public int? Precision { get; set; }
     public int? Scale { get; set; }
     public bool? HasDefaultValue { get; set; }

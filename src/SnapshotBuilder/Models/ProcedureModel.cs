@@ -239,6 +239,11 @@ internal sealed class ProcedureResultColumn
     public bool? IsIdentity { get; set; }
 
     /// <summary>
+    /// Indicates whether the source column is part of a single-column unique key (primary or unique index).
+    /// </summary>
+    public bool? IsUniqueKey { get; set; }
+
+    /// <summary>
     /// Nested columns when this column contains structured data (e.g., user-defined table types).
     /// </summary>
     public List<ProcedureResultColumn> Columns { get; } = new();

@@ -393,6 +393,7 @@ internal sealed class SchemaSnapshotFileLayoutService
                 }
                 if (c.IsNullable == false) c.IsNullable = null;
                 if (c.IsIdentity == false) c.IsIdentity = null;
+                if (c.IsUniqueKey == false) c.IsUniqueKey = null;
                 if (c.MaxLength.HasValue && c.MaxLength.Value == 0) c.MaxLength = null;
                 if (c.Precision.HasValue && c.Precision.Value == 0) c.Precision = null;
                 if (c.Scale.HasValue && c.Scale.Value == 0) c.Scale = null;
