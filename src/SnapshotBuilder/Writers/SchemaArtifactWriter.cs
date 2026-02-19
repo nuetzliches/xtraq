@@ -199,6 +199,7 @@ internal sealed class SchemaArtifactWriter
         var tableTypeRoot = Path.Combine(schemaRoot, "tabletypes");
         Directory.CreateDirectory(tableTypeRoot);
         var validTableTypeFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var requiredTableTypeIdentities = BuildTableTypeIdentitySet(requiredTableTypeRefs);
 
         foreach (var tableTypeMetadata in tableTypes ?? Array.Empty<TableTypeMetadata>())
         {
@@ -214,8 +215,10 @@ internal sealed class SchemaArtifactWriter
                 continue;
             }
 
-            var tableTypeKey = SnapshotWriterUtilities.BuildKey(tableType.SchemaName ?? string.Empty, tableType.Name ?? string.Empty);
-            // Emit all table types from the selected schemas; dependency filter can be too restrictive for cross-schema references.
+            if (!ShouldEmitTableTypeArtifact(dependencyFilter, requiredTableTypeIdentities, tableType.SchemaName, tableType.Name))
+            {
+                continue;
+            }
 
             var columns = tableTypeMetadata.Columns ?? Array.Empty<Column>();
             var jsonBytes = BuildTableTypeJson(tableType, columns, requiredTypeRefs);
@@ -241,7 +244,7 @@ internal sealed class SchemaArtifactWriter
             });
         }
 
-        PruneExtraneousFiles(tableTypeRoot, validTableTypeFiles, tableTypeSchemas);
+        PruneExtraneousFiles(tableTypeRoot, validTableTypeFiles);
 
         var scalarTypes = new List<UserDefinedTypeRow>();
         try
@@ -480,6 +483,52 @@ internal sealed class SchemaArtifactWriter
         }
 
         return result;
+    }
+
+    private static HashSet<string> BuildTableTypeIdentitySet(ISet<string>? requiredTableTypeRefs)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (requiredTableTypeRefs == null || requiredTableTypeRefs.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var typeRef in requiredTableTypeRefs)
+        {
+            if (string.IsNullOrWhiteSpace(typeRef))
+            {
+                continue;
+            }
+
+            var (_, schema, name) = TableTypeRefFormatter.Split(typeRef);
+            if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            result.Add(SnapshotWriterUtilities.BuildKey(schema!, name!));
+        }
+
+        return result;
+    }
+
+    private static bool ShouldEmitTableTypeArtifact(
+        SchemaDependencyFilter dependencyFilter,
+        ISet<string> requiredTableTypeIdentities,
+        string? schema,
+        string? name)
+    {
+        if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        if (dependencyFilter.ShouldEmitTableType(null, schema, name))
+        {
+            return true;
+        }
+
+        return requiredTableTypeIdentities.Contains(SnapshotWriterUtilities.BuildKey(schema, name));
     }
 
     private static HashSet<string> CollectTableTypeSchemas(IReadOnlyList<ProcedureAnalysisResult>? procedures)

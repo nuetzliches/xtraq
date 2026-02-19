@@ -84,4 +84,76 @@ public sealed class BuildSchemaAllowListTests
             "shared.AuditLogEntryTableType"
         }, normalized);
     }
+
+    [Fact]
+    public void CollectRequiredTableTypeReferences_WhenProcedureWrapsForeignSchema_IncludesTransitiveTableTypes()
+    {
+        var procedures = new List<ProcedureDescriptor>
+        {
+            new(
+                ProcedureName: "EntryPoint",
+                Schema: "acquisition",
+                OperationName: "EntryPoint",
+                InputParameters: Array.Empty<FieldDescriptor>(),
+                OutputFields: Array.Empty<FieldDescriptor>(),
+                ResultSets: new[]
+                {
+                    new ResultSetDescriptor(
+                        Index: 0,
+                        Name: "ResultSet1",
+                        Fields: Array.Empty<FieldDescriptor>(),
+                        ProcedureRef: "core.InnerOperation")
+                },
+                TableTypeParameters: Array.Empty<TableTypeParameterDescriptor>()
+            ),
+            new(
+                ProcedureName: "InnerOperation",
+                Schema: "core",
+                OperationName: "InnerOperation",
+                InputParameters: Array.Empty<FieldDescriptor>(),
+                OutputFields: Array.Empty<FieldDescriptor>(),
+                ResultSets: Array.Empty<ResultSetDescriptor>(),
+                TableTypeParameters: new[]
+                {
+                    new TableTypeParameterDescriptor(
+                        ParameterName: "Payload",
+                        TableTypeSchema: "calendar",
+                        TableTypeName: "HolidayType",
+                        NormalizedTypeReference: "calendar.HolidayType")
+                }
+            ),
+            new(
+                ProcedureName: "Unrelated",
+                Schema: "admin",
+                OperationName: "Unrelated",
+                InputParameters: Array.Empty<FieldDescriptor>(),
+                OutputFields: Array.Empty<FieldDescriptor>(),
+                ResultSets: Array.Empty<ResultSetDescriptor>(),
+                TableTypeParameters: new[]
+                {
+                    new TableTypeParameterDescriptor(
+                        ParameterName: "Payload",
+                        TableTypeSchema: "admin",
+                        TableTypeName: "AdminAuditType",
+                        NormalizedTypeReference: "admin.AdminAuditType")
+                }
+            )
+        };
+
+        var allowList = new[] { "acquisition" };
+
+        var method = typeof(Xtraq.Runtime.XtraqCliRuntime)
+            .GetMethod("CollectRequiredTableTypeReferences", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var result = method!.Invoke(null, new object?[] { procedures, allowList })
+            as HashSet<string> ?? throw new InvalidOperationException("Invocation returned null");
+
+        var normalized = result.OrderBy(static entry => entry, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        Assert.Equal(new[]
+        {
+            "calendar.HolidayType"
+        }, normalized);
+    }
 }

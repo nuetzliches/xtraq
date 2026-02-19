@@ -1084,60 +1084,294 @@ internal sealed class XtraqCliRuntime(
         IEnumerable<ProcedureDescriptor> procedures,
         IReadOnlyList<string> allowedSchemas)
     {
+        var allProcedures = procedures?.ToArray() ?? Array.Empty<ProcedureDescriptor>();
         HashSet<string>? schemaFilter = allowedSchemas.Count > 0
             ? new HashSet<string>(allowedSchemas, StringComparer.OrdinalIgnoreCase)
             : null;
 
         var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (allProcedures.Length == 0)
+        {
+            return required;
+        }
 
-        foreach (var procedure in procedures)
+        var proceduresByKey = BuildProcedureLookup(allProcedures);
+        var proceduresByName = BuildUniqueProcedureNameLookup(allProcedures);
+        var queue = new Queue<ProcedureDescriptor>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var procedure in allProcedures)
         {
             if (schemaFilter is { Count: > 0 } && !schemaFilter.Contains(procedure.Schema))
             {
                 continue;
             }
 
-            if (procedure.TableTypeParameters.Count == 0)
-            {
-                continue;
-            }
+            EnqueueProcedure(queue, visited, procedure);
+        }
 
-            foreach (var parameter in procedure.TableTypeParameters)
+        while (queue.Count > 0)
+        {
+            var procedure = queue.Dequeue();
+            CollectDirectTableTypeReferences(required, procedure);
+
+            foreach (var reference in EnumerateProcedureReferences(procedure))
             {
-                if (string.IsNullOrWhiteSpace(parameter.TableTypeName))
+                if (!TryResolveProcedureReference(proceduresByKey, proceduresByName, reference, procedure.Schema, out var referencedProcedure))
                 {
                     continue;
                 }
 
-                var candidates = new List<string?>
-                {
-                    parameter.NormalizedTypeReference,
-                    TableTypeRefFormatter.Combine(parameter.TableTypeCatalog, parameter.TableTypeSchema, parameter.TableTypeName)
-                };
-
-                if (!string.IsNullOrWhiteSpace(parameter.TableTypeSchema))
-                {
-                    candidates.Add(TableTypeRefFormatter.Combine(parameter.TableTypeSchema, parameter.TableTypeName));
-                }
-                else
-                {
-                    candidates.Add(TableTypeRefFormatter.Combine(procedure.Schema, parameter.TableTypeName));
-                }
-
-                var anyAdded = false;
-                foreach (var candidate in candidates)
-                {
-                    anyAdded |= AddTableTypeReference(required, candidate);
-                }
-
-                if (!anyAdded)
-                {
-                    AddTableTypeReference(required, parameter.TableTypeName);
-                }
+                EnqueueProcedure(queue, visited, referencedProcedure);
             }
         }
 
         return required;
+    }
+
+    private static void CollectDirectTableTypeReferences(ISet<string> required, ProcedureDescriptor procedure)
+    {
+        if (required == null || procedure == null || procedure.TableTypeParameters.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var parameter in procedure.TableTypeParameters)
+        {
+            if (string.IsNullOrWhiteSpace(parameter.TableTypeName))
+            {
+                continue;
+            }
+
+            var candidates = new List<string?>
+            {
+                parameter.NormalizedTypeReference,
+                TableTypeRefFormatter.Combine(parameter.TableTypeCatalog, parameter.TableTypeSchema, parameter.TableTypeName)
+            };
+
+            if (!string.IsNullOrWhiteSpace(parameter.TableTypeSchema))
+            {
+                candidates.Add(TableTypeRefFormatter.Combine(parameter.TableTypeSchema, parameter.TableTypeName));
+            }
+            else
+            {
+                candidates.Add(TableTypeRefFormatter.Combine(procedure.Schema, parameter.TableTypeName));
+            }
+
+            var anyAdded = false;
+            foreach (var candidate in candidates)
+            {
+                anyAdded |= AddTableTypeReference(required, candidate);
+            }
+
+            if (!anyAdded)
+            {
+                AddTableTypeReference(required, parameter.TableTypeName);
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateProcedureReferences(ProcedureDescriptor procedure)
+    {
+        if (procedure == null || procedure.ResultSets.Count == 0)
+        {
+            yield break;
+        }
+
+        foreach (var resultSet in procedure.ResultSets)
+        {
+            if (resultSet == null)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(resultSet.ProcedureRef))
+            {
+                yield return resultSet.ProcedureRef!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(resultSet.ExecSourceProcedureName))
+            {
+                var composed = ComposeProcedureReference(resultSet.ExecSourceSchemaName, resultSet.ExecSourceProcedureName);
+                if (!string.IsNullOrWhiteSpace(composed))
+                {
+                    yield return composed!;
+                }
+            }
+        }
+    }
+
+    private static string? ComposeProcedureReference(string? schema, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var cleanName = name.Trim();
+        var cleanSchema = string.IsNullOrWhiteSpace(schema) ? null : schema.Trim();
+        return string.IsNullOrWhiteSpace(cleanSchema)
+            ? cleanName
+            : string.Concat(cleanSchema, ".", cleanName);
+    }
+
+    private static Dictionary<string, ProcedureDescriptor> BuildProcedureLookup(IEnumerable<ProcedureDescriptor> procedures)
+    {
+        var result = new Dictionary<string, ProcedureDescriptor>(StringComparer.OrdinalIgnoreCase);
+        if (procedures == null)
+        {
+            return result;
+        }
+
+        foreach (var procedure in procedures)
+        {
+            if (procedure == null)
+            {
+                continue;
+            }
+
+            var key = BuildProcedureLookupKey(procedure.Schema, procedure.ProcedureName);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            result[key] = procedure;
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, ProcedureDescriptor> BuildUniqueProcedureNameLookup(IEnumerable<ProcedureDescriptor> procedures)
+    {
+        var buckets = new Dictionary<string, List<ProcedureDescriptor>>(StringComparer.OrdinalIgnoreCase);
+        if (procedures != null)
+        {
+            foreach (var procedure in procedures)
+            {
+                if (procedure == null || string.IsNullOrWhiteSpace(procedure.ProcedureName))
+                {
+                    continue;
+                }
+
+                if (!buckets.TryGetValue(procedure.ProcedureName, out var list))
+                {
+                    list = new List<ProcedureDescriptor>();
+                    buckets[procedure.ProcedureName] = list;
+                }
+
+                list.Add(procedure);
+            }
+        }
+
+        var unique = new Dictionary<string, ProcedureDescriptor>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, candidates) in buckets)
+        {
+            if (candidates.Count == 1)
+            {
+                unique[name] = candidates[0];
+            }
+        }
+
+        return unique;
+    }
+
+    private static bool TryResolveProcedureReference(
+        IReadOnlyDictionary<string, ProcedureDescriptor> proceduresByKey,
+        IReadOnlyDictionary<string, ProcedureDescriptor> proceduresByName,
+        string? reference,
+        string? fallbackSchema,
+        out ProcedureDescriptor procedure)
+    {
+        procedure = default!;
+        var (schema, name) = SplitProcedureReference(reference);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(schema))
+        {
+            var directKey = BuildProcedureLookupKey(schema, name);
+            if (!string.IsNullOrWhiteSpace(directKey) && proceduresByKey.TryGetValue(directKey, out procedure!))
+            {
+                return true;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackSchema))
+        {
+            var fallbackKey = BuildProcedureLookupKey(fallbackSchema, name);
+            if (!string.IsNullOrWhiteSpace(fallbackKey) && proceduresByKey.TryGetValue(fallbackKey, out procedure!))
+            {
+                return true;
+            }
+        }
+
+        if (proceduresByName.TryGetValue(name!, out procedure!))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static (string? Schema, string? Name) SplitProcedureReference(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return (null, null);
+        }
+
+        var parts = reference
+            .Trim()
+            .Split('.', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return (null, null);
+        }
+
+        if (parts.Length == 1)
+        {
+            return (null, parts[0]);
+        }
+
+        return (parts[0], parts[1]);
+    }
+
+    private static void EnqueueProcedure(Queue<ProcedureDescriptor> queue, ISet<string> visited, ProcedureDescriptor procedure)
+    {
+        if (queue == null || visited == null || procedure == null)
+        {
+            return;
+        }
+
+        var key = BuildProcedureLookupKey(procedure.Schema, procedure.ProcedureName);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return;
+        }
+
+        if (!visited.Add(key))
+        {
+            return;
+        }
+
+        queue.Enqueue(procedure);
+    }
+
+    private static string? BuildProcedureLookupKey(string? schema, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var cleanName = name.Trim();
+        var cleanSchema = string.IsNullOrWhiteSpace(schema) ? null : schema.Trim();
+        return string.IsNullOrWhiteSpace(cleanSchema)
+            ? cleanName
+            : string.Concat(cleanSchema, ".", cleanName);
     }
 
     private static bool AddTableTypeReference(ISet<string> collector, string? candidate)

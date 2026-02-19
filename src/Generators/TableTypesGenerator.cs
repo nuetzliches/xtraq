@@ -53,6 +53,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
         Directory.CreateDirectory(rootOut);
         var written = 0;
         var artifactsPerSchema = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var expectedTableTypeFilesPerSchema = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         if (!Templates.TryLoad("TableType", out var tableTypeTemplate))
         {
             throw new InvalidOperationException("TableType template 'TableType.xqt' not found – generation aborted.");
@@ -121,19 +122,20 @@ internal sealed class TableTypesGenerator : GeneratorBase
             types = Array.Empty<TableTypeInfo>();
         }
 
-        if (normalizedDependencies.Count > 0 && types.Count < normalizedDependencies.Count)
+        if (normalizedDependencies.Count > 0)
         {
-            // Fallback: emit all available types when dependency metadata cannot be matched (prevents missing cross-schema UDTTs).
-            try
+            var unresolvedDependencies = DetermineUnresolvedDependencies(normalizedDependencies, types);
+            if (unresolvedDependencies.Count > 0)
             {
-                Console.Out.WriteLine("[xtraq] Info: TableTypes dependencies unresolved or partially matched -> emitting all table types.");
+                try
+                {
+                    Console.Out.WriteLine($"[xtraq] Warning: {unresolvedDependencies.Count} table type dependencies could not be matched: {string.Join(", ", unresolvedDependencies)}.");
+                }
+                catch
+                {
+                    // best-effort logging
+                }
             }
-            catch
-            {
-                // best-effort logging
-            }
-
-            types = _provider.GetAll();
         }
         foreach (var tt in types.OrderBy(t => t.Schema).ThenBy(t => t.Name))
         {
@@ -215,6 +217,7 @@ internal sealed class TableTypesGenerator : GeneratorBase
             var code = Templates.RenderRawTemplate(tableTypeTemplate, extendedModel);
             var fileName = typeName + ".cs";
             File.WriteAllText(Path.Combine(schemaDir, fileName), code, Encoding.UTF8);
+            RegisterExpectedTableTypeFile(expectedTableTypeFilesPerSchema, schemaPascal, fileName);
             written++;
             if (!artifactsPerSchema.TryGetValue(schemaPascal, out var currentCount))
             {
@@ -225,6 +228,9 @@ internal sealed class TableTypesGenerator : GeneratorBase
                 artifactsPerSchema[schemaPascal] = currentCount + 1;
             }
         }
+
+        PruneStaleTableTypeArtifacts(rootOut, expectedTableTypeFilesPerSchema);
+
         return new TableTypeGenerationResult(
             written,
             new Dictionary<string, int>(artifactsPerSchema, StringComparer.OrdinalIgnoreCase)); // includes interface (even if 0 types)
@@ -258,6 +264,164 @@ internal sealed class TableTypesGenerator : GeneratorBase
         }
 
         return normalized;
+    }
+
+    private static HashSet<string> DetermineUnresolvedDependencies(
+        IReadOnlyCollection<string> normalizedDependencies,
+        IReadOnlyCollection<TableTypeInfo> resolvedTypes)
+    {
+        var requiredKeys = ToSchemaScopedIdentitySet(normalizedDependencies);
+        if (requiredKeys.Count == 0)
+        {
+            return requiredKeys;
+        }
+
+        var resolvedKeys = ToSchemaScopedIdentitySet(
+            resolvedTypes.Select(static t => NormalizeTypeIdentity(t.Catalog, t.Schema, t.Name)));
+
+        requiredKeys.ExceptWith(resolvedKeys);
+        return requiredKeys;
+    }
+
+    private static HashSet<string> ToSchemaScopedIdentitySet(IEnumerable<string> references)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (references == null)
+        {
+            return keys;
+        }
+
+        foreach (var reference in references)
+        {
+            var key = TryToSchemaScopedIdentity(reference);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                keys.Add(key);
+            }
+        }
+
+        return keys;
+    }
+
+    private static string? TryToSchemaScopedIdentity(string? reference)
+    {
+        var normalized = TableTypeRefFormatter.Normalize(reference);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        var parts = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        var schema = parts[^2];
+        var name = parts[^1];
+        if (string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        return string.Concat(schema, ".", name);
+    }
+
+    private static void RegisterExpectedTableTypeFile(
+        IDictionary<string, HashSet<string>> expectedTableTypeFilesPerSchema,
+        string schemaName,
+        string fileName)
+    {
+        if (expectedTableTypeFilesPerSchema == null
+            || string.IsNullOrWhiteSpace(schemaName)
+            || string.IsNullOrWhiteSpace(fileName))
+        {
+            return;
+        }
+
+        if (!expectedTableTypeFilesPerSchema.TryGetValue(schemaName, out var files))
+        {
+            files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            expectedTableTypeFilesPerSchema[schemaName] = files;
+        }
+
+        files.Add(fileName);
+    }
+
+    private static void PruneStaleTableTypeArtifacts(
+        string rootOut,
+        IReadOnlyDictionary<string, HashSet<string>> expectedTableTypeFilesPerSchema)
+    {
+        if (string.IsNullOrWhiteSpace(rootOut) || !Directory.Exists(rootOut))
+        {
+            return;
+        }
+
+        foreach (var schemaDir in Directory.GetDirectories(rootOut, "*", SearchOption.TopDirectoryOnly))
+        {
+            var schemaName = Path.GetFileName(schemaDir);
+            if (string.IsNullOrWhiteSpace(schemaName))
+            {
+                continue;
+            }
+
+            if (!expectedTableTypeFilesPerSchema.TryGetValue(schemaName, out var expectedFiles))
+            {
+                expectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            foreach (var candidate in Directory.GetFiles(schemaDir, "*.cs", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(candidate);
+                if (string.IsNullOrWhiteSpace(fileName) || expectedFiles.Contains(fileName))
+                {
+                    continue;
+                }
+
+                if (!LooksLikeGeneratedTableTypeArtifact(candidate))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(candidate);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+            }
+        }
+    }
+
+    private static bool LooksLikeGeneratedTableTypeArtifact(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(filePath);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return false;
+            }
+
+            if (!content.Contains("<auto-generated/>", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return content.Contains("Provides a strongly typed projection over the SQL table type", StringComparison.Ordinal)
+                   || content.Contains(": ITableType", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string NormalizeTypeIdentity(string? catalog, string schema, string name)
